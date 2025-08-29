@@ -5,7 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "accelerate>=1.10.1",
     "dspy>=3.0.2",
     "ipykernel>=6.30.1",
+    "mlflow>=3.3.2",
+    "numpy>=2.3.2",
     "pandas>=2.3.2",
+    "peft>=0.17.1",
+    "scikit-learn>=1.7.1",
+    "sglang[all]>=0.5.1.post3",
+    "torch>=2.8.0",
+    "transformers>=4.55.2",
+    "trl>=0.21.0",
 ]
