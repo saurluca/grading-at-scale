@@ -2,7 +2,7 @@
 import os
 import pandas as pd
 import dspy
-from sklearn.metrics import f1_score
+from dspy.clients.lm_local import LocalProvider
 import mlflow
 
 mlflow.set_tracking_uri("http://localhost:5000")
@@ -10,8 +10,8 @@ mlflow.set_experiment("ROARS")
 
 mlflow.dspy.autolog()
 
-lm = dspy.LM("ollama_chat/llama3.2:1b", api_base="http://localhost:11434", api_key="")
-dspy.configure(lm=lm)
+# lm = dspy.LM("ollama_chat/llama3.2:1b", api_base="http://localhost:11434", api_key="")
+# dspy.configure(lm=lm)
 
 
 # Roars datase: https://github.com/owenhenkel/ROARS-dataset/blob/main/ROARS_datadictionary.csv
@@ -21,10 +21,10 @@ file_path = os.path.join(os.path.dirname(__file__), "data", "ROARS.csv")
 data = pd.read_csv(
     file_path,
     usecols=[
-        "story",
-        "story_text",
+        # "story",
+        # "story_text",
         "passage_text",
-        "question_num",
+        # "question_num",
         "question_text",
         "student_answer",
         "2class_human_groundtruth",
@@ -32,20 +32,12 @@ data = pd.read_csv(
     ],
 )
 
-# %%
-# print number of unique values for each column
-print(data.nunique())
-# print correlation matrix for only numeric columns
-print(data.select_dtypes(include=["number"]).corr())
 
-# print number of rows
-print(f"Number of rows: {len(data)}")
-# print nubmer of true and false labels
-print(f"Number of true labels: {data['2class_human_groundtruth'].sum()}")
-print(f"Number of false labels: {len(data) - data['2class_human_groundtruth'].sum()}")
-
-data.head()
-
+# student_lm_name = "meta-llama/Llama-3.2-1B"
+student_lm_name = "Gensyn/Qwen2.5-0.5B-Instruct"
+# student_lm_name = "openai-community/gpt2"
+student_lm = dspy.LM(model=f"openai/local:{student_lm_name}", provider=LocalProvider())
+# teacher_lm = dspy.LM("openai/gpt-4o-mini", max_tokens=3000)
 
 # %%
 
@@ -79,6 +71,8 @@ def convert_to_dspy_format(dataset_split: pd.DataFrame):
 
 
 grader = dspy.Predict(RoarsGrader)
+grader.set_lm(student_lm)
+grader.get_lm().launch()
 
 
 def metric(
@@ -91,8 +85,8 @@ def metric(
 
 # %%
 
-n_train = 200
-n_val = 100
+n_train = 10
+n_val = 10
 
 # Sample train set
 train_set = data.sample(n=n_train, random_state=42)
@@ -107,37 +101,13 @@ val_set = val_set.reset_index(drop=True)
 train_set = convert_to_dspy_format(train_set)
 val_set = convert_to_dspy_format(val_set)
 
-
-# %%
-
-# y_true = []
-# y_pred = []
-
-# for example in val_set:
-#     prediction = grader(
-#         passage_text=example.passage_text,
-#         question_text=example.question_text,
-#         student_answer=example.student_answer,
-#     )
-#     y_true.append(example.label)
-#     y_pred.append(prediction.label)
-
-# accuracy = sum([yt == yp for yt, yp in zip(y_true, y_pred)]) / len(y_true)
-# f1 = f1_score(y_true, y_pred)
-
-# print(f"Accuracy: {accuracy}")
-# print(f"F1 score: {f1:.2f}")
-# print(
-#     f"Number of correct predictions: {sum([yt == yp for yt, yp in zip(y_true, y_pred)])} out of {len(y_true)}"
-# )
-
 # %%
 
 baseline_evaluator = dspy.Evaluate(
-    devset=val_set, metric=metric, display_progress=True, display_table=5, num_threads=4
+    devset=val_set, metric=metric, display_progress=True, display_table=5, num_threads=1
 )
 
-baseline_evaluator(grader)
+# baseline_evaluator(grader)
 
 # %%
 # config = dict(
@@ -150,17 +120,17 @@ baseline_evaluator(grader)
 # teleprompter = dspy.BootstrapFewShotWithRandomSearch(metric=metric, **config)
 # grader_optimized = teleprompter.compile(grader, trainset=train_set)
 
-config = dict(
-    max_bootstrapped_demos=4,
-    max_labeled_demos=4,
-    # num_candidate_programs=4,
-    # num_threads=4,
-)
+# config = dict(
+#     max_bootstrapped_demos=4,
+#     max_labeled_demos=4,
+#     # num_candidate_programs=4,
+#     # num_threads=4,
+# )
 
-teleprompter = dspy.BootstrapFewShot(metric=metric, **config)
-grader_optimized = teleprompter.compile(grader, trainset=train_set)
+# teleprompter = dspy.BootstrapFewShot(metric=metric, **config)
+# grader_optimized = teleprompter.compile(grader, trainset=train_set)
 
-baseline_evaluator(grader_optimized)
+# baseline_evaluator(grader_optimized)
 
 # Major improvement from 51 to 68
 
@@ -170,7 +140,7 @@ dspy.settings.experimental = True
 
 
 optimizer = dspy.BootstrapFinetune(
-    num_threads=16,
+    num_threads=1,
     metric=metric,
 )  # if you *do* have labels, pass metric=your_metric here!
 grader_ft = optimizer.compile(grader, trainset=train_set)
