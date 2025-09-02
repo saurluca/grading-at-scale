@@ -17,9 +17,8 @@ dependencies = [
     "peft>=0.17.1",
     "scikit-learn>=1.7.1",
     "seaborn>=0.13.2",
-    "sglang[all]>=0.5.1.post3",
     "torch>=2.8.0",
     "tqdm>=4.67.1",
-    "transformers>=4.55.2",
+    "transformers>=4.56.0",
     "trl>=0.21.0",
 ]
