@@ -5,3 +5,4 @@ mlartifacts/
 .env
 
 yelp_review_classifier/
+output/
