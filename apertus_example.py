@@ -3,7 +3,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # model_name = "swiss-ai/Apertus-8B-Instruct-2509"
 # model_name = "meta-llama/Llama-3.2-3B-Instruct"
-model_name = "meta-llama/Llama-3.2-3B-Instruct"
+model_name = "meta-llama/Llama-3.2-1B-Instruct"
 device = "cuda"  # for GPU usage or "cpu" for CPU usage
 
 # load the tokenizer and the model

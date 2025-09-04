@@ -12,8 +12,8 @@ from sklearn.metrics import precision_score, recall_score, f1_score
 model_id = "meta-llama/Llama-3.2-3B-Instruct"
 # model_id = "swiss-ai/Apertus-8B-Instruct-2509"
 seed = 42
-train_size = 500
-eval_size = 100
+train_size = None
+eval_size = None
 
 
 # Load the model configuration
@@ -198,10 +198,10 @@ training_args = TrainingArguments(
     eval_strategy="epoch",
     push_to_hub=False,
     # learning_rate=5e-5,  # Much more reasonable for fine-tuning
-    per_device_train_batch_size=1,  # Smaller batch size for stability
-    per_device_eval_batch_size=1,
+    per_device_train_batch_size=4,  # Smaller batch size for stability
+    per_device_eval_batch_size=4,
     eval_accumulation_steps=1,
-    num_train_epochs=1,
+    num_train_epochs=3,
     save_strategy="epoch",
     logging_steps=1,
     gradient_accumulation_steps=1,
@@ -265,3 +265,9 @@ print(f"MSE: {final_mse:.4f}")
 print(f"Precision: {final_precision:.4f}")
 print(f"Recall: {final_recall:.4f}")
 print(f"F1: {final_f1:.4f}")
+
+# %%
+
+hub_model_id = "saurluca/Llama-3.2-3B-Instruct-finetuned-SciEntsBank_2way"
+model.push_to_hub(hub_model_id)
+tokenizer.push_to_hub(hub_model_id)
