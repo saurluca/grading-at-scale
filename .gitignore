@@ -6,3 +6,8 @@ mlartifacts/
 
 yelp_review_classifier/
 output/
+
+__pycache__/
+
+
+SciEntsBank_2way/
