@@ -16,6 +16,7 @@ dependencies = [
     "matplotlib>=3.10.5",
     "mlflow>=3.3.2",
     "numpy>=2.3.2",
+    "outlines>=1.2.4",
     "pandas>=2.3.2",
     "peft>=0.17.1",
     "scikit-learn>=1.7.1",
