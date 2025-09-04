@@ -8,8 +8,8 @@ MODEL_NAME = "meta-llama/Llama-3.2-1B-Instruct"
 
 # Load tokenizer and model
 model = outlines.from_transformers(
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME),
-    model_obj = AutoModelForCausalLM.from_pretrained(MODEL_NAME, device_map="auto")
+    AutoModelForCausalLM.from_pretrained(MODEL_NAME, device_map="auto"),
+    AutoTokenizer.from_pretrained(MODEL_NAME),
 )
 
 class Rating(Enum):
@@ -49,7 +49,7 @@ grading_result = model(
     prompt,
     GradingResult,
     max_new_tokens=200,
-)x
+)
 
 grading_result = GradingResult.model_validate_json(grading_result)
 print(f"Reasoning: {grading_result.reasoning}")
