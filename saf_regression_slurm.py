@@ -1,6 +1,6 @@
 # %%
 import torch
-from datasets import DatasetDict
+from datasets import DatasetDict, load_dataset, ClassLabel
 from transformers import AutoModelForCausalLM, AutoConfig, AutoTokenizer
 import numpy as np
 from transformers import TrainingArguments, Trainer
@@ -8,6 +8,8 @@ from torch.nn import functional as F
 import os
 import json
 from sklearn.metrics import precision_score, recall_score, f1_score
+
+print("Starting ...")
 
 model_id = "meta-llama/Llama-3.2-1B-Instruct"
 # model_id = "swiss-ai/Apertus-8B-Instruct-2509"
@@ -22,6 +24,8 @@ config = AutoConfig.from_pretrained(model_id)
 # Load the pre-trained model
 model = AutoModelForCausalLM.from_pretrained(model_id)
 tokenizer = AutoTokenizer.from_pretrained(model_id)
+
+print("Model and tokenizer loaded in")
 
 # Set padding token for the tokenizer
 if tokenizer.pad_token is None:
@@ -97,14 +101,24 @@ class RegressionModel(torch.nn.Module):
         with open(os.path.join(save_directory, "config.json"), "w") as f:
             json.dump(config_dict, f)
 
+print("Init custom model")
 # Create the regression model
 regression_model = RegressionModel(model)
 
 # %%
 
+print("Loading dataset")
+dataset = load_dataset('nkazi/SciEntsBank')
+
+dataset = dataset.align_labels_with_mapping({'correct': 0, 'contradictory': 1, 'partially_correct_incomplete': 1, 'irrelevant': 1, 'non_domain': 1}, 'label')
+dataset = dataset.cast_column('label', ClassLabel(names=['correct', 'incorrect']))
+
+print("Dataset ready")
+
+
 # 1 is correct, 0 is incorrect
-print(f"Loading dataset from SciEntsBank_2way...")
-dataset = DatasetDict.load_from_disk('SciEntsBank_2way')
+#print(f"Loading dataset from SciEntsBank_2way...")
+#dataset = DatasetDict.load_from_disk('SciEntsBank_2way')
 
 # shuffle dataset
 small_train = dataset["train"].shuffle(seed=seed)
