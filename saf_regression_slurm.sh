@@ -3,8 +3,7 @@
 #SBATCH --output=saf_regression_%j.out
 #SBATCH --error=saf_regression_%j.err
 #SBATCH --time=00:15:00
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:1
+#SBATCH --gpus=mi300a:1
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
 #SBATCH --nodes=1
@@ -23,8 +22,8 @@ echo "Installing Python packages..."
 # source /path/to/your/venv/bin/activate
 
 # Option 3: Create and activate a new virtual environment (uncomment if needed)
-# python -m venv venv
-# source venv/bin/activate
+python -m venv venv
+source venv/bin/activate
 pip install -e .
 
 # Set environment variables
