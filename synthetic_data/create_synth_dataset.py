@@ -12,37 +12,53 @@ from sklearn.metrics import (
     f1_score,
     confusion_matrix,
 )
+from dotenv import load_dotenv
+from types import SimpleNamespace
+load_dotenv()
 
-# Configuration constants
-n_students_answer_per_question = 6
-percentile_correct = 0.5
+cfg = SimpleNamespace(**{})
 
+
+# Configuration
+cfg.output_dir = os.path.join(os.path.dirname(__file__), "../", "data", "privacy")
+
+# Non-cfg configuration values
+N_STUDENTS_ANSWERS_PER_QUESTION = 6
+PERCENTILE_CORRECT = 0.5
+TASKS_FILENAME = "privacy_data.csv"
+# student_lm = dspy.LM(
+#     "ollama_chat/llama3.2:3b",
+#     api_base="http://localhost:11434",
+#     api_key="",
+#     temperature=0.5,
+#     max_tokens=50,
+# )
 student_lm = dspy.LM(
-    "ollama_chat/llama3.2:3b",
-    api_base="http://localhost:11434",
-    api_key="",
-    temperature=0.5,
-    max_tokens=50,
+    "azure/gpt-4o-mini",
+    api_base=os.getenv("AZURE_API_BASE"),
+    api_key=os.getenv("AZURE_API_KEY"),
+    api_version="2024-12-01-preview",
+    temperature=1.5,
+    cache=False,
+    # max_tokens=50,
 )
-default_lm = dspy.LM(
-    "ollama_chat/gemma3:4b",
-    api_base="http://localhost:11434",
-    api_key="",
-    # temperature=0.5,
+teacher_lm = dspy.LM(
+    "azure/gpt-4o",
+    api_base=os.getenv("AZURE_API_BASE"),
+    api_key=os.getenv("AZURE_API_KEY"),
+    api_version="2024-12-01-preview",
 )
-dspy.configure(lm=default_lm)
-
-file_path = os.path.join(os.path.dirname(__file__), "data", "logic", "logic_data.csv")
 
 # read in data
-tasks = pd.read_csv(file_path)
+tasks_file_path = os.path.join(cfg.output_dir, TASKS_FILENAME)
+tasks = pd.read_csv(tasks_file_path)
 
 # %%
 
 
-class LogicGrader(dspy.Signature):
-    """You are a logic teacher for an introduction to Logic class at university.
-    Your job is to grade logic exercises and decide if the students answered correctly (true or false).
+class Grader(dspy.Signature):
+    """You are a university professor for an introduction to Privacy and Anonmyisation class at university.
+    Your job is to grade privacy exercises and decide if the students answered correctly (true or false).
     Answer based on the provided reference answer and reference text.
     """
 
@@ -67,14 +83,16 @@ class IncorrectAnswerGenerator(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
     reference: str = dspy.InputField(description="The correct reference answer")
     answer: str = dspy.OutputField(
-        description="An incorrect student answer that shows misunderstanding or error in reasoning. The answer should be plausible but wrong."
+        description="An incorrect student answer that shows misunderstanding or error in reasoning. The answer should be plausible but definitly wrong."
     )
 
 
 # Create DSPy programs
-grader = dspy.ChainOfThought(LogicGrader)
-correct_answer_generator = dspy.ChainOfThought(CorrectAnswerGenerator)
-incorrect_answer_generator = dspy.ChainOfThought(IncorrectAnswerGenerator)
+grader = dspy.Predict(Grader)
+correct_answer_generator = dspy.Predict(CorrectAnswerGenerator)
+incorrect_answer_generator = dspy.Predict(IncorrectAnswerGenerator)
+
+grader.set_lm(teacher_lm)
 
 # Set the student LM for answer generation
 correct_answer_generator.set_lm(student_lm)
@@ -193,7 +211,7 @@ def evaluate_grader_performance(answers_df, grader):
 
     Args:
         answers_df: DataFrame with student answers and intended correctness
-        grader: The LogicGrader instance
+        grader: The Grader instance
 
     Returns:
         Dictionary with evaluation metrics
@@ -247,11 +265,11 @@ def evaluate_grader_performance(answers_df, grader):
 # %%
 
 # Generate student answers dataframe
-print(f"Generating {n_students_answer_per_question} student answers per question...")
-print(f"Target correct percentage: {percentile_correct * 100}%")
+print(f"Generating {N_STUDENTS_ANSWERS_PER_QUESTION} student answers per question...")
+print(f"Target correct percentage: {PERCENTILE_CORRECT * 100}%")
 
 student_answers_df = generate_student_answers_df(
-    tasks, n_students_answer_per_question, percentile_correct
+    tasks, N_STUDENTS_ANSWERS_PER_QUESTION, PERCENTILE_CORRECT
 )
 
 print(f"Generated {len(student_answers_df)} total student answers")
@@ -259,9 +277,8 @@ print(f"Intended correct answers: {student_answers_df['intended_correct'].sum()}
 print(f"Intended incorrect answers: {(~student_answers_df['intended_correct']).sum()}")
 
 # Save the dataframe
-output_path = os.path.join(
-    os.path.dirname(__file__), "data", "logic", "student_answers.csv"
-)
+student_answers_filename = "student_answers.csv"
+output_path = os.path.join(cfg.output_dir, student_answers_filename)
 student_answers_df.to_csv(output_path, index=False)
 print(f"Saved student answers to: {output_path}")
 
@@ -294,19 +311,20 @@ print(
 )
 
 # Plot confusion matrix
-plot_save_path = os.path.join(
-    os.path.dirname(__file__), "data", "logic", "confusion_matrix.png"
-)
+plot_filename = "confusion_matrix.png"
 plot_confusion_matrix(
-    metrics["intended_correct"], metrics["predicted_correct"], save_path=plot_save_path
+    metrics["intended_correct"],
+    metrics["predicted_correct"],
+    save_path=os.path.join(cfg.output_dir, plot_filename),
 )
 
 # Add predicted correctness to the dataframe
 student_answers_df["predicted_correct"] = metrics["predicted_correct"]
 
 # Save the complete dataframe with predictions
+complete_output_filename = "student_answers_with_predictions.csv"
 complete_output_path = os.path.join(
-    os.path.dirname(__file__), "data", "logic", "student_answers_with_predictions.csv"
+    cfg.output_dir, complete_output_filename
 )
 student_answers_df.to_csv(complete_output_path, index=False)
 print(f"\nSaved complete results to: {complete_output_path}")

@@ -4,10 +4,10 @@ import pandas as pd
 import os
 
 # Read the JSON files
-with open("data/logic/tasks.json", "r") as f:
+with open("data/privacy/tasks.json", "r") as f:
     tasks = json.load(f)
 
-with open("data/logic/chunks.json", "r") as f:
+with open("data/privacy/chunks.json", "r") as f:
     chunks = json.load(f)
 
 # Create a dictionary to map chunk_id to chunk_text
@@ -32,10 +32,10 @@ for task in tasks:
 df = pd.DataFrame(data)
 
 # Ensure the output directory exists
-os.makedirs("data/logic", exist_ok=True)
+os.makedirs("data/privacy", exist_ok=True)
 
 # Save to CSV
-output_path = "data/logic/logic_data.csv"
+output_path = "data/privacy/privacy_data.csv"
 df.to_csv(output_path, index=False)
 
 print(f"Created CSV with {len(df)} rows")
