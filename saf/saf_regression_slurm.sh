@@ -2,9 +2,9 @@
 #SBATCH --job-name=saf_regression
 #SBATCH --output=saf_regression_%j.out
 #SBATCH --error=saf_regression_%j.err
-#SBATCH --time=00:15:00
+#SBATCH --time=1:00:00
 #SBATCH --gpus=mi300a:1
-#SBATCH --mem=32G
+#SBATCH --mem=64G
 #SBATCH --cpus-per-task=4
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
