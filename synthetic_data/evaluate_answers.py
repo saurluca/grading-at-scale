@@ -1,11 +1,30 @@
 # %%
+import os
+import sys
+from pathlib import Path
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import (
+    confusion_matrix,
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+)
 from tqdm import tqdm
 import dspy
+from model_builder import build_lm
 
+# Ensure project root is on sys.path for absolute imports (works in scripts and notebooks)
+if "__file__" in globals():
+    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+else:
+    _PROJECT_ROOT = Path.cwd().parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(_PROJECT_ROOT))
 
+from utils import load_config
 
 
 class Grader(dspy.Signature):
@@ -33,7 +52,8 @@ def plot_confusion_matrix(y_true, y_pred, save_path=None):
     - y_pred: List or array of predicted labels
     - save_path: Optional path to save the plot
     """
-    cm = confusion_matrix(y_true, y_pred)
+    labels = [0, 1, 2]
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
 
     plt.figure(figsize=(8, 6))
     sns.heatmap(
@@ -61,16 +81,18 @@ def evaluate_grader_performance(answers_df, grader):
     Evaluate the grader's performance on the generated answers.
 
     Args:
-        answers_df: DataFrame with student answers and intended correctness
+        answers_df: DataFrame with student answers and intended label/correctness
         grader: The Grader instance
 
     Returns:
         Dictionary with evaluation metrics
     """
-    predicted_correct = []
-    intended_correct = []
+    predicted_labels = []
+    intended_labels = []
 
     print("Evaluating grader performance...")
+
+    label_name_to_int = {"incorrect": 0, "partial": 1, "partially correct": 1, "correct": 2}
 
     for idx, row in tqdm(answers_df.iterrows()):
         try:
@@ -81,8 +103,13 @@ def evaluate_grader_performance(answers_df, grader):
                 answer=row["student_answer"],
             )
 
-            predicted_correct.append(graded_result.label)
-            intended_correct.append(row["intended_correct"])
+            predicted_labels.append(int(graded_result.label))
+
+            if "intended_label" in row and isinstance(row["intended_label"], str):
+                intended_labels.append(label_name_to_int.get(row["intended_label"].strip().lower(), 0))
+            else:
+                # Fallback from boolean intended_correct to multiclass (2 for True, 0 for False)
+                intended_labels.append(2 if bool(row.get("intended_correct", False)) else 0)
 
             if idx % 10 == 0:  # Progress indicator
                 print(f"Processed {idx + 1}/{len(answers_df)} answers")
@@ -90,17 +117,21 @@ def evaluate_grader_performance(answers_df, grader):
         except Exception as e:
             print(f"Error grading answer {idx}: {e}")
             # Default to incorrect if grading fails
-            predicted_correct.append(False)
-            intended_correct.append(row["intended_correct"])
+            predicted_labels.append(0)
+            if "intended_label" in row and isinstance(row["intended_label"], str):
+                intended_labels.append(label_name_to_int.get(row["intended_label"].strip().lower(), 0))
+            else:
+                intended_labels.append(2 if bool(row.get("intended_correct", False)) else 0)
 
     # Calculate metrics
-    accuracy = accuracy_score(intended_correct, predicted_correct)
-    precision = precision_score(intended_correct, predicted_correct, zero_division=0)
-    recall = recall_score(intended_correct, predicted_correct, zero_division=0)
-    f1 = f1_score(intended_correct, predicted_correct, zero_division=0)
+    labels = [0, 1, 2]
+    accuracy = accuracy_score(intended_labels, predicted_labels)
+    precision = precision_score(intended_labels, predicted_labels, labels=labels, average="macro", zero_division=0)
+    recall = recall_score(intended_labels, predicted_labels, labels=labels, average="macro", zero_division=0)
+    f1 = f1_score(intended_labels, predicted_labels, labels=labels, average="macro", zero_division=0)
 
     # Confusion matrix
-    cm = confusion_matrix(intended_correct, predicted_correct)
+    cm = confusion_matrix(intended_labels, predicted_labels, labels=labels)
 
     return {
         "accuracy": accuracy,
@@ -108,61 +139,79 @@ def evaluate_grader_performance(answers_df, grader):
         "recall": recall,
         "f1_score": f1,
         "confusion_matrix": cm,
-        "predicted_correct": predicted_correct,
-        "intended_correct": intended_correct,
+        "predicted_labels": predicted_labels,
+        "intended_labels": intended_labels,
     }
 
 
 
-# %%
+"""
+Main evaluation pipeline
+"""
 
-# Evaluate grader performance
+# Load config and paths
+cfg = load_config("synthetic_data")
+output_dir = os.path.normpath(os.path.join(Path(__file__).resolve().parent, "../", cfg.output_dir))
+
+# Build LM and Grader program
+grader_lm = build_lm(
+    cfg.teacher_model_name,
+    temperature=getattr(cfg, "lm_temperature", 0.6),
+    cache=getattr(cfg, "lm_cache", False),
+)
+grader_program = dspy.Predict(Grader)
+grader_program.set_lm(grader_lm)
+
+# Load generated answers CSV based on config-driven naming
+generated_filename = (
+    f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}.csv"
+)
+generated_path = os.path.join(output_dir, generated_filename)
+if not os.path.exists(generated_path):
+    raise FileNotFoundError(f"Generated answers CSV not found at: {generated_path}")
+
+student_answers_df = pd.read_csv(generated_path)
+
+# Evaluate
 print("\n" + "=" * 50)
 print("EVALUATING GRADER PERFORMANCE")
 print("=" * 50)
-
-metrics = evaluate_grader_performance(student_answers_df, grader)
+metrics = evaluate_grader_performance(student_answers_df, grader_program)
 
 # Display results
 print("\n" + "=" * 50)
 print("GRADER PERFORMANCE METRICS")
 print("=" * 50)
 print(f"Accuracy: {metrics['accuracy']:.3f}")
-print(f"Precision: {metrics['precision']:.3f}")
-print(f"Recall: {metrics['recall']:.3f}")
-print(f"F1 Score: {metrics['f1_score']:.3f}")
-
-print("\nConfusion Matrix:")
-print("                 Predicted")
-print("                 Correct  Incorrect")
-print(
-    f"Actual Correct   {metrics['confusion_matrix'][1][1]:>8}  {metrics['confusion_matrix'][1][0]:>9}"
-)
-print(
-    f"Actual Incorrect {metrics['confusion_matrix'][0][1]:>8}  {metrics['confusion_matrix'][0][0]:>9}"
-)
+print(f"Precision (macro): {metrics['precision']:.3f}")
+print(f"Recall (macro): {metrics['recall']:.3f}")
+print(f"F1 Score (macro): {metrics['f1_score']:.3f}")
 
 # Plot confusion matrix
-plot_filename = f"confusion_matrix_{cfg.n_students_answers_per_question}_{cfg.percentile_correct}.png"
+plot_filename = (
+    f"confusion_matrix_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}.png"
+)
+plot_path = os.path.join(output_dir, plot_filename)
 plot_confusion_matrix(
-    metrics["intended_correct"],
-    metrics["predicted_correct"],
-    save_path=os.path.join(cfg.output_dir, plot_filename),
+    metrics["intended_labels"],
+    metrics["predicted_labels"],
+    save_path=plot_path,
 )
 
-# Add predicted correctness to the dataframe
-student_answers_df["predicted_correct"] = metrics["predicted_correct"]
+# Add predictions to DF and save
+label_int_to_name = {0: "incorrect", 1: "partial", 2: "correct"}
+student_answers_df["predicted_label"] = metrics["predicted_labels"]
+student_answers_df["predicted_label_name"] = student_answers_df["predicted_label"].map(label_int_to_name)
 
-# Save the complete dataframe with predictions
-complete_output_filename = f"student_answers_with_predictions_{cfg.n_students_answers_per_question}_{cfg.percentile_correct}.csv"
-complete_output_path = os.path.join(
-    cfg.output_dir, complete_output_filename
+complete_output_filename = (
+    f"student_answers_with_predictions_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}.csv"
 )
+complete_output_path = os.path.join(output_dir, complete_output_filename)
 student_answers_df.to_csv(complete_output_path, index=False)
 print(f"\nSaved complete results to: {complete_output_path}")
 
-# Display some example results
+# Sample a few rows for inspection
 print("\n" + "=" * 50)
 print("SAMPLE RESULTS")
 print("=" * 50)
-sample_results = student_answers_df.head(10)
+print(student_answers_df.head(10))
