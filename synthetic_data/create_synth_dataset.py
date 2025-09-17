@@ -13,7 +13,9 @@ cfg.n_students_answers_per_question = 3
 cfg.percentile_correct = 0.0
 cfg.tasks_filename = "privacy_data.csv"
 
-student_lm = build_lm("apertus-8b-instruct-2509", temperature=1.0, cache=False)
+student_lm = build_lm("apertus-8b")
+                    #   temperature=1.0,
+                    #   cache=False)
 
 # read in data
 tasks_file_path = os.path.join(cfg.output_dir, cfg.tasks_filename)
@@ -29,9 +31,9 @@ class Test(dspy.Signature):
 test_program = dspy.Predict(Test)
 test_program.set_lm(student_lm)
 
-print(test_program(question="What is the capital of France?"))
+output = test_program(question="What is the capital of France?")
 
-# %%
+print(output.answer)
 
 # %%
 

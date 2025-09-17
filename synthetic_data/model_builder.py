@@ -17,14 +17,20 @@ model_configs = {
         "api_base": os.getenv("AZURE_API_BASE"),
         "api_version": "2024-12-01-preview",
     },
-    "apertus-8b-instruct-2509": {
-        "model": "openrouter/swiss-ai/Apertus-8B-Instruct-2509",
+    "apertus-8b": {
+        "model": "openrouter/swiss-ai/apertus-8b-instruct",
         "api_key": os.getenv("SWISS_API_KEY"),
         "api_base": "https://api.publicai.co/v1",
         # No api_version
     },
-    "apertus-70b-instruct-2509": {
-        "model": "openrouter/swiss-ai/Apertus-70B-Instruct-2509",
+    "apertus-70b": {
+        "model": "openrouter/swiss-ai/apertus-70b-instruct",
+        "api_key": os.getenv("SWISS_API_KEY"),
+        "api_base": "https://api.publicai.co/v1",
+        # No api_version
+    },
+    "Gemma-27B": {
+        "model": "openrouter/aisingapore/Gemma-SEA-LION-v4-27B-IT",
         "api_key": os.getenv("SWISS_API_KEY"),
         "api_base": "https://api.publicai.co/v1",
         # No api_version
