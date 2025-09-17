@@ -1,5 +1,5 @@
-model_name: apertus-8b
-teacher_model_name: gpt-4o
+model_name: apertus-70b
+teacher_model_name: gpt-4o-mini
 output_dir: data/privacy
 tasks_filename: privacy_data.csv
 
