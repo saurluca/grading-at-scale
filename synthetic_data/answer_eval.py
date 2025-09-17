@@ -27,11 +27,5 @@ tasks = pd.read_csv(cfg.tasks_file_path)
 
 # tasks.tail()
 
-for i in range(len(tasks)):
-    example = tasks.iloc[i]
-    if not example['intended_correct']:
-        print(f"\n\n should be correct: {example['intended_correct']}")
-        print("question: ", example["question"])
-        print("answer: ", example["student_answer"])
 
 

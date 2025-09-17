@@ -2,74 +2,38 @@
 import os
 import pandas as pd
 import dspy
-import matplotlib.pyplot as plt
-import seaborn as sns
 from tqdm import tqdm
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    confusion_matrix,
-)
-from dotenv import load_dotenv
 from types import SimpleNamespace
-load_dotenv()
-
-cfg = SimpleNamespace(**{})
-
+from model_builder import build_lm
 
 # Configuration
+cfg = SimpleNamespace(**{})
 cfg.output_dir = os.path.join(os.path.dirname(__file__), "../", "data", "privacy")
+cfg.n_students_answers_per_question = 3
+cfg.percentile_correct = 0.0
+cfg.tasks_filename = "privacy_data.csv"
 
-# Non-cfg configuration values
-N_STUDENTS_ANSWERS_PER_QUESTION = 6
-PERCENTILE_CORRECT = 0.5
-TASKS_FILENAME = "privacy_data.csv"
-# student_lm = dspy.LM(
-#     "ollama_chat/llama3.2:3b",
-#     api_base="http://localhost:11434",
-#     api_key="",
-#     temperature=0.5,
-#     max_tokens=50,
-# )
-student_lm = dspy.LM(
-    "azure/gpt-4o-mini",
-    api_base=os.getenv("AZURE_API_BASE"),
-    api_key=os.getenv("AZURE_API_KEY"),
-    api_version="2024-12-01-preview",
-    temperature=1.5,
-    cache=False,
-    # max_tokens=50,
-)
-teacher_lm = dspy.LM(
-    "azure/gpt-4o",
-    api_base=os.getenv("AZURE_API_BASE"),
-    api_key=os.getenv("AZURE_API_KEY"),
-    api_version="2024-12-01-preview",
-)
+student_lm = build_lm("apertus-8b-instruct-2509", temperature=1.0, cache=False)
 
 # read in data
-tasks_file_path = os.path.join(cfg.output_dir, TASKS_FILENAME)
+tasks_file_path = os.path.join(cfg.output_dir, cfg.tasks_filename)
 tasks = pd.read_csv(tasks_file_path)
 
 # %%
 
-
-class Grader(dspy.Signature):
-    """You are a university professor for an introduction to Privacy and Anonmyisation class at university.
-    Your job is to grade privacy exercises and decide if the students answered correctly (true or false).
-    Answer based on the provided reference answer and reference text.
-    """
-
+class Test(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
-    reference: str = dspy.InputField(description="The ground truth reference text")
-    answer: str = dspy.InputField(description="The student answer")
+    answer: str = dspy.OutputField(description="The answer to the question")
+    
+    
+test_program = dspy.Predict(Test)
+test_program.set_lm(student_lm)
 
-    label: bool = dspy.OutputField(
-        description="True if the student answer is correct, False if the student answer is incorrect"
-    )
+print(test_program(question="What is the capital of France?"))
 
+# %%
+
+# %%
 
 class CorrectAnswerGenerator(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
@@ -77,61 +41,34 @@ class CorrectAnswerGenerator(dspy.Signature):
     answer: str = dspy.OutputField(
         description="A correct student answer that demonstrates understanding of the question. The answer should be accurate and well-reasoned."
     )
+    
+    
+class PartialAnswerGenerator(dspy.Signature):
+    question: str = dspy.InputField(description="The question text")
+    reference: str = dspy.InputField(description="The correct reference answer")
+    answer: str = dspy.OutputField(
+        description="A partially correct student answer that demonstrates understanding of the question but not the full answer."
+    )
 
 
 class IncorrectAnswerGenerator(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
     reference: str = dspy.InputField(description="The correct reference answer")
     answer: str = dspy.OutputField(
-        description="An incorrect student answer that shows misunderstanding or error in reasoning. The answer should be plausible but definitly wrong."
+        description="An incorrect student answer that shows misunderstanding or error in reasoning. The answer should be plausible but wrong."
     )
 
-
 # Create DSPy programs
-grader = dspy.Predict(Grader)
 correct_answer_generator = dspy.Predict(CorrectAnswerGenerator)
+partial_answer_generator = dspy.Predict(PartialAnswerGenerator)
 incorrect_answer_generator = dspy.Predict(IncorrectAnswerGenerator)
-
-grader.set_lm(teacher_lm)
 
 # Set the student LM for answer generation
 correct_answer_generator.set_lm(student_lm)
+partial_answer_generator.set_lm(student_lm)
 incorrect_answer_generator.set_lm(student_lm)
 
 # %%
-
-
-def plot_confusion_matrix(y_true, y_pred, save_path=None):
-    """
-    Plot a confusion matrix using seaborn's heatmap.
-
-    Parameters:
-    - y_true: List or array of true labels
-    - y_pred: List or array of predicted labels
-    - save_path: Optional path to save the plot
-    """
-    cm = confusion_matrix(y_true, y_pred)
-
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(
-        cm,
-        annot=True,
-        fmt="d",
-        cmap="Blues",
-        xticklabels=["Incorrect", "Correct"],
-        yticklabels=["Incorrect", "Correct"],
-    )
-    plt.xlabel("Predicted Labels")
-    plt.ylabel("True Labels")
-    plt.title("Confusion Matrix - Grader Performance")
-
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-        print(f"Confusion matrix plot saved to: {save_path}")
-
-    plt.show()
-
-
 def generate_student_answers_df(tasks_df, n_answers_per_question, correct_percentile):
     """
     Generate a dataframe with student answers for each question.
@@ -205,71 +142,14 @@ def generate_student_answers_df(tasks_df, n_answers_per_question, correct_percen
     return pd.DataFrame(all_answers)
 
 
-def evaluate_grader_performance(answers_df, grader):
-    """
-    Evaluate the grader's performance on the generated answers.
-
-    Args:
-        answers_df: DataFrame with student answers and intended correctness
-        grader: The Grader instance
-
-    Returns:
-        Dictionary with evaluation metrics
-    """
-    predicted_correct = []
-    intended_correct = []
-
-    print("Evaluating grader performance...")
-
-    for idx, row in tqdm(answers_df.iterrows()):
-        try:
-            # Get grader's prediction
-            graded_result = grader(
-                question=row["question"],
-                reference=row["reference"],
-                answer=row["student_answer"],
-            )
-
-            predicted_correct.append(graded_result.label)
-            intended_correct.append(row["intended_correct"])
-
-            if idx % 10 == 0:  # Progress indicator
-                print(f"Processed {idx + 1}/{len(answers_df)} answers")
-
-        except Exception as e:
-            print(f"Error grading answer {idx}: {e}")
-            # Default to incorrect if grading fails
-            predicted_correct.append(False)
-            intended_correct.append(row["intended_correct"])
-
-    # Calculate metrics
-    accuracy = accuracy_score(intended_correct, predicted_correct)
-    precision = precision_score(intended_correct, predicted_correct, zero_division=0)
-    recall = recall_score(intended_correct, predicted_correct, zero_division=0)
-    f1 = f1_score(intended_correct, predicted_correct, zero_division=0)
-
-    # Confusion matrix
-    cm = confusion_matrix(intended_correct, predicted_correct)
-
-    return {
-        "accuracy": accuracy,
-        "precision": precision,
-        "recall": recall,
-        "f1_score": f1,
-        "confusion_matrix": cm,
-        "predicted_correct": predicted_correct,
-        "intended_correct": intended_correct,
-    }
-
-
 # %%
 
 # Generate student answers dataframe
-print(f"Generating {N_STUDENTS_ANSWERS_PER_QUESTION} student answers per question...")
-print(f"Target correct percentage: {PERCENTILE_CORRECT * 100}%")
+print(f"Generating {cfg.n_students_answers_per_question} student answers per question...")
+print(f"Target correct percentage: {cfg.percentile_correct * 100}%")
 
 student_answers_df = generate_student_answers_df(
-    tasks, N_STUDENTS_ANSWERS_PER_QUESTION, PERCENTILE_CORRECT
+    tasks, cfg.n_students_answers_per_question, cfg.percentile_correct
 )
 
 print(f"Generated {len(student_answers_df)} total student answers")
@@ -277,67 +157,17 @@ print(f"Intended correct answers: {student_answers_df['intended_correct'].sum()}
 print(f"Intended incorrect answers: {(~student_answers_df['intended_correct']).sum()}")
 
 # Save the dataframe
-student_answers_filename = "student_answers.csv"
+student_answers_filename = f"student_answers_{cfg.n_students_answers_per_question}_{cfg.percentile_correct}.csv"
 output_path = os.path.join(cfg.output_dir, student_answers_filename)
 student_answers_df.to_csv(output_path, index=False)
 print(f"Saved student answers to: {output_path}")
 
 # %%
 
-# Evaluate grader performance
-print("\n" + "=" * 50)
-print("EVALUATING GRADER PERFORMANCE")
-print("=" * 50)
+# Sample 5 random incorrect student answers to display
+incorrect_examples = student_answers_df[~student_answers_df['intended_correct']].sample(n=5, random_state=42)
 
-metrics = evaluate_grader_performance(student_answers_df, grader)
-
-# Display results
-print("\n" + "=" * 50)
-print("GRADER PERFORMANCE METRICS")
-print("=" * 50)
-print(f"Accuracy: {metrics['accuracy']:.3f}")
-print(f"Precision: {metrics['precision']:.3f}")
-print(f"Recall: {metrics['recall']:.3f}")
-print(f"F1 Score: {metrics['f1_score']:.3f}")
-
-print("\nConfusion Matrix:")
-print("                 Predicted")
-print("                 Correct  Incorrect")
-print(
-    f"Actual Correct   {metrics['confusion_matrix'][1][1]:>8}  {metrics['confusion_matrix'][1][0]:>9}"
-)
-print(
-    f"Actual Incorrect {metrics['confusion_matrix'][0][1]:>8}  {metrics['confusion_matrix'][0][0]:>9}"
-)
-
-# Plot confusion matrix
-plot_filename = "confusion_matrix.png"
-plot_confusion_matrix(
-    metrics["intended_correct"],
-    metrics["predicted_correct"],
-    save_path=os.path.join(cfg.output_dir, plot_filename),
-)
-
-# Add predicted correctness to the dataframe
-student_answers_df["predicted_correct"] = metrics["predicted_correct"]
-
-# Save the complete dataframe with predictions
-complete_output_filename = "student_answers_with_predictions.csv"
-complete_output_path = os.path.join(
-    cfg.output_dir, complete_output_filename
-)
-student_answers_df.to_csv(complete_output_path, index=False)
-print(f"\nSaved complete results to: {complete_output_path}")
-
-# Display some example results
-print("\n" + "=" * 50)
-print("SAMPLE RESULTS")
-print("=" * 50)
-sample_results = student_answers_df.head(10)
-# for idx, row in sample_results.iterrows():
-#     print(
-#         f"Task {row['task_id']}: Intended={row['intended_correct']}, Predicted={row['predicted_correct']}"
-#     )
-#     print(f"  Question: {row['question'][:100]}...")
-#     print(f"  Answer: {row['student_answer'][:100]}...")
-#     print()
+for idx, example in incorrect_examples.iterrows():
+    print("\nSampled Incorrect Example:")
+    print("question: ", example["question"])
+    print("answer: ", example["student_answer"])
