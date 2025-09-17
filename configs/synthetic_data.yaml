@@ -1,0 +1,10 @@
+model_name: apertus-8b
+output_dir: data/privacy
+tasks_filename: privacy_data.csv
+
+num_correct_answers: 2
+num_partial_answers: 2
+num_incorrect_answers: 2
+
+lm_temperature: 0.6
+lm_cache: false

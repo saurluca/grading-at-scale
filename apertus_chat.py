@@ -12,7 +12,6 @@ HEADERS = {
 }
 
 
-
 def list_models():
     resp = requests.get(f"{API_BASE}/models", headers=HEADERS)
     resp.raise_for_status()

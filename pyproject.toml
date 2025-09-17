@@ -17,6 +17,7 @@ dependencies = [
     "matplotlib>=3.10.5",
     "mlflow>=3.3.2",
     "numpy>=2.3.2",
+    "omegaconf>=2.3.0",
     "outlines>=1.2.4",
     "pandas>=2.3.2",
     "peft>=0.17.1",

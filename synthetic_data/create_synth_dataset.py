@@ -1,39 +1,37 @@
 # %%
 import os
+import sys
+from pathlib import Path
 import pandas as pd
 import dspy
 from tqdm import tqdm
-from types import SimpleNamespace
 from model_builder import build_lm
 
-# Configuration
-cfg = SimpleNamespace(**{})
-cfg.output_dir = os.path.join(os.path.dirname(__file__), "../", "data", "privacy")
-cfg.n_students_answers_per_question = 3
-cfg.percentile_correct = 0.0
-cfg.tasks_filename = "privacy_data.csv"
+# Ensure project root is on sys.path for absolute imports (works in scripts and notebooks)
+if "__file__" in globals():
+    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+else:
+    _PROJECT_ROOT = Path.cwd().parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(_PROJECT_ROOT))
 
-student_lm = build_lm("apertus-8b")
-                    #   temperature=1.0,
-                    #   cache=False)
+from utils import load_config
+
+# Configuration via YAML (OmegaConf)
+cfg = load_config("synthetic_data")
+output_dir = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "../", cfg.output_dir)
+)
+
+student_lm = build_lm(
+    cfg.model_name,
+    temperature=getattr(cfg, "lm_temperature", 0.6),
+    cache=getattr(cfg, "lm_cache", False),
+)
 
 # read in data
-tasks_file_path = os.path.join(cfg.output_dir, cfg.tasks_filename)
+tasks_file_path = os.path.join(output_dir, cfg.tasks_filename)
 tasks = pd.read_csv(tasks_file_path)
-
-# %%
-
-class Test(dspy.Signature):
-    question: str = dspy.InputField(description="The question text")
-    answer: str = dspy.OutputField(description="The answer to the question")
-    
-    
-test_program = dspy.Predict(Test)
-test_program.set_lm(student_lm)
-
-output = test_program(question="What is the capital of France?")
-
-print(output.answer)
 
 # %%
 
@@ -71,17 +69,18 @@ partial_answer_generator.set_lm(student_lm)
 incorrect_answer_generator.set_lm(student_lm)
 
 # %%
-def generate_student_answers_df(tasks_df, n_answers_per_question, correct_percentile):
+def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrect):
     """
     Generate a dataframe with student answers for each question.
 
     Args:
         tasks_df: DataFrame containing questions and reference answers
-        n_answers_per_question: Number of student answers to generate per question
-        correct_percentile: Percentile of answers that should be correct (0.0 to 1.0)
+        num_correct: Number of correct answers to generate per question
+        num_partial: Number of partial answers to generate per question
+        num_incorrect: Number of incorrect answers to generate per question
 
     Returns:
-        DataFrame with columns: task_id, question, reference, student_answer, intended_correct
+        DataFrame with columns: task_id, question, reference, student_answer, intended_correct, intended_label
     """
     all_answers = []
 
@@ -89,16 +88,8 @@ def generate_student_answers_df(tasks_df, n_answers_per_question, correct_percen
         question = task["question"]
         reference = task["chunk_text"]
 
-        # Calculate number of correct and incorrect answers
-        n_correct = int(n_answers_per_question * correct_percentile)
-        n_incorrect = n_answers_per_question - n_correct
-
-        # print(
-        #     f"Generating answers for task {idx}: {n_correct} correct, {n_incorrect} incorrect"
-        # )
-
         # Generate correct answers using the correct answer generator
-        for i in range(n_correct):
+        for i in range(num_correct):
             try:
                 generated_result = correct_answer_generator(
                     question=question, reference=reference
@@ -116,11 +107,35 @@ def generate_student_answers_df(tasks_df, n_answers_per_question, correct_percen
                     "reference": reference,
                     "student_answer": student_answer,
                     "intended_correct": True,
+                    "intended_label": "correct",
+                }
+            )
+
+        # Generate partial answers using the partial answer generator
+        for i in range(num_partial):
+            try:
+                generated_result = partial_answer_generator(
+                    question=question, reference=reference
+                )
+                student_answer = generated_result.answer
+            except Exception as e:
+                print(f"Error generating partial answer for task {idx}: {e}")
+                # Fallback if generation fails
+                student_answer = f"Partial answer {i + 1} for question {idx}"
+
+            all_answers.append(
+                {
+                    "task_id": idx,
+                    "question": question,
+                    "reference": reference,
+                    "student_answer": student_answer,
+                    "intended_correct": False,
+                    "intended_label": "partial",
                 }
             )
 
         # Generate incorrect answers using the incorrect answer generator
-        for i in range(n_incorrect):
+        for i in range(num_incorrect):
             try:
                 generated_result = incorrect_answer_generator(
                     question=question, reference=reference
@@ -138,6 +153,7 @@ def generate_student_answers_df(tasks_df, n_answers_per_question, correct_percen
                     "reference": reference,
                     "student_answer": student_answer,
                     "intended_correct": False,
+                    "intended_label": "incorrect",
                 }
             )
 
@@ -146,30 +162,45 @@ def generate_student_answers_df(tasks_df, n_answers_per_question, correct_percen
 
 # %%
 
-# Generate student answers dataframe
-print(f"Generating {cfg.n_students_answers_per_question} student answers per question...")
-print(f"Target correct percentage: {cfg.percentile_correct * 100}%")
+total_per_question = cfg.num_correct_answers + cfg.num_partial_answers + cfg.num_incorrect_answers
+print(f"Generating {total_per_question} student answers per question...")
+print(
+    f"Per-question targets -> correct: {cfg.num_correct_answers}, partial: {cfg.num_partial_answers}, incorrect: {cfg.num_incorrect_answers}"
+)
 
 student_answers_df = generate_student_answers_df(
-    tasks, cfg.n_students_answers_per_question, cfg.percentile_correct
+    tasks,
+    cfg.num_correct_answers,
+    cfg.num_partial_answers,
+    cfg.num_incorrect_answers,
 )
 
 print(f"Generated {len(student_answers_df)} total student answers")
-print(f"Intended correct answers: {student_answers_df['intended_correct'].sum()}")
-print(f"Intended incorrect answers: {(~student_answers_df['intended_correct']).sum()}")
+num_correct = (student_answers_df["intended_label"] == "correct").sum()
+num_partial = (student_answers_df["intended_label"] == "partial").sum()
+num_incorrect = (student_answers_df["intended_label"] == "incorrect").sum()
+print(f"Intended correct answers: {num_correct}")
+print(f"Intended partial answers: {num_partial}")
+print(f"Intended incorrect answers: {num_incorrect}")
 
 # Save the dataframe
-student_answers_filename = f"student_answers_{cfg.n_students_answers_per_question}_{cfg.percentile_correct}.csv"
-output_path = os.path.join(cfg.output_dir, student_answers_filename)
+student_answers_filename = (
+    f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}.csv"
+)
+output_path = os.path.join(output_dir, student_answers_filename)
 student_answers_df.to_csv(output_path, index=False)
 print(f"Saved student answers to: {output_path}")
 
 # %%
 
-# Sample 5 random incorrect student answers to display
-incorrect_examples = student_answers_df[~student_answers_df['intended_correct']].sample(n=5, random_state=42)
-
-for idx, example in incorrect_examples.iterrows():
-    print("\nSampled Incorrect Example:")
-    print("question: ", example["question"])
-    print("answer: ", example["student_answer"])
+"""
+Sample a few random incorrect student answers to display
+"""
+incorrect_df = student_answers_df[student_answers_df["intended_label"] == "incorrect"]
+sample_n = min(5, len(incorrect_df))
+if sample_n > 0:
+    incorrect_examples = incorrect_df.sample(n=sample_n, random_state=42)
+    for idx, example in incorrect_examples.iterrows():
+        print("\nSampled Incorrect Example:")
+        print("question: ", example["question"])
+        print("answer: ", example["student_answer"])

@@ -2,10 +2,7 @@
 import os
 import pandas as pd
 import dspy
-
-from dotenv import load_dotenv
 from types import SimpleNamespace
-load_dotenv()
 
 cfg = SimpleNamespace(**{})
 
