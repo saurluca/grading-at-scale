@@ -4,7 +4,6 @@ from datasets import ClassLabel
 import dspy
 import os
 from dotenv import load_dotenv
-from dspy.teleprompt import MIPROv2
 
 
 load_dotenv()

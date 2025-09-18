@@ -45,7 +45,7 @@ Answer:"""
 
 # %%
 
-print(f"Loading dataset from yelp_review_full...")
+print("Loading dataset from yelp_review_full...")
 dataset = load_dataset("yelp_review_full")
 
 # shuffle and reduce the dataset to the size of train_size and eval_size

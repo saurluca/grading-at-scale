@@ -2,7 +2,6 @@
 from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, Trainer
 import torch
-import torch.nn.functional as F
 from sklearn.metrics import f1_score, classification_report
 from utils import mse as utils_mse, isfloat as utils_isfloat, extract_model_pred
 import numpy as np
@@ -133,7 +132,7 @@ new_response = tokenizer.decode(new_tokens, skip_special_tokens=True)
 print(f"\nOnly new tokens: '{new_response}'")
 
 # Show the prompt template used
-print(f"\nPrompt template used:")
+print("\nPrompt template used:")
 print(f"True score: {example.get('scores', 'N/A')}")
 
 

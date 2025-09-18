@@ -1,5 +1,4 @@
 from transformers import AutoModelForCausalLM, BitsAndBytesConfig
-import torch
 
 quantization_config = BitsAndBytesConfig(
     load_in_4bit=True,

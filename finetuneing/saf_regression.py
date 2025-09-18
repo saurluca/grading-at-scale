@@ -104,7 +104,7 @@ regression_model = RegressionModel(model)
 # %%
 
 # 1 is correct, 0 is incorrect
-print(f"Loading dataset from SciEntsBank_2way...")
+print("Loading dataset from SciEntsBank_2way...")
 dataset = DatasetDict.load_from_disk("SciEntsBank_2way")
 
 # shuffle dataset
