@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 import dspy
+
 load_dotenv()
 
 
@@ -37,12 +38,16 @@ model_configs = {
     },
 }
 
-def build_lm(model_name: str, cache: bool = True, temperature: float = 0.5):
+
+def build_lm(
+    model_name: str, cache: bool = True, temperature: float = 0.5, max_tokens: int = 256
+):
     config = model_configs[model_name]
     lm_kwargs = {
         "model": config.get("model"),
         "api_key": config.get("api_key"),
         "api_base": config.get("api_base"),
+        "max_tokens": max_tokens,
         "cache": cache,
         "temperature": temperature,
     }
