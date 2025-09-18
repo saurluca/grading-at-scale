@@ -25,7 +25,7 @@ output_dir = os.path.normpath(
 
 student_lm = build_lm(
     cfg.model_name,
-    temperature=getattr(cfg, "lm_temperature", 0.6),
+    temperature=getattr(cfg, "lm_temperature", 0.8),
     cache=getattr(cfg, "lm_cache", False),
 )
 
@@ -35,28 +35,30 @@ tasks = pd.read_csv(tasks_file_path)
 
 # %%
 
+
 class CorrectAnswerGenerator(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
-    reference: str = dspy.InputField(description="The correct reference answer")
+    # reference: str = dspy.InputField(description="The correct reference answer")
     answer: str = dspy.OutputField(
-        description="A correct student answer that demonstrates understanding of the question. The answer should be accurate and well-reasoned."
+        description="A short correct student answer that demonstrates understanding of the question. The answer should be accurate and well-reasoned."
     )
-    
-    
+
+
 class PartialAnswerGenerator(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
-    reference: str = dspy.InputField(description="The correct reference answer")
+    # reference: str = dspy.InputField(description="The correct reference answer")
     answer: str = dspy.OutputField(
-        description="A partially correct student answer that demonstrates understanding of the question but not the full answer."
+        description="A short partially correct student answer that demonstrates understanding of the question but is wrong in some kind of way. Your goal is to get half the points."
     )
 
 
 class IncorrectAnswerGenerator(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
-    reference: str = dspy.InputField(description="The correct reference answer")
+    # reference: str = dspy.InputField(description="The correct reference answer")
     answer: str = dspy.OutputField(
-        description="An incorrect student answer that shows misunderstanding or error in reasoning. The answer should be plausible but wrong."
+        description="An shortincorrect student answer that shows misunderstanding or error in reasoning. The answer should be plausible but wrong."
     )
+
 
 # Create DSPy programs
 correct_answer_generator = dspy.Predict(CorrectAnswerGenerator)
@@ -67,6 +69,7 @@ incorrect_answer_generator = dspy.Predict(IncorrectAnswerGenerator)
 correct_answer_generator.set_lm(student_lm)
 partial_answer_generator.set_lm(student_lm)
 incorrect_answer_generator.set_lm(student_lm)
+
 
 # %%
 def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrect):
@@ -80,7 +83,8 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
         num_incorrect: Number of incorrect answers to generate per question
 
     Returns:
-        DataFrame with columns: task_id, question, reference, student_answer, intended_correct, intended_label
+        DataFrame with columns: task_id, question, reference, student_answer, intended_label
+        - intended_label: one of {"incorrect", "partial", "correct"}
     """
     all_answers = []
 
@@ -106,7 +110,6 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
                     "question": question,
                     "reference": reference,
                     "student_answer": student_answer,
-                    "intended_correct": True,
                     "intended_label": "correct",
                 }
             )
@@ -129,7 +132,6 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
                     "question": question,
                     "reference": reference,
                     "student_answer": student_answer,
-                    "intended_correct": False,
                     "intended_label": "partial",
                 }
             )
@@ -152,7 +154,6 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
                     "question": question,
                     "reference": reference,
                     "student_answer": student_answer,
-                    "intended_correct": False,
                     "intended_label": "incorrect",
                 }
             )
@@ -162,7 +163,9 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
 
 # %%
 
-total_per_question = cfg.num_correct_answers + cfg.num_partial_answers + cfg.num_incorrect_answers
+total_per_question = (
+    cfg.num_correct_answers + cfg.num_partial_answers + cfg.num_incorrect_answers
+)
 print(f"Generating {total_per_question} student answers per question...")
 print(
     f"Per-question targets -> correct: {cfg.num_correct_answers}, partial: {cfg.num_partial_answers}, incorrect: {cfg.num_incorrect_answers}"
@@ -184,9 +187,7 @@ print(f"Intended partial answers: {num_partial}")
 print(f"Intended incorrect answers: {num_incorrect}")
 
 # Save the dataframe
-student_answers_filename = (
-    f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}.csv"
-)
+student_answers_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}.csv"
 output_path = os.path.join(output_dir, student_answers_filename)
 student_answers_df.to_csv(output_path, index=False)
 print(f"Saved student answers to: {output_path}")

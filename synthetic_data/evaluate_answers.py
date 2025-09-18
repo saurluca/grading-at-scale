@@ -42,7 +42,6 @@ class Grader(dspy.Signature):
     )
 
 
-
 def plot_confusion_matrix(y_true, y_pred, save_path=None):
     """
     Plot a confusion matrix using seaborn's heatmap.
@@ -75,13 +74,12 @@ def plot_confusion_matrix(y_true, y_pred, save_path=None):
     plt.show()
 
 
-
 def evaluate_grader_performance(answers_df, grader):
     """
     Evaluate the grader's performance on the generated answers.
 
     Args:
-        answers_df: DataFrame with student answers and intended label/correctness
+        answers_df: DataFrame with student answers and intended labels
         grader: The Grader instance
 
     Returns:
@@ -92,7 +90,12 @@ def evaluate_grader_performance(answers_df, grader):
 
     print("Evaluating grader performance...")
 
-    label_name_to_int = {"incorrect": 0, "partial": 1, "partially correct": 1, "correct": 2}
+    label_name_to_int = {
+        "incorrect": 0,
+        "partial": 1,
+        "partially correct": 1,
+        "correct": 2,
+    }
 
     for idx, row in tqdm(answers_df.iterrows()):
         try:
@@ -105,11 +108,14 @@ def evaluate_grader_performance(answers_df, grader):
 
             predicted_labels.append(int(graded_result.label))
 
-            if "intended_label" in row and isinstance(row["intended_label"], str):
-                intended_labels.append(label_name_to_int.get(row["intended_label"].strip().lower(), 0))
+            # Consume intended_label as string or int; default to 0 if missing
+            val = row.get("intended_label", None)
+            if isinstance(val, str):
+                intended_labels.append(label_name_to_int.get(val.strip().lower(), 0))
+            elif pd.notna(val):
+                intended_labels.append(int(val))
             else:
-                # Fallback from boolean intended_correct to multiclass (2 for True, 0 for False)
-                intended_labels.append(2 if bool(row.get("intended_correct", False)) else 0)
+                intended_labels.append(0)
 
             if idx % 10 == 0:  # Progress indicator
                 print(f"Processed {idx + 1}/{len(answers_df)} answers")
@@ -118,17 +124,38 @@ def evaluate_grader_performance(answers_df, grader):
             print(f"Error grading answer {idx}: {e}")
             # Default to incorrect if grading fails
             predicted_labels.append(0)
-            if "intended_label" in row and isinstance(row["intended_label"], str):
-                intended_labels.append(label_name_to_int.get(row["intended_label"].strip().lower(), 0))
+            val = row.get("intended_label", None)
+            if isinstance(val, str):
+                intended_labels.append(label_name_to_int.get(val.strip().lower(), 0))
+            elif pd.notna(val):
+                intended_labels.append(int(val))
             else:
-                intended_labels.append(2 if bool(row.get("intended_correct", False)) else 0)
+                intended_labels.append(0)
 
     # Calculate metrics
     labels = [0, 1, 2]
     accuracy = accuracy_score(intended_labels, predicted_labels)
-    precision = precision_score(intended_labels, predicted_labels, labels=labels, average="macro", zero_division=0)
-    recall = recall_score(intended_labels, predicted_labels, labels=labels, average="macro", zero_division=0)
-    f1 = f1_score(intended_labels, predicted_labels, labels=labels, average="macro", zero_division=0)
+    precision = precision_score(
+        intended_labels,
+        predicted_labels,
+        labels=labels,
+        average="macro",
+        zero_division=0,
+    )
+    recall = recall_score(
+        intended_labels,
+        predicted_labels,
+        labels=labels,
+        average="macro",
+        zero_division=0,
+    )
+    f1 = f1_score(
+        intended_labels,
+        predicted_labels,
+        labels=labels,
+        average="macro",
+        zero_division=0,
+    )
 
     # Confusion matrix
     cm = confusion_matrix(intended_labels, predicted_labels, labels=labels)
@@ -144,14 +171,15 @@ def evaluate_grader_performance(answers_df, grader):
     }
 
 
-
 """
 Main evaluation pipeline
 """
 
 # Load config and paths
 cfg = load_config("synthetic_data")
-output_dir = os.path.normpath(os.path.join(Path(__file__).resolve().parent, "../", cfg.output_dir))
+output_dir = os.path.normpath(
+    os.path.join(Path(__file__).resolve().parent, "../", cfg.output_dir)
+)
 
 # Build LM and Grader program
 grader_lm = build_lm(
@@ -163,9 +191,7 @@ grader_program = dspy.Predict(Grader)
 grader_program.set_lm(grader_lm)
 
 # Load generated answers CSV based on config-driven naming
-generated_filename = (
-    f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}.csv"
-)
+generated_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}.csv"
 generated_path = os.path.join(output_dir, generated_filename)
 if not os.path.exists(generated_path):
     raise FileNotFoundError(f"Generated answers CSV not found at: {generated_path}")
@@ -188,9 +214,7 @@ print(f"Recall (macro): {metrics['recall']:.3f}")
 print(f"F1 Score (macro): {metrics['f1_score']:.3f}")
 
 # Plot confusion matrix
-plot_filename = (
-    f"confusion_matrix_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}.png"
-)
+plot_filename = f"confusion_matrix_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}.png"
 plot_path = os.path.join(output_dir, plot_filename)
 plot_confusion_matrix(
     metrics["intended_labels"],
@@ -201,11 +225,11 @@ plot_confusion_matrix(
 # Add predictions to DF and save
 label_int_to_name = {0: "incorrect", 1: "partial", 2: "correct"}
 student_answers_df["predicted_label"] = metrics["predicted_labels"]
-student_answers_df["predicted_label_name"] = student_answers_df["predicted_label"].map(label_int_to_name)
-
-complete_output_filename = (
-    f"student_answers_with_predictions_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}.csv"
+student_answers_df["predicted_label_name"] = student_answers_df["predicted_label"].map(
+    label_int_to_name
 )
+
+complete_output_filename = f"student_answers_with_predictions_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}.csv"
 complete_output_path = os.path.join(output_dir, complete_output_filename)
 student_answers_df.to_csv(complete_output_path, index=False)
 print(f"\nSaved complete results to: {complete_output_path}")
