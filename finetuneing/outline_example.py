@@ -12,14 +12,21 @@ model = outlines.from_transformers(
     AutoTokenizer.from_pretrained(MODEL_NAME),
 )
 
+
 class Rating(Enum):
     false = 0
     partially_correct = 0.5
     correct = 1
 
+
 class GradingResult(BaseModel):
-    reasoning: str = Field(..., description="Brief explanation for the grade no more then 10 words")
-    score: Rating = Field(..., description="Grade as a number: false, partially_correct, or correct")
+    reasoning: str = Field(
+        ..., description="Brief explanation for the grade no more then 10 words"
+    )
+    score: Rating = Field(
+        ..., description="Grade as a number: false, partially_correct, or correct"
+    )
+
 
 prompt_template = """question: {question} \n student answer: {answer} \n reference answer: {reference}"""
 

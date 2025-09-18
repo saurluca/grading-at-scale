@@ -23,9 +23,11 @@ print(f"Loading tokenizer and model from {model_name}...")
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 # Use eager attention implementation for Gemma3 models as recommended
 model = AutoModelForCausalLM.from_pretrained(
-    model_name, 
+    model_name,
     attn_implementation="eager",
-    use_cache=(not use_gradient_checkpointing)  # Disable cache for gradient checkpointing compatibility
+    use_cache=(
+        not use_gradient_checkpointing
+    ),  # Disable cache for gradient checkpointing compatibility
 ).to(device)
 
 # Fix for models that might not have padding token
@@ -39,9 +41,9 @@ if use_gradient_checkpointing:
 prompt_template = """You are a helpful assistant that grades student answers to questions. 
 Return only the grade. Valid values are 0, 0.5 or 1. 1 is the highest grade.
 The question: {question} \n the student answer: {answer} \n the reference answer: {reference}."""
-    
-# %%   
-    
+
+# %%
+
 print(f"Loading dataset from {dataset_name}...")
 dataset = load_dataset(dataset_name)
 
@@ -61,37 +63,44 @@ if eval_size is not None:
 
 # %%
 
+
 def tokenize_function(examples):
     """Tokenize the text and prepare inputs for the model"""
-    
+
     prompts = []
     scores = []
-    
+
     for i in range(len(examples["question"])):
-        prompts.append(prompt_template.format(
-            question=examples["question"][i], 
-            answer=examples["answer_feedback"][i], 
-            reference=examples["reference_answer"][i]
-        ))
+        prompts.append(
+            prompt_template.format(
+                question=examples["question"][i],
+                answer=examples["answer_feedback"][i],
+                reference=examples["reference_answer"][i],
+            )
+        )
         scores.append(examples["score"][i])
-    
+
     tokenized = tokenizer(
         prompts,
         padding="max_length",
         truncation=True,
         max_length=256,
-        return_tensors=None
+        return_tensors=None,
     )
-    
+
     # Store scores for MSE loss calculation
     tokenized["scores"] = scores
-    
+
     return tokenized
 
-print("\nTokenizing datasets...")
-tokenized_train = small_train.map(tokenize_function, batched=True, remove_columns=small_train.column_names)
-tokenized_eval = small_eval.map(tokenize_function, batched=True, remove_columns=small_eval.column_names)
 
+print("\nTokenizing datasets...")
+tokenized_train = small_train.map(
+    tokenize_function, batched=True, remove_columns=small_train.column_names
+)
+tokenized_eval = small_eval.map(
+    tokenize_function, batched=True, remove_columns=small_eval.column_names
+)
 
 
 # %% RUN SMALL EXAMPLE
@@ -110,7 +119,7 @@ outputs = model.generate(
     max_new_tokens=4,
     do_sample=False,
     pad_token_id=tokenizer.eos_token_id,
-    eos_token_id=tokenizer.eos_token_id
+    eos_token_id=tokenizer.eos_token_id,
 )
 
 
@@ -119,7 +128,7 @@ full_response = tokenizer.decode(outputs[0], skip_special_tokens=True)
 print(f"\nFull generated response: '{full_response}'")
 
 # Decode only the new tokens (what the model generated)
-new_tokens = outputs[0][input_ids.shape[1]:]
+new_tokens = outputs[0][input_ids.shape[1] :]
 new_response = tokenizer.decode(new_tokens, skip_special_tokens=True)
 print(f"\nOnly new tokens: '{new_response}'")
 
@@ -129,6 +138,7 @@ print(f"True score: {example.get('scores', 'N/A')}")
 
 
 # %%
+
 
 def extract_score_from_text(text):
     """Extract numerical score from model output text. Return None if not a clean number in {0,0.5,1}."""
@@ -142,9 +152,7 @@ def extract_score_from_text(text):
     except Exception:
         pass
     # Fallback regex patterns
-    patterns = [
-        r'^\s*(0|0\.5|1)\s*$'
-    ]
+    patterns = [r"^\s*(0|0\.5|1)\s*$"]
     for pattern in patterns:
         match = re.search(pattern, text.lower())
         if match:
@@ -156,6 +164,7 @@ def extract_score_from_text(text):
 
 # `%%
 
+
 def evaluate_model(model, tokenizer, eval_dataset, device):
     """Evaluate model using simple generation + utils helpers.
     - Generate short outputs per example
@@ -163,6 +172,7 @@ def evaluate_model(model, tokenizer, eval_dataset, device):
     - Compute MSE (and invalid count) with utils.mse
     - Compute macro F1 by binning values into classes {0, 0.5, 1}
     """
+
     def bin_score_to_class(val: float) -> int:
         if val < 0.25:
             return 0
@@ -173,7 +183,7 @@ def evaluate_model(model, tokenizer, eval_dataset, device):
     model.eval()
     pred_texts = []
     true_texts = []
-    
+
     with torch.no_grad():
         for i in range(len(eval_dataset)):
             input_ids = torch.tensor([eval_dataset[i]["input_ids"]]).to(device)
@@ -182,18 +192,20 @@ def evaluate_model(model, tokenizer, eval_dataset, device):
                 max_new_tokens=4,
                 do_sample=False,
                 pad_token_id=tokenizer.eos_token_id,
-                eos_token_id=tokenizer.eos_token_id
+                eos_token_id=tokenizer.eos_token_id,
             )
-            response = tokenizer.decode(outputs[0][input_ids.shape[1]:], skip_special_tokens=True).strip()
+            response = tokenizer.decode(
+                outputs[0][input_ids.shape[1] :], skip_special_tokens=True
+            ).strip()
             pred_texts.append(response)
             true_texts.append(str(eval_dataset[i]["scores"]))
 
     cleaned_preds = extract_model_pred(pred_texts)
-    
+
     # Convert to numpy arrays for proper indexing
     cleaned_preds_array = np.array(cleaned_preds)
     true_texts_array = np.array(true_texts)
-    
+
     mse_val, invalid_count = utils_mse(cleaned_preds_array, true_texts_array)
 
     y_true = []
@@ -211,23 +223,31 @@ def evaluate_model(model, tokenizer, eval_dataset, device):
 
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
-    f1 = f1_score(y_true, y_pred, average='macro', zero_division=0)
+    f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
 
     print(f"Eval MSE: {mse_val:.4f} | invalid: {invalid_count}")
     print("\nClassification Report:")
-    print(classification_report(y_true, y_pred, target_names=['0', '0.5', '1'], zero_division=0))
+    print(
+        classification_report(
+            y_true, y_pred, target_names=["0", "0.5", "1"], zero_division=0
+        )
+    )
     return f1, y_pred, y_true
 
+
 # %%
+
 
 # Custom trainer with MSE loss
 class MSETrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         # Precompute token ids for score strings
         def first_token_id(s):
             ids = self.tokenizer.encode(s, add_special_tokens=False)
             return ids[0] if len(ids) > 0 else None
+
         self.score_id_map = {
             0.0: first_token_id("0"),
             0.5: first_token_id("0.5"),
@@ -241,9 +261,13 @@ class MSETrainer(Trainer):
         if self.score_id_map[1.0] is None:
             self.score_id_map[1.0] = first_token_id(" 1")
         # Keep only available ids
-        self.available_scores = [v for v in self.score_id_map.keys() if self.score_id_map[v] is not None]
+        self.available_scores = [
+            v for v in self.score_id_map.keys() if self.score_id_map[v] is not None
+        ]
         self.available_ids = [self.score_id_map[v] for v in self.available_scores]
-        self.available_values_tensor = torch.tensor(self.available_scores, dtype=torch.float32, device=self.model.device)
+        self.available_values_tensor = torch.tensor(
+            self.available_scores, dtype=torch.float32, device=self.model.device
+        )
 
     @property
     def tokenizer(self):
@@ -252,7 +276,9 @@ class MSETrainer(Trainer):
 
     def compute_loss(self, model, inputs, return_outputs=False):
         input_ids = inputs["input_ids"].to(self.model.device)
-        scores = torch.tensor(inputs["scores"], dtype=torch.float32, device=self.model.device)
+        scores = torch.tensor(
+            inputs["scores"], dtype=torch.float32, device=self.model.device
+        )
         outputs = model(input_ids=input_ids)
         logits = outputs.logits  # [B, T, V]
         last_token_logits = logits[:, -1, :]  # [B, V]
@@ -264,12 +290,16 @@ class MSETrainer(Trainer):
             return (loss, outputs) if return_outputs else loss
 
         # Gather probabilities for our score tokens
-        ids_tensor = torch.tensor(self.available_ids, dtype=torch.long, device=self.model.device)
+        ids_tensor = torch.tensor(
+            self.available_ids, dtype=torch.long, device=self.model.device
+        )
         selected_probs = probs.index_select(dim=1, index=ids_tensor)  # [B, K]
         total_prob = selected_probs.sum(dim=1)  # [B]
 
         # Expected score conditioned on selecting one of the score tokens
-        weighted_sum = (selected_probs * self.available_values_tensor.unsqueeze(0)).sum(dim=1)  # [B]
+        weighted_sum = (selected_probs * self.available_values_tensor.unsqueeze(0)).sum(
+            dim=1
+        )  # [B]
         eps = 1e-8
         predicted_scores = weighted_sum / (total_prob + eps)  # [B]
 
@@ -278,10 +308,13 @@ class MSETrainer(Trainer):
 
         # If the model doesn't put probability mass on any of the score tokens, count as wrong (MSE=1)
         invalid_mask = total_prob < 1e-4
-        squared_error = torch.where(invalid_mask, torch.ones_like(squared_error), squared_error)
+        squared_error = torch.where(
+            invalid_mask, torch.ones_like(squared_error), squared_error
+        )
 
         loss = squared_error.mean()
         return (loss, outputs) if return_outputs else loss
+
 
 # %%
 
@@ -325,7 +358,9 @@ print("\nTraining completed successfully!")
 
 # Evaluate model after training
 print("\nEvaluating model after training...")
-f1_after, predictions, true_scores = evaluate_model(model, tokenizer, tokenized_eval, device)
+f1_after, predictions, true_scores = evaluate_model(
+    model, tokenizer, tokenized_eval, device
+)
 print(f"F1 Score after training: {f1_after:.4f}")
 
 # Print some example predictions

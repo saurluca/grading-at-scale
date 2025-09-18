@@ -181,6 +181,8 @@ output_dir = os.path.normpath(
     os.path.join(Path(__file__).resolve().parent, "../", cfg.output_dir)
 )
 
+print(f"Using model {cfg.teacher_model_name} for evaluation")
+
 # Build LM and Grader program
 grader_lm = build_lm(
     cfg.teacher_model_name,

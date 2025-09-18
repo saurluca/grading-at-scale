@@ -12,12 +12,12 @@ print("Loading model")
 model = AutoModelForCausalLM.from_pretrained(
     # "bigscience/bloom-1b7",
     "swiss-ai/Apertus-8B-Instruct-2509",
-    quantization_config=quantization_config
+    quantization_config=quantization_config,
 )
 
 print("Getting memory footprint")
 memory_bytes = model.get_memory_footprint()
-memory_gb = memory_bytes / (1024 ** 3)
+memory_gb = memory_bytes / (1024**3)
 print(f"Memory footprint: {memory_gb:.2f} GB")
 
 

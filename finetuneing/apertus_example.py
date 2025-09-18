@@ -17,9 +17,7 @@ model = AutoModelForCausalLM.from_pretrained(
 
 # prepare the model input
 prompt = "Give me a brief explanation of gravity in simple terms."
-messages_think = [
-    {"role": "user", "content": prompt}
-]
+messages_think = [{"role": "user", "content": prompt}]
 
 text = tokenizer.apply_chat_template(
     messages_think,

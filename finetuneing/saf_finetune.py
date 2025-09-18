@@ -15,7 +15,9 @@ seed = 42
 train_size = 100
 eval_size = 10
 dataset_name = "Short-Answer-Feedback/saf_communication_networks_english"
-hub_model_id = f"saurluca/{MODEL_NAME.split('/')[-1]}-finetuned-saf-communication-networks-english"
+hub_model_id = (
+    f"saurluca/{MODEL_NAME.split('/')[-1]}-finetuned-saf-communication-networks-english"
+)
 
 
 # Load tokenizer and model
@@ -30,17 +32,22 @@ class Rating(Enum):
     incorrect = 0
     partially_correct = 0.5
     correct = 1
-    
+
 
 class GradingResult(BaseModel):
-    reasoning: str = Field(..., description="Brief explanation for the grade no more then 10 words")
-    score: Rating = Field(..., description="Grade as a number: incorrect, partially_correct, or correct")
+    reasoning: str = Field(
+        ..., description="Brief explanation for the grade no more then 10 words"
+    )
+    score: Rating = Field(
+        ..., description="Grade as a number: incorrect, partially_correct, or correct"
+    )
+
 
 prompt_template = """question: {question} \n student answer: {answer} \n reference answer: {reference}"""
-        
-    
-# %%   
-    
+
+
+# %%
+
 print(f"Loading dataset from {dataset_name}...")
 dataset = load_dataset(dataset_name)
 
@@ -55,22 +62,18 @@ if train_size is not None:
     small_train = small_train.select(range(train_size))
 if eval_size is not None:
     small_eval = small_eval.select(range(eval_size))
-    
-reverse_rating = {
-    "Incorrect": 0.0,
-    "Partially correct": 0.5,
-    "Correct": 1.0
-}
+
+reverse_rating = {"Incorrect": 0.0, "Partially correct": 0.5, "Correct": 1.0}
 
 new_small_eval = []
-    
+
 # convert verification_feedback to rating string with rever
 for example in tqdm(small_eval):
     example["verification_feedback"] = reverse_rating[example["verification_feedback"]]
     new_small_eval.append(example)
-    
+
 small_eval = new_small_eval
-    
+
 print(new_small_eval[0])
 
 # %%
@@ -83,12 +86,12 @@ mistakes = 0
 
 for i in tqdm(range(len(small_eval))):
     example = small_eval[i]
-    
+
     grading_result = model(
         prompt_template.format(
             question=example["question"],
             answer=example["answer_feedback"],
-            reference=example["reference_answer"]
+            reference=example["reference_answer"],
         ),
         GradingResult,
         max_new_tokens=512,
@@ -100,7 +103,7 @@ for i in tqdm(range(len(small_eval))):
         mistakes += 1
         continue
     predictions.append(str(float(grading_result.score.value)))
-    true_scores.append(str(example['verification_feedback']))
+    true_scores.append(str(example["verification_feedback"]))
 
 print(f"Mistakes: {mistakes}")
 

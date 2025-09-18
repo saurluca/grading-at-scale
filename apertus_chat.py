@@ -1,7 +1,7 @@
-import json
 import os
 import requests
 from dotenv import load_dotenv
+
 load_dotenv()
 
 API_KEY = os.getenv("SWISS_API_KEY")  # Or set this manually
@@ -17,6 +17,7 @@ def list_models():
     resp.raise_for_status()
     return resp.json()
 
+
 def chat_completion(model_id: str, messages: list, temperature=1.0, top_p=1.0, n=1):
     payload = {
         "model": model_id,
@@ -28,6 +29,7 @@ def chat_completion(model_id: str, messages: list, temperature=1.0, top_p=1.0, n
     resp = requests.post(f"{API_BASE}/chat/completions", json=payload, headers=HEADERS)
     resp.raise_for_status()
     return resp.json()
+
 
 def interactive_chat(model_id: str):
     print("Start chatting! (type 'exit' to quit)\n")
@@ -45,6 +47,7 @@ def interactive_chat(model_id: str):
         print(f"AI: {reply}\n")
 
         conversation.append({"role": "assistant", "content": reply})
+
 
 def main():
     print("Listing models...")

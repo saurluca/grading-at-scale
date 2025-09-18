@@ -14,23 +14,26 @@ tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
 quantization_config = QuantoConfig(weights="int8")
 model = AutoModelForCausalLM.from_pretrained(
-    model_name, torch_dtype="auto", device_map=device, quantization_config=quantization_config
+    model_name,
+    torch_dtype="auto",
+    device_map=device,
+    quantization_config=quantization_config,
 )
 
 model = torch.compile(model)
 
 # prepare the model input
 prompt = "Give me a brief explanation of gravity in simple terms."
-messages_think = [
-    {"role": "user", "content": prompt}
-]
+messages_think = [{"role": "user", "content": prompt}]
 
 text = tokenizer.apply_chat_template(
     messages_think,
     tokenize=False,
     add_generation_prompt=True,
 )
-model_inputs = tokenizer([text], return_tensors="pt", add_special_tokens=False).to(model.device)
+model_inputs = tokenizer([text], return_tensors="pt", add_special_tokens=False).to(
+    model.device
+)
 
 print("Model inputs")
 

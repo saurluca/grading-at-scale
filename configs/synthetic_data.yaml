@@ -1,5 +1,7 @@
-model_name: apertus-70b
-teacher_model_name: apertus-70b
+# models available: apertus-8b, apertus-70b, gpt-4o-mini, gpt-4o, DeepSeek-V3.1, Llamma-4-Scout, gpt-oss-120b
+model_name: gpt-4o
+teacher_model_name: apertus-8b
+
 output_dir: data/privacy
 tasks_filename: privacy_data.csv
 

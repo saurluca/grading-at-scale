@@ -56,7 +56,7 @@ class IncorrectAnswerGenerator(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
     # reference: str = dspy.InputField(description="The correct reference answer")
     answer: str = dspy.OutputField(
-        description="An shortincorrect student answer that shows misunderstanding or error in reasoning. The answer should be plausible but wrong."
+        description="A short incorrect student answer that shows misunderstanding or error in reasoning. The answer should be plausible but wrong."
     )
 
 
