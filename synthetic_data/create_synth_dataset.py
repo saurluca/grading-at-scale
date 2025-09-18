@@ -25,8 +25,8 @@ output_dir = os.path.normpath(
 
 student_lm = build_lm(
     cfg.model_name,
-    temperature=getattr(cfg, "lm_temperature", 0.8),
-    cache=getattr(cfg, "lm_cache", False),
+    temperature=getattr(cfg, "lm_temperature", None),
+    cache=getattr(cfg, "lm_cache", None),
 )
 
 # read in data
@@ -56,7 +56,7 @@ class IncorrectAnswerGenerator(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
     # reference: str = dspy.InputField(description="The correct reference answer")
     answer: str = dspy.OutputField(
-        description="A short incorrect student answer that shows misunderstanding or error in reasoning. The answer should be plausible but wrong."
+        description="A short incorrect student answer that shows misunderstanding or error in reasoning. Be creative. The answer should be plausible but wrong."
     )
 
 
