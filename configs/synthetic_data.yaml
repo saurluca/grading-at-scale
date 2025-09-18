@@ -1,13 +1,18 @@
-# models available: apertus-8b, apertus-70b, gpt-4o-mini, gpt-4o, DeepSeek-V3.1, Llamma-4-Scout, gpt-oss-120b
+# models: apertus-8b, apertus-70b, gpt-4o-mini, gpt-4o, DeepSeek-V3.1,
 model_name: gpt-4o
-teacher_model_name: apertus-8b
+teacher_model_name: gpt-4o-mini
 
-output_dir: data/privacy
-tasks_filename: privacy_data.csv
+# Raw input folders (JSON)
+raw_tasks_dir: data/raw/tasks
+raw_chunks_dir: data/raw/chunks
 
-num_correct_answers: 1
-num_partial_answers: 1
-num_incorrect_answers: 1
+# Synth output (CSV)
+output_dir: data/synth
+tasks_filename: tasks_unified.csv
 
-lm_temperature: 0.6
+num_correct_answers: 3
+num_partial_answers: 3
+num_incorrect_answers: 3
+
+lm_temperature: 1.0
 lm_cache: false
