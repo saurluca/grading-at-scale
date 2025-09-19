@@ -44,8 +44,12 @@ model_configs = {
         "model": "openrouter/openai/gpt-5-mini",
         "api_key": os.getenv("OPENROUTER_API_KEY"),
     },
-    "llama-3.1-8b": {
-        "model": "openrouter/meta-llama/llama-3.1-8b-instruct",
+    "gpt-oss-20b": {
+        "model": "openrouter/openai/gpt-oss-20b:free",
+        "api_key": os.getenv("OPENROUTER_API_KEY"),
+    },
+    "aion-llama": {
+        "model": "openrouter/aion-labs/aion-rp-llama-3.1-8b",
         "api_key": os.getenv("OPENROUTER_API_KEY"),
     },
 }

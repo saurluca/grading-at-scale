@@ -25,8 +25,8 @@ output_dir = os.path.normpath(
 
 student_lm = build_lm(
     cfg.model_name,
-    temperature=getattr(cfg, "lm_temperature", None),
-    cache=getattr(cfg, "lm_cache", None),
+    temperature=getattr(cfg, "lm_temperature_creation", None),
+    cache=False,
 )
 
 # read in data
@@ -38,7 +38,7 @@ tasks = pd.read_csv(tasks_file_path)
 
 class CorrectAnswerGenerator(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
-    # reference: str = dspy.InputField(description="The correct reference answer")
+    reference: str = dspy.InputField(description="The correct reference answer")
     answer: str = dspy.OutputField(
         description="A short correct student answer that demonstrates understanding of the question. The answer should be accurate and well-reasoned."
     )
@@ -46,9 +46,9 @@ class CorrectAnswerGenerator(dspy.Signature):
 
 class PartialAnswerGenerator(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
-    # reference: str = dspy.InputField(description="The correct reference answer")
+    reference: str = dspy.InputField(description="The correct reference answer")
     answer: str = dspy.OutputField(
-        description="A short partially correct student answer that demonstrates understanding of the question but is wrong in some kind of way. Your goal is to get half the points."
+        description="A short partially correct student answer that demonstrates understanding of the question but is wrong."
     )
 
 
@@ -83,32 +83,36 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
         num_incorrect: Number of incorrect answers to generate per question
 
     Returns:
-        DataFrame with columns: task_id, question, reference, student_answer, intended_label
+        DataFrame with columns: task_id, question, reference_answer, chunk_text, topic, student_answer, intended_label
         - intended_label: one of {"incorrect", "partial", "correct"}
     """
     all_answers = []
 
     for idx, task in tqdm(tasks_df.iterrows()):
         question = task["question"]
-        reference = task["chunk_text"]
+        reference_answer = task["answer"]
+        chunk_text = task["chunk_text"]
+        topic = task["topic"]
 
         # Generate correct answers using the correct answer generator
         for i in range(num_correct):
             try:
                 generated_result = correct_answer_generator(
-                    question=question, reference=reference
+                    question=question, reference=reference_answer
                 )
                 student_answer = generated_result.answer
             except Exception as e:
                 print(f"Error generating correct answer for task {idx}: {e}")
                 # Fallback to reference answer
-                student_answer = reference
+                student_answer = reference_answer
 
             all_answers.append(
                 {
                     "task_id": idx,
                     "question": question,
-                    "reference": reference,
+                    "reference_answer": reference_answer,
+                    "chunk_text": chunk_text,
+                    "topic": topic,
                     "student_answer": student_answer,
                     "intended_label": "correct",
                 }
@@ -118,7 +122,7 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
         for i in range(num_partial):
             try:
                 generated_result = partial_answer_generator(
-                    question=question, reference=reference
+                    question=question, reference=reference_answer
                 )
                 student_answer = generated_result.answer
             except Exception as e:
@@ -130,7 +134,9 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
                 {
                     "task_id": idx,
                     "question": question,
-                    "reference": reference,
+                    "reference_answer": reference_answer,
+                    "chunk_text": chunk_text,
+                    "topic": topic,
                     "student_answer": student_answer,
                     "intended_label": "partial",
                 }
@@ -140,7 +146,7 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
         for i in range(num_incorrect):
             try:
                 generated_result = incorrect_answer_generator(
-                    question=question, reference=reference
+                    question=question, reference=reference_answer
                 )
                 student_answer = generated_result.answer
             except Exception as e:
@@ -152,7 +158,9 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
                 {
                     "task_id": idx,
                     "question": question,
-                    "reference": reference,
+                    "reference_answer": reference_answer,
+                    "chunk_text": chunk_text,
+                    "topic": topic,
                     "student_answer": student_answer,
                     "intended_label": "incorrect",
                 }
@@ -204,4 +212,7 @@ if sample_n > 0:
     for idx, example in incorrect_examples.iterrows():
         print("\nSampled Incorrect Example:")
         print("question: ", example["question"])
-        print("answer: ", example["student_answer"])
+        print("reference_answer: ", example["reference_answer"])
+        print("chunk_text: ", example["chunk_text"])
+        print("topic: ", example["topic"])
+        print("student_answer: ", example["student_answer"])

@@ -26,15 +26,25 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from utils import load_config
 
+# Enable nice tqdm integration with pandas
+tqdm.pandas(desc="Grading answers")
+
 
 class Grader(dspy.Signature):
-    """You are a university professor for a introductory class.
+    """
+    You are a university professor for a introductory class.
     Your job is to grade exercises and decide if the student answers are correct(2), partially correct(1), or incorrect(0).
-    Answer based on the provided reference answer and reference text.
+    Answer based on the provided reference answer.
+    Return the corrsponding integer label for the grading, 0 for incorrect, 1 for partially correct, 2 for correct.
     """
 
     question: str = dspy.InputField(description="The question text")
-    reference: str = dspy.InputField(description="The ground truth reference text")
+    reference: str = dspy.InputField(
+        description="The ground truth reference text", optional=True
+    )
+    reference_answer: str = dspy.InputField(
+        description="The ground truth reference answer"
+    )
     answer: str = dspy.InputField(description="The student answer")
 
     label: int = dspy.OutputField(
@@ -85,9 +95,6 @@ def evaluate_grader_performance(answers_df, grader):
     Returns:
         Dictionary with evaluation metrics
     """
-    predicted_labels = []
-    intended_labels = []
-
     print("Evaluating grader performance...")
 
     label_name_to_int = {
@@ -97,40 +104,32 @@ def evaluate_grader_performance(answers_df, grader):
         "correct": 2,
     }
 
-    for idx, row in tqdm(answers_df.iterrows()):
+    def grade_row(row):
         try:
-            # Get grader's prediction
-            graded_result = grader(
+            result = grader(
                 question=row["question"],
-                reference=row["reference"],
+                # reference=row["chunk_text"],
+                reference_answer=row["reference_answer"],
                 answer=row["student_answer"],
             )
-
-            predicted_labels.append(int(graded_result.label))
-
-            # Consume intended_label as string or int; default to 0 if missing
-            val = row.get("intended_label", None)
-            if isinstance(val, str):
-                intended_labels.append(label_name_to_int.get(val.strip().lower(), 0))
-            elif pd.notna(val):
-                intended_labels.append(int(val))
-            else:
-                intended_labels.append(0)
-
-            if idx % 10 == 0:  # Progress indicator
-                print(f"Processed {idx + 1}/{len(answers_df)} answers")
-
+            predicted = int(result.label)
         except Exception as e:
-            print(f"Error grading answer {idx}: {e}")
-            # Default to incorrect if grading fails
-            predicted_labels.append(0)
-            val = row.get("intended_label", None)
-            if isinstance(val, str):
-                intended_labels.append(label_name_to_int.get(val.strip().lower(), 0))
-            elif pd.notna(val):
-                intended_labels.append(int(val))
-            else:
-                intended_labels.append(0)
+            tqdm.write(f"Error grading answer: {e}")
+            predicted = -1
+
+        val = row.get("intended_label", None)
+        if isinstance(val, str):
+            intended = label_name_to_int.get(val.strip().lower(), 0)
+        elif pd.notna(val):
+            intended = int(val)
+        else:
+            intended = 0
+
+        return {"predicted": predicted, "intended": intended}
+
+    results = answers_df.progress_apply(grade_row, axis=1)
+    predicted_labels = results.map(lambda d: d["predicted"]).tolist()
+    intended_labels = results.map(lambda d: d["intended"]).tolist()
 
     # Calculate metrics
     labels = [0, 1, 2]
@@ -186,8 +185,6 @@ print(f"Using model {cfg.teacher_model_name} for evaluation")
 # Build LM and Grader program
 grader_lm = build_lm(
     cfg.teacher_model_name,
-    temperature=getattr(cfg, "lm_temperature", 0.6),
-    cache=getattr(cfg, "lm_cache", False),
 )
 grader_program = dspy.Predict(Grader)
 grader_program.set_lm(grader_lm)
