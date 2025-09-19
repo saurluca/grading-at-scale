@@ -6,7 +6,17 @@ import pandas as pd
 import dspy
 from tqdm import tqdm
 from model_builder import build_lm
-from typing import List
+from gen_signatures import (
+    CorrectAnswerGenerator,
+    PartialAnswerGenerator,
+    IncorrectAnswerGenerator,
+    CorrectAnswerGeneratorPerQuestion,
+    PartialAnswerGeneratorPerQuestion,
+    IncorrectAnswerGeneratorPerQuestion,
+    CorrectAnswerGeneratorAll,
+    PartialAnswerGeneratorAll,
+    IncorrectAnswerGeneratorAll,
+)
 
 # Ensure project root is on sys.path for absolute imports (works in scripts and notebooks)
 if "__file__" in globals():
@@ -38,100 +48,6 @@ tasks_file_path = os.path.join(output_dir, cfg.tasks_filename)
 tasks = pd.read_csv(tasks_file_path)
 
 
-class CorrectAnswerGenerator(dspy.Signature):
-    question: str = dspy.InputField(description="The question text")
-    reference: str = dspy.InputField(description="The correct reference answer")
-    answer: str = dspy.OutputField(
-        description="A short correct student answer that demonstrates understanding of the question. The answer should be accurate and well-reasoned."
-    )
-
-
-class PartialAnswerGenerator(dspy.Signature):
-    question: str = dspy.InputField(description="The question text")
-    reference: str = dspy.InputField(description="The correct reference answer")
-    answer: str = dspy.OutputField(
-        description="A short partially correct student answer that demonstrates understanding of the question but is wrong."
-    )
-
-
-class IncorrectAnswerGenerator(dspy.Signature):
-    question: str = dspy.InputField(description="The question text")
-    # reference: str = dspy.InputField(description="The correct reference answer")
-    answer: str = dspy.OutputField(
-        description="A short incorrect student answer that shows misunderstanding or error in reasoning. Be creative. The answer should be plausible but wrong."
-    )
-
-
-# Per-question batched generators (many answers for one question per call)
-class CorrectAnswerGeneratorPerQuestion(dspy.Signature):
-    question: str = dspy.InputField(description="The question text")
-    reference_answer: str = dspy.InputField(description="The correct reference answer")
-    number_of_answers_per_question: int = dspy.InputField(
-        description="How many answers to generate for this question"
-    )
-    answers: List[str] = dspy.OutputField(description="List of correct student answers")
-
-
-class PartialAnswerGeneratorPerQuestion(dspy.Signature):
-    question: str = dspy.InputField(description="The question text")
-    reference_answer: str = dspy.InputField(description="The correct reference answer")
-    number_of_answers_per_question: int = dspy.InputField(
-        description="How many answers to generate for this question"
-    )
-    answers: List[str] = dspy.OutputField(
-        description="List of partially correct student answers"
-    )
-
-
-class IncorrectAnswerGeneratorPerQuestion(dspy.Signature):
-    question: str = dspy.InputField(description="The question text")
-    number_of_answers_per_question: int = dspy.InputField(
-        description="How many answers to generate for this question"
-    )
-    answers: List[str] = dspy.OutputField(
-        description="List of incorrect student answers"
-    )
-
-
-# All-questions batched generators (many answers for all questions in one call)
-class CorrectAnswerGeneratorAll(dspy.Signature):
-    questions: List[str] = dspy.InputField(description="The list of questions")
-    # references: List[str] = dspy.InputField(description="Optional context texts")
-    reference_answers: List[str] = dspy.InputField(
-        description="The list of correct reference answers"
-    )
-    number_of_answers_per_question: int = dspy.InputField(
-        description="How many answers per question"
-    )
-    answers: List[str] = dspy.OutputField(
-        description="Flat list of answers in question-major order"
-    )
-
-
-class PartialAnswerGeneratorAll(dspy.Signature):
-    questions: List[str] = dspy.InputField(description="The list of questions")
-    # references: List[str] = dspy.InputField(description="Optional context texts")
-    reference_answers: List[str] = dspy.InputField(
-        description="The list of correct reference answers"
-    )
-    number_of_answers_per_question: int = dspy.InputField(
-        description="How many answers per question"
-    )
-    answers: List[str] = dspy.OutputField(
-        description="Flat list of answers in question-major order"
-    )
-
-
-class IncorrectAnswerGeneratorAll(dspy.Signature):
-    questions: List[str] = dspy.InputField(description="The list of questions")
-    number_of_answers_per_question: int = dspy.InputField(
-        description="How many answers per question"
-    )
-    answers: List[str] = dspy.OutputField(
-        description="Flat list of answers in question-major order"
-    )
-
-
 # Create DSPy programs
 correct_answer_generator = dspy.Predict(CorrectAnswerGenerator)
 partial_answer_generator = dspy.Predict(PartialAnswerGenerator)
@@ -150,18 +66,15 @@ correct_answer_generator.set_lm(student_lm)
 partial_answer_generator.set_lm(student_lm)
 incorrect_answer_generator.set_lm(student_lm)
 
-# Increase max_tokens
 correct_answer_generator_perq.set_lm(student_lm)
 partial_answer_generator_perq.set_lm(student_lm)
 incorrect_answer_generator_perq.set_lm(student_lm)
 
-# Increase max_tokens
 correct_answer_generator_all.set_lm(student_lm)
 partial_answer_generator_all.set_lm(student_lm)
 incorrect_answer_generator_all.set_lm(student_lm)
 
 
-# %%
 def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrect):
     """
     Generate a dataframe with student answers for each question.
@@ -187,9 +100,12 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
         # Generate correct answers using the correct answer generator
         for i in range(num_correct):
             try:
-                generated_result = correct_answer_generator(
-                    question=question, reference=reference_answer
-                )
+                kwargs = {"question": question}
+                if getattr(cfg, "create_pass_reference_for_correct", False):
+                    kwargs["reference"] = chunk_text
+                if getattr(cfg, "create_pass_reference_answer_for_correct", True):
+                    kwargs["reference_answer"] = reference_answer
+                generated_result = correct_answer_generator(**kwargs)
                 student_answer = generated_result.answer
             except Exception as e:
                 print(f"Error generating correct answer for task {idx}: {e}")
@@ -211,9 +127,12 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
         # Generate partial answers using the partial answer generator
         for i in range(num_partial):
             try:
-                generated_result = partial_answer_generator(
-                    question=question, reference=reference_answer
-                )
+                kwargs = {"question": question}
+                if getattr(cfg, "create_pass_reference_for_partial", False):
+                    kwargs["reference"] = chunk_text
+                if getattr(cfg, "create_pass_reference_answer_for_partial", True):
+                    kwargs["reference_answer"] = reference_answer
+                generated_result = partial_answer_generator(**kwargs)
                 student_answer = generated_result.answer
             except Exception as e:
                 print(f"Error generating partial answer for task {idx}: {e}")
@@ -235,9 +154,12 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
         # Generate incorrect answers using the incorrect answer generator
         for i in range(num_incorrect):
             try:
-                generated_result = incorrect_answer_generator(
-                    question=question, reference=reference_answer
-                )
+                kwargs = {"question": question}
+                if getattr(cfg, "create_pass_reference_for_incorrect", False):
+                    kwargs["reference"] = chunk_text
+                if getattr(cfg, "create_pass_reference_answer_for_incorrect", False):
+                    kwargs["reference_answer"] = reference_answer
+                generated_result = incorrect_answer_generator(**kwargs)
                 student_answer = generated_result.answer
             except Exception as e:
                 print(f"Error generating incorrect answer for task {idx}: {e}")
@@ -274,11 +196,15 @@ def generate_student_answers_df_per_question(
         # Correct answers in one call
         if num_correct > 0:
             try:
-                res = correct_answer_generator_perq(
-                    question=question,
-                    reference_answer=reference_answer,
-                    number_of_answers_per_question=num_correct,
-                )
+                kwargs = {
+                    "question": question,
+                    "number_of_answers_per_question": num_correct,
+                }
+                if getattr(cfg, "create_pass_reference_for_correct", False):
+                    kwargs["reference"] = chunk_text
+                if getattr(cfg, "create_pass_reference_answer_for_correct", True):
+                    kwargs["reference_answer"] = reference_answer
+                res = correct_answer_generator_perq(**kwargs)
                 answers = list(getattr(res, "answers", []))
             except Exception as e:
                 print(f"Error generating correct answers for task {idx}: {e}")
@@ -299,11 +225,15 @@ def generate_student_answers_df_per_question(
         # Partial answers in one call
         if num_partial > 0:
             try:
-                res = partial_answer_generator_perq(
-                    question=question,
-                    reference_answer=reference_answer,
-                    number_of_answers_per_question=num_partial,
-                )
+                kwargs = {
+                    "question": question,
+                    "number_of_answers_per_question": num_partial,
+                }
+                if getattr(cfg, "create_pass_reference_for_partial", False):
+                    kwargs["reference"] = chunk_text
+                if getattr(cfg, "create_pass_reference_answer_for_partial", True):
+                    kwargs["reference_answer"] = reference_answer
+                res = partial_answer_generator_perq(**kwargs)
                 answers = list(getattr(res, "answers", []))
             except Exception as e:
                 print(f"Error generating partial answers for task {idx}: {e}")
@@ -327,10 +257,15 @@ def generate_student_answers_df_per_question(
         # Incorrect answers in one call
         if num_incorrect > 0:
             try:
-                res = incorrect_answer_generator_perq(
-                    question=question,
-                    number_of_answers_per_question=num_incorrect,
-                )
+                kwargs = {
+                    "question": question,
+                    "number_of_answers_per_question": num_incorrect,
+                }
+                if getattr(cfg, "create_pass_reference_for_incorrect", False):
+                    kwargs["reference"] = chunk_text
+                if getattr(cfg, "create_pass_reference_answer_for_incorrect", False):
+                    kwargs["reference_answer"] = reference_answer
+                res = incorrect_answer_generator_perq(**kwargs)
                 answers = list(getattr(res, "answers", []))
             except Exception as e:
                 print(f"Error generating incorrect answers for task {idx}: {e}")
@@ -377,7 +312,7 @@ def generate_student_answers_df_all(tasks_df, num_correct, num_partial, num_inco
 
     questions_list = tasks_df["question"].astype(str).tolist()
     reference_answers_list = tasks_df["answer"].astype(str).tolist()
-    # reference_texts_list = tasks_df["chunk_text"].astype(str).tolist()
+    reference_texts_list = tasks_df["chunk_text"].astype(str).tolist()
 
     correct_flat = []
     partial_flat = []
@@ -385,28 +320,39 @@ def generate_student_answers_df_all(tasks_df, num_correct, num_partial, num_inco
 
     try:
         if num_correct > 0:
-            r = correct_answer_generator_all(
-                questions=questions_list,
-                # references=reference_texts_list,
-                reference_answers=reference_answers_list,
-                number_of_answers_per_question=num_correct,
-            )
+            kwargs = {
+                "questions": questions_list,
+                "number_of_answers_per_question": num_correct,
+            }
+            if getattr(cfg, "create_pass_reference_for_correct", False):
+                kwargs["references"] = reference_texts_list
+            if getattr(cfg, "create_pass_reference_answer_for_correct", True):
+                kwargs["reference_answers"] = reference_answers_list
+            r = correct_answer_generator_all(**kwargs)
             correct_flat = getattr(r, "answers", [])
 
         if num_partial > 0:
-            r = partial_answer_generator_all(
-                questions=questions_list,
-                # references=reference_texts_list,
-                reference_answers=reference_answers_list,
-                number_of_answers_per_question=num_partial,
-            )
+            kwargs = {
+                "questions": questions_list,
+                "number_of_answers_per_question": num_partial,
+            }
+            if getattr(cfg, "create_pass_reference_for_partial", False):
+                kwargs["references"] = reference_texts_list
+            if getattr(cfg, "create_pass_reference_answer_for_partial", True):
+                kwargs["reference_answers"] = reference_answers_list
+            r = partial_answer_generator_all(**kwargs)
             partial_flat = getattr(r, "answers", [])
 
         if num_incorrect > 0:
-            r = incorrect_answer_generator_all(
-                questions=questions_list,
-                number_of_answers_per_question=num_incorrect,
-            )
+            kwargs = {
+                "questions": questions_list,
+                "number_of_answers_per_question": num_incorrect,
+            }
+            if getattr(cfg, "create_pass_reference_for_incorrect", False):
+                kwargs["references"] = reference_texts_list
+            if getattr(cfg, "create_pass_reference_answer_for_incorrect", False):
+                kwargs["reference_answers"] = reference_answers_list
+            r = incorrect_answer_generator_all(**kwargs)
             incorrect_flat = getattr(r, "answers", [])
     except Exception as e:
         raise e

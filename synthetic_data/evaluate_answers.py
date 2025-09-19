@@ -15,7 +15,8 @@ from sklearn.metrics import (
 from tqdm import tqdm
 import dspy
 from model_builder import build_lm
-from typing import List, Optional
+from eval_signatures import GraderSingle, GraderPerQuestion, GraderAll
+
 
 # Ensure project root is on sys.path for absolute imports (works in scripts and notebooks)
 if "__file__" in globals():
@@ -29,71 +30,6 @@ from utils import load_config
 
 # Enable nice tqdm integration with pandas
 tqdm.pandas(desc="Grading answers")
-
-
-class GraderSingle(dspy.Signature):
-    """
-    You are a university professor for a introductory class.
-    Your job is to grade exercises and decide if the student answers are correct(2), partially correct(1), or incorrect(0).
-    Answer based on the provided reference answer.
-    Return the corrsponding integer label for the grading, 0 for incorrect, 1 for partially correct, 2 for correct.
-    """
-
-    question: str = dspy.InputField(description="The question text")
-    reference: Optional[str] = dspy.InputField(
-        description="The ground truth reference text", optional=True
-    )
-    reference_answer: str = dspy.InputField(
-        description="The ground truth reference answer"
-    )
-    answer: str = dspy.InputField(description="The student answer")
-
-    label: int = dspy.OutputField(
-        description="2 if the student answer is correct, 1 if the student answer is partially correct, 0 if the student answer is incorrect"
-    )
-
-
-class GraderPerQuestion(dspy.Signature):
-    """
-    You are a university professor for a introductory class.
-    Your job is to grade exercises and decide if the student answers are correct(2), partially correct(1), or incorrect(0).
-    Answer based on the provided reference answer.
-    Return the corrsponding integer label for the grading, 0 for incorrect, 1 for partially correct, 2 for correct.
-    """
-
-    question: str = dspy.InputField(description="The question text")
-    reference_answer: str = dspy.InputField(
-        description="The ground truth reference answer"
-    )
-    answers: List[str] = dspy.InputField(description="The list of student answers")
-
-    predicted_labels: List[int] = dspy.OutputField(
-        description="Your labels for the provided answers, 0 for incorrect, 1 for partially correct, 2 for correct"
-    )
-
-
-class GraderAll(dspy.Signature):
-    """
-    You are a university professor for a introductory class.
-    Your job is to grade exercises and decide if the student answers are correct(2), partially correct(1), or incorrect(0).
-    Answer based on the provided reference answer.
-    Return the corrsponding integer label for the grading, 0 for incorrect, 1 for partially correct, 2 for correct.
-    """
-
-    questions: List[str] = dspy.InputField(description="Unique questions list")
-    reference_answers: List[str] = dspy.InputField(
-        description="Correct reference answers aligned with questions, same order as questions"
-    )
-    counts_per_question: List[int] = dspy.InputField(
-        description="Number of student answers for each question (same order as questions)"
-    )
-    answers_flat: List[str] = dspy.InputField(
-        description="All student answers flattened in question-major order"
-    )
-
-    labels_flat: List[int] = dspy.OutputField(
-        description="Labels flattened in question-major order, 0 for incorrect, 1 for partially correct, 2 for correct"
-    )
 
 
 def plot_confusion_matrix(y_true, y_pred, save_path=None):
@@ -173,12 +109,18 @@ def evaluate_grader_performance(
 
         def grade_row(row):
             try:
-                result = grader_single(
-                    question=row["question"],
-                    # reference=row["chunk_text"],
-                    reference_answer=row["reference_answer"],
-                    answer=row["student_answer"],
-                )
+                kwargs = {
+                    "question": row["question"],
+                    "answer": row["student_answer"],
+                }
+                if (
+                    getattr(cfg, "eval_pass_reference", False)
+                    and "chunk_text" in row.index
+                ):
+                    kwargs["reference"] = row["chunk_text"]
+                if getattr(cfg, "eval_pass_reference_answer", True):
+                    kwargs["reference_answer"] = row["reference_answer"]
+                result = grader_single(**kwargs)
                 predicted = int(result.label)
             except Exception as e:
                 tqdm.write(f"Error grading answer: {e}")
@@ -211,12 +153,24 @@ def evaluate_grader_performance(
             answers = group["student_answer"].astype(str).tolist()
             question = str(group.iloc[0]["question"])
             reference_answer = str(group.iloc[0]["reference_answer"])
+            reference_text = (
+                str(group.iloc[0]["chunk_text"])
+                if "chunk_text" in group.columns
+                else None
+            )
             try:
-                batch_result = grader_perq(
-                    question=question,
-                    reference_answer=reference_answer,
-                    answers=answers,
-                )
+                kwargs = {
+                    "question": question,
+                    "answers": answers,
+                }
+                if (
+                    getattr(cfg, "eval_pass_reference", False)
+                    and reference_text is not None
+                ):
+                    kwargs["reference"] = reference_text
+                if getattr(cfg, "eval_pass_reference_answer", True):
+                    kwargs["reference_answer"] = reference_answer
+                batch_result = grader_perq(**kwargs)
                 labels = batch_result.predicted_labels
 
                 # Align labels back to the dataframe rows
@@ -233,24 +187,38 @@ def evaluate_grader_performance(
         # Build compact inputs without repetition
         group_key = "task_id" if "task_id" in answers_df.columns else "question"
         questions_unique = []
-        references_unique = []
+        reference_texts_unique = []
         counts_per_question = []
         answers_flat = []
 
         for _, group in answers_df.groupby(group_key):
             questions_unique.append(str(group.iloc[0]["question"]))
-            references_unique.append(str(group.iloc[0]["reference_answer"]))
+            reference_texts_unique.append(
+                str(group.iloc[0]["chunk_text"])
+                if "chunk_text" in group.columns
+                else ""
+            )
             group_answers = group["student_answer"].astype(str).tolist()
             counts_per_question.append(len(group_answers))
             answers_flat.extend(group_answers)
 
         try:
-            res = grader_all(
-                questions=questions_unique,
-                reference_answers=references_unique,
-                counts_per_question=counts_per_question,
-                answers_flat=answers_flat,
-            )
+            kwargs = {
+                "questions": questions_unique,
+                "counts_per_question": counts_per_question,
+                "answers_flat": answers_flat,
+            }
+            if getattr(cfg, "eval_pass_reference", False):
+                kwargs["references"] = reference_texts_unique
+            if getattr(cfg, "eval_pass_reference_answer", True):
+                # Build aligned reference answers per unique question
+                reference_answers_unique = []
+                for _, group in answers_df.groupby(group_key):
+                    reference_answers_unique.append(
+                        str(group.iloc[0]["reference_answer"])
+                    )
+                kwargs["reference_answers"] = reference_answers_unique
+            res = grader_all(**kwargs)
             labels_flat = res.labels_flat
 
             if len(labels_flat) < len(answers_flat):
@@ -323,7 +291,7 @@ output_dir = os.path.normpath(
 
 print(f"Using model {cfg.teacher_model_name} for evaluation")
 
-
+# Increase max_tokens
 max_tokens = 8192 if cfg.eval_mode == "all" else 512
 
 # Build LM and Grader program(s)
@@ -397,4 +365,8 @@ print(f"\nSaved complete results to: {complete_output_path}")
 print("\n" + "=" * 50)
 print("SAMPLE RESULTS")
 print("=" * 50)
+student_answers_df = student_answers_df[
+    ["question", "student_answer", "predicted_label_name"]
+]
+student_answers_df = student_answers_df.sample(n=5, random_state=42)
 print(student_answers_df.head(10))

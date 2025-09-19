@@ -21,3 +21,18 @@ lm_cache: false
 # Evaluation batching mode: single | per_question | all
 eval_mode: all
 create_mode: per_question
+
+# Control which fields are passed to models
+# Evaluation flags
+eval_pass_reference: true # pass chunk_text as `reference`
+eval_pass_reference_answer: true # pass ground-truth as `reference_answer`
+
+# Creation flags (per generator type)
+create_pass_reference_for_correct: false
+create_pass_reference_answer_for_correct: true
+create_pass_reference_for_partial: false
+create_pass_reference_answer_for_partial: false
+create_pass_reference_for_incorrect: false
+create_pass_reference_answer_for_incorrect: false
+# total possible combinations:
+#20 (questions) * 3 (answers) * 3 (generation) * 3 (eval) * 4 (possible infor gen) * 4 (eval info) = 20 * 3 * 3 * 3 * 4 * 4 = 8640
