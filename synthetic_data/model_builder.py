@@ -52,8 +52,23 @@ model_configs = {
         "model": "openrouter/aion-labs/aion-rp-llama-3.1-8b",
         "api_key": os.getenv("OPENROUTER_API_KEY"),
     },
-    "llama3.2": {
+    "llama3.2:3b": {
         "model": "ollama_chat/llama3.2:3b",
+        "api_key": "",
+        "api_base": "http://100.116.24.45:11434",
+    },
+    "llama3.1:8b": {
+        "model": "ollama_chat/llama3.1:8b",
+        "api_key": "",
+        "api_base": "http://100.116.24.45:11434",
+    },
+    "deepseek-r1": {
+        "model": "ollama_chat/deepseek-r1:8b",
+        "api_key": "",
+        "api_base": "http://100.116.24.45:11434",
+    },
+    "deepseek-r1:1.5b": {
+        "model": "ollama_chat/deepseek-r1:1.5b",
         "api_key": "",
         "api_base": "http://100.116.24.45:11434",
     },
@@ -61,7 +76,10 @@ model_configs = {
 
 
 def build_lm(
-    model_name: str, cache: bool = True, temperature: float = 1.0, max_tokens: int = 512
+    model_name: str,
+    cache: bool = True,
+    temperature: float | None = None,
+    max_tokens: int = 512,
 ):
     config = model_configs[model_name]
     lm_kwargs = {
@@ -70,8 +88,9 @@ def build_lm(
         "api_base": config.get("api_base"),
         "max_tokens": max_tokens,
         "cache": cache,
-        "temperature": temperature,
     }
+    if temperature is not None:
+        lm_kwargs["temperature"] = temperature
     # Only add api_version if present in config
     if "api_version" in config:
         lm_kwargs["api_version"] = config.get("api_version")
