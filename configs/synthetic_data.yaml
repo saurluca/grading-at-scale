@@ -19,5 +19,5 @@ lm_temperature_creation: 1.0
 lm_cache: false
 
 # Evaluation batching mode: single | per_question | all
-eval_mode: per_question
-create_mode: all
+eval_mode: all
+create_mode: per_question

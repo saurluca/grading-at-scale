@@ -24,10 +24,13 @@ output_dir = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "../", cfg.output_dir)
 )
 
+max_tokens = 4096 if cfg.create_mode == "all" else 512
+
 student_lm = build_lm(
     cfg.model_name,
     temperature=getattr(cfg, "lm_temperature_creation", None),
     cache=False,
+    max_tokens=max_tokens,
 )
 
 # read in data
@@ -148,14 +151,14 @@ partial_answer_generator.set_lm(student_lm)
 incorrect_answer_generator.set_lm(student_lm)
 
 # Increase max_tokens
-correct_answer_generator_perq.set_lm(student_lm, max_tokens=512)
-partial_answer_generator_perq.set_lm(student_lm, max_tokens=512)
-incorrect_answer_generator_perq.set_lm(student_lm, max_tokens=512)
+correct_answer_generator_perq.set_lm(student_lm)
+partial_answer_generator_perq.set_lm(student_lm)
+incorrect_answer_generator_perq.set_lm(student_lm)
 
 # Increase max_tokens
-correct_answer_generator_all.set_lm(student_lm, max_tokens=4096)
-partial_answer_generator_all.set_lm(student_lm, max_tokens=4096)
-incorrect_answer_generator_all.set_lm(student_lm, max_tokens=4096)
+correct_answer_generator_all.set_lm(student_lm)
+partial_answer_generator_all.set_lm(student_lm)
+incorrect_answer_generator_all.set_lm(student_lm)
 
 
 # %%
@@ -465,6 +468,7 @@ total_per_question = (
     cfg.num_correct_answers + cfg.num_partial_answers + cfg.num_incorrect_answers
 )
 print(f"Generating {total_per_question} student answers per question...")
+print(f"Using mode: {cfg.create_mode} with model: {cfg.model_name}")
 print(
     f"Per-question targets -> correct: {cfg.num_correct_answers}, partial: {cfg.num_partial_answers}, incorrect: {cfg.num_incorrect_answers}"
 )
@@ -505,8 +509,8 @@ print(f"Intended incorrect answers: {num_incorrect}")
 # Save the dataframe
 mode_suffix = {
     "single": "single",
-    "per_question": "perq",
-    "all": "mass",
+    "per_question": "per_question",
+    "all": "all",
 }.get(create_mode, create_mode)
 student_answers_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{mode_suffix}.csv"
 output_path = os.path.join(output_dir, student_answers_filename)

@@ -16,7 +16,6 @@ from tqdm import tqdm
 import dspy
 from model_builder import build_lm
 from typing import List, Optional
-import ast
 
 # Ensure project root is on sys.path for absolute imports (works in scripts and notebooks)
 if "__file__" in globals():
@@ -68,7 +67,7 @@ class GraderPerQuestion(dspy.Signature):
     )
     answers: List[str] = dspy.InputField(description="The list of student answers")
 
-    labels: List[int] = dspy.OutputField(
+    predicted_labels: List[int] = dspy.OutputField(
         description="Your labels for the provided answers, 0 for incorrect, 1 for partially correct, 2 for correct"
     )
 
@@ -162,50 +161,13 @@ def evaluate_grader_performance(
         for _, row in df.iterrows():
             val = row.get("intended_label", None)
             if isinstance(val, str):
-                intended = label_name_to_int.get(val.strip().lower(), 0)
+                intended = label_name_to_int.get(val.strip().lower(), -1)
             elif pd.notna(val):
                 intended = int(val)
             else:
-                intended = 0
+                intended = -1
             vals.append(intended)
         return vals
-
-    def _coerce_to_list(value):
-        # Handle callable outputs (e.g., methods)
-        if callable(value):
-            try:
-                value = value()
-            except Exception:
-                return []
-        if value is None:
-            return []
-        if isinstance(value, (list, tuple)):
-            return list(value)
-        # Accept singletons
-        if isinstance(value, (int, float, str)):
-            return [value]
-        # Try generic iteration
-        try:
-            return list(value)
-        except Exception:
-            return []
-
-    def _extract_output_list(result_obj, field_name: str):
-        print("field parse bla")
-        try:
-            s = repr(result_obj)
-            key = f"{field_name}="
-            i = s.find(key)
-            if i != -1:
-                # Find matching bracket range [ ... ]
-                start = s.find("[", i)
-                end = s.find("]", start)
-                if start != -1 and end != -1:
-                    snippet = s[start : end + 1]
-                    return _coerce_to_list(ast.literal_eval(snippet))
-        except Exception:
-            pass
-        return []
 
     if mode == "single":
 
@@ -255,9 +217,7 @@ def evaluate_grader_performance(
                     reference_answer=reference_answer,
                     answers=answers,
                 )
-                print(f"Batch result: {batch_result.labels}")
-                labels = _extract_output_list(batch_result, "labels")
-                print(f"Predicted labels: {labels}")
+                labels = batch_result.predicted_labels
 
                 # Align labels back to the dataframe rows
                 for k, row_idx in enumerate(group.index):
@@ -291,7 +251,7 @@ def evaluate_grader_performance(
                 counts_per_question=counts_per_question,
                 answers_flat=answers_flat,
             )
-            labels_flat = _coerce_to_list(getattr(res, "labels_flat", []))
+            labels_flat = res.labels_flat
 
             if len(labels_flat) < len(answers_flat):
                 labels_flat = labels_flat + [-1] * (
@@ -364,7 +324,7 @@ output_dir = os.path.normpath(
 print(f"Using model {cfg.teacher_model_name} for evaluation")
 
 
-max_tokens = 4096 if cfg.eval_mode == "all" else 512
+max_tokens = 8192 if cfg.eval_mode == "all" else 512
 
 # Build LM and Grader program(s)
 grader_lm = build_lm(
@@ -373,16 +333,15 @@ grader_lm = build_lm(
     # cache=False,
 )
 
-grader_program_single = dspy.Predict(GraderSingle)
-grader_program_single.set_lm(grader_lm)
-grader_program_perq = dspy.Predict(GraderPerQuestion)
-grader_program_perq.set_lm(grader_lm)
-grader_program_all = dspy.ChainOfThought(GraderAll)
-grader_program_all.set_lm(grader_lm)
+grader_single = dspy.Predict(GraderSingle)
+grader_single.set_lm(grader_lm)
+grader_perq = dspy.Predict(GraderPerQuestion)
+grader_perq.set_lm(grader_lm)
+grader_all = dspy.Predict(GraderAll)
+grader_all.set_lm(grader_lm)
 
 # Load generated answers CSV based on config-driven naming
-generated_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}.csv"
-# _{cfg.create_mode}
+generated_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{cfg.create_mode}.csv"
 generated_path = os.path.join(output_dir, generated_filename)
 if not os.path.exists(generated_path):
     raise FileNotFoundError(f"Generated answers CSV not found at: {generated_path}")
@@ -396,10 +355,10 @@ print("=" * 50)
 eval_mode = getattr(cfg, "eval_mode", "single")
 metrics = evaluate_grader_performance(
     student_answers_df,
-    grader_program_single,
+    grader_single,
     mode=eval_mode,
-    grader_perq=grader_program_perq,
-    grader_all=grader_program_all,
+    grader_perq=grader_perq,
+    grader_all=grader_all,
 )
 
 # Display results
@@ -412,7 +371,7 @@ print(f"Recall (macro): {metrics['recall']:.3f}")
 print(f"F1 Score (macro): {metrics['f1_score']:.3f}")
 
 # Plot confusion matrix
-mode_suffix = {"single": "single", "per_question": "perq", "all": "mass"}.get(
+mode_suffix = {"single": "single", "per_question": "perq", "all": "all"}.get(
     eval_mode, eval_mode
 )
 plot_filename = f"confusion_matrix_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{mode_suffix}_{cfg.create_mode}.png"
@@ -429,7 +388,6 @@ student_answers_df["predicted_label"] = metrics["predicted_labels"]
 student_answers_df["predicted_label_name"] = student_answers_df["predicted_label"].map(
     label_int_to_name
 )
-
 complete_output_filename = f"student_answers_with_predictions_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{mode_suffix}_{cfg.create_mode}.csv"
 complete_output_path = os.path.join(output_dir, complete_output_filename)
 student_answers_df.to_csv(complete_output_path, index=False)
