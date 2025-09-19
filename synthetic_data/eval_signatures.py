@@ -6,7 +6,6 @@ class GraderSingle(dspy.Signature):
     """
     You are a university professor for a introductory class.
     Your job is to grade exercises and decide if the student answers are correct(2), partially correct(1), or incorrect(0).
-    Answer based on the provided reference answer.
     Return the corrsponding integer label for the grading, 0 for incorrect, 1 for partially correct, 2 for correct.
     """
 
@@ -26,10 +25,9 @@ class GraderSingle(dspy.Signature):
 
 class GraderPerQuestion(dspy.Signature):
     """
-    You are a university professor for a introductory class.
+    You are a university professor for an introductory class.
     Your job is to grade exercises and decide if the student answers are correct(2), partially correct(1), or incorrect(0).
-    Answer based on the provided reference answer.
-    Return the corrsponding integer label for the grading, 0 for incorrect, 1 for partially correct, 2 for correct.
+    Return the corrsponding integer labels as a list for the grading, 0 for incorrect, 1 for partially correct, 2 for correct.
     """
 
     question: str = dspy.InputField(description="The question text")
@@ -51,8 +49,7 @@ class GraderAll(dspy.Signature):
     """
     You are a university professor for a introductory class.
     Your job is to grade exercises and decide if the student answers are correct(2), partially correct(1), or incorrect(0).
-    Answer based on the provided reference answer.
-    Return the corrsponding integer label for the grading, 0 for incorrect, 1 for partially correct, 2 for correct.
+    Return the corrsponding integer labels as a list for the grading, 0 for incorrect, 1 for partially correct, 2 for correct.
     """
 
     questions: List[str] = dspy.InputField(description="Unique questions list")

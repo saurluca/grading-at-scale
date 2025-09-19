@@ -2,21 +2,22 @@
 import os
 import sys
 from pathlib import Path
-import pandas as pd
+import logging
+
+import dspy
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
+from eval_signatures import GraderAll, GraderPerQuestion, GraderSingle
+from model_builder import build_lm
 from sklearn.metrics import (
-    confusion_matrix,
     accuracy_score,
+    confusion_matrix,
+    f1_score,
     precision_score,
     recall_score,
-    f1_score,
 )
 from tqdm import tqdm
-import dspy
-from model_builder import build_lm
-from eval_signatures import GraderSingle, GraderPerQuestion, GraderAll
-
 
 # Ensure project root is on sys.path for absolute imports (works in scripts and notebooks)
 if "__file__" in globals():
@@ -26,7 +27,10 @@ else:
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.append(str(_PROJECT_ROOT))
 
+
 from utils import load_config
+
+logging.getLogger("dspy").setLevel(logging.ERROR)
 
 # Enable nice tqdm integration with pandas
 tqdm.pandas(desc="Grading answers")
@@ -394,12 +398,17 @@ complete_output_path = os.path.join(output_dir, complete_output_filename)
 student_answers_df.to_csv(complete_output_path, index=False)
 print(f"\nSaved complete results to: {complete_output_path}")
 
+# %%
+
 # Sample a few rows for inspection
 print("\n" + "=" * 50)
 print("SAMPLE RESULTS")
 print("=" * 50)
-student_answers_df = student_answers_df[
-    ["question", "student_answer", "predicted_label_name"]
+print_df = student_answers_df[
+    ["question", "student_answer", "predicted_label_name", "intended_label"]
 ]
-student_answers_df = student_answers_df.sample(n=5, random_state=42)
-print(student_answers_df.head(10))
+print_df = print_df.sample(n=5)
+for idx, row in print_df.iterrows():
+    print(
+        f"Question: {row['question']}\nStudent Answer: {row['student_answer']}\nPredicted Label: {row['predicted_label_name']}\nTrue Label: {row['intended_label']}\n{'-' * 40}"
+    )

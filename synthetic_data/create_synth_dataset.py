@@ -27,6 +27,11 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.append(str(_PROJECT_ROOT))
 
 from utils import load_config
+import logging
+
+logging.getLogger("dspy").setLevel(logging.ERROR)
+
+tqdm.pandas(desc="Creating synthetic dataset")
 
 # Configuration via YAML (OmegaConf)
 cfg = load_config("synthetic_data")
@@ -49,7 +54,99 @@ tasks_file_path = os.path.join(output_dir, cfg.tasks_filename)
 tasks = pd.read_csv(tasks_file_path)
 
 
-def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrect):
+# ------------------------------
+# Helpers to build kwargs/rows
+# ------------------------------
+
+DEFAULT_PASS_REFERENCE = {
+    "correct": False,
+    "partial": False,
+    "incorrect": False,
+}
+DEFAULT_PASS_REFERENCE_ANSWER = {
+    "correct": True,
+    "partial": True,
+    "incorrect": False,
+}
+
+
+def _should_pass_reference(label: str) -> bool:
+    return bool(
+        getattr(
+            cfg, f"create_pass_reference_for_{label}", DEFAULT_PASS_REFERENCE[label]
+        )
+    )
+
+
+def _should_pass_reference_answer(label: str) -> bool:
+    return bool(
+        getattr(
+            cfg,
+            f"create_pass_reference_answer_for_{label}",
+            DEFAULT_PASS_REFERENCE_ANSWER[label],
+        )
+    )
+
+
+def _build_kwargs_single(
+    label: str, question: str, chunk_text: str, reference_answer: str
+):
+    kwargs = {"question": question}
+    if _should_pass_reference(label):
+        kwargs["reference"] = chunk_text
+    if _should_pass_reference_answer(label):
+        kwargs["reference_answer"] = reference_answer
+    return kwargs
+
+
+def _build_kwargs_perq(
+    label: str, question: str, chunk_text: str, reference_answer: str, count: int
+):
+    kwargs = _build_kwargs_single(label, question, chunk_text, reference_answer)
+    kwargs["number_of_answers_per_question"] = count
+    return kwargs
+
+
+def _build_kwargs_all(
+    label: str,
+    questions_list,
+    reference_texts_list,
+    reference_answers_list,
+    count: int,
+):
+    kwargs = {
+        "questions": questions_list,
+        "number_of_answers_per_question": count,
+    }
+    if _should_pass_reference(label):
+        kwargs["references"] = reference_texts_list
+    if _should_pass_reference_answer(label):
+        kwargs["reference_answers"] = reference_answers_list
+    return kwargs
+
+
+def _append_rows(rows, idx, task, answers, label: str):
+    question = task["question"]
+    reference_answer = task["answer"]
+    chunk_text = task["chunk_text"]
+    topic = task["topic"]
+    for ans in answers:
+        rows.append(
+            {
+                "task_id": idx,
+                "question": question,
+                "reference_answer": reference_answer,
+                "chunk_text": chunk_text,
+                "topic": topic,
+                "student_answer": ans,
+                "intended_label": label,
+            }
+        )
+
+
+def generate_student_answers_df(
+    tasks_df, num_correct, num_partial, num_incorrect, models
+):
     """
     Generate a dataframe with student answers for each question.
 
@@ -65,99 +162,44 @@ def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrec
     """
     all_answers = []
 
+    label_counts = [
+        ("correct", num_correct),
+        ("partial", num_partial),
+        ("incorrect", num_incorrect),
+    ]
+
     for idx, task in tqdm(tasks_df.iterrows()):
         question = task["question"]
         reference_answer = task["answer"]
         chunk_text = task["chunk_text"]
-        topic = task["topic"]
 
-        # Generate correct answers using the correct answer generator
-        for i in range(num_correct):
-            try:
-                kwargs = {"question": question}
-                if getattr(cfg, "create_pass_reference_for_correct", False):
-                    kwargs["reference"] = chunk_text
-                if getattr(cfg, "create_pass_reference_answer_for_correct", True):
-                    kwargs["reference_answer"] = reference_answer
-                generated_result = correct_answer_generator(**kwargs)
-                student_answer = generated_result.answer
-            except Exception as e:
-                print(f"Error generating correct answer for task {idx}: {e}")
-                # Fallback to reference answer
-                student_answer = reference_answer
-
-            all_answers.append(
-                {
-                    "task_id": idx,
-                    "question": question,
-                    "reference_answer": reference_answer,
-                    "chunk_text": chunk_text,
-                    "topic": topic,
-                    "student_answer": student_answer,
-                    "intended_label": "correct",
-                }
-            )
-
-        # Generate partial answers using the partial answer generator
-        for i in range(num_partial):
-            try:
-                kwargs = {"question": question}
-                if getattr(cfg, "create_pass_reference_for_partial", False):
-                    kwargs["reference"] = chunk_text
-                if getattr(cfg, "create_pass_reference_answer_for_partial", True):
-                    kwargs["reference_answer"] = reference_answer
-                generated_result = partial_answer_generator(**kwargs)
-                student_answer = generated_result.answer
-            except Exception as e:
-                print(f"Error generating partial answer for task {idx}: {e}")
-                # Fallback if generation fails
-                student_answer = f"Partial answer {i + 1} for question {idx}"
-
-            all_answers.append(
-                {
-                    "task_id": idx,
-                    "question": question,
-                    "reference_answer": reference_answer,
-                    "chunk_text": chunk_text,
-                    "topic": topic,
-                    "student_answer": student_answer,
-                    "intended_label": "partial",
-                }
-            )
-
-        # Generate incorrect answers using the incorrect answer generator
-        for i in range(num_incorrect):
-            try:
-                kwargs = {"question": question}
-                if getattr(cfg, "create_pass_reference_for_incorrect", False):
-                    kwargs["reference"] = chunk_text
-                if getattr(cfg, "create_pass_reference_answer_for_incorrect", False):
-                    kwargs["reference_answer"] = reference_answer
-                generated_result = incorrect_answer_generator(**kwargs)
-                student_answer = generated_result.answer
-            except Exception as e:
-                print(f"Error generating incorrect answer for task {idx}: {e}")
-                # Fallback if generation fails
-                student_answer = f"Incorrect answer {i + 1} for question {idx}"
-
-            all_answers.append(
-                {
-                    "task_id": idx,
-                    "question": question,
-                    "reference_answer": reference_answer,
-                    "chunk_text": chunk_text,
-                    "topic": topic,
-                    "student_answer": student_answer,
-                    "intended_label": "incorrect",
-                }
-            )
+        for label, count in label_counts:
+            if count <= 0:
+                continue
+            predictor = models.get(label)
+            for i in range(count):
+                try:
+                    kwargs = _build_kwargs_single(
+                        label, question, chunk_text, reference_answer
+                    )
+                    result = predictor(**kwargs)
+                    ans = getattr(result, "answer", None)
+                except Exception as e:
+                    print(f"Error generating {label} answer for task {idx}: {e}")
+                    if label == "correct":
+                        ans = reference_answer
+                    elif label == "partial":
+                        ans = f"Partial answer {i + 1} for question {idx}"
+                    else:
+                        ans = f"Incorrect answer {i + 1} for question {idx}"
+                _append_rows(all_answers, idx, task, [ans], label)
 
     return pd.DataFrame(all_answers)
 
 
 # Per-question batched generation
 def generate_student_answers_df_per_question(
-    tasks_df, num_correct, num_partial, num_incorrect
+    tasks_df, num_correct, num_partial, num_incorrect, models
 ):
     all_answers = []
 
@@ -165,107 +207,40 @@ def generate_student_answers_df_per_question(
         question = task["question"]
         reference_answer = task["answer"]
         chunk_text = task["chunk_text"]
-        topic = task["topic"]
 
-        # Correct answers in one call
-        if num_correct > 0:
-            try:
-                kwargs = {
-                    "question": question,
-                    "number_of_answers_per_question": num_correct,
-                }
-                if getattr(cfg, "create_pass_reference_for_correct", False):
-                    kwargs["reference"] = chunk_text
-                if getattr(cfg, "create_pass_reference_answer_for_correct", True):
-                    kwargs["reference_answer"] = reference_answer
-                res = correct_answer_generator_perq(**kwargs)
-                answers = list(getattr(res, "answers", []))
-            except Exception as e:
-                print(f"Error generating correct answers for task {idx}: {e}")
-                answers = [reference_answer] * num_correct
-            for ans in answers:
-                all_answers.append(
-                    {
-                        "task_id": idx,
-                        "question": question,
-                        "reference_answer": reference_answer,
-                        "chunk_text": chunk_text,
-                        "topic": topic,
-                        "student_answer": ans,
-                        "intended_label": "correct",
-                    }
-                )
+        label_counts = [
+            ("correct", num_correct),
+            ("partial", num_partial),
+            ("incorrect", num_incorrect),
+        ]
 
-        # Partial answers in one call
-        if num_partial > 0:
+        for label, count in label_counts:
+            if count <= 0:
+                continue
+            predictor = models.get(label)
             try:
-                kwargs = {
-                    "question": question,
-                    "number_of_answers_per_question": num_partial,
-                }
-                if getattr(cfg, "create_pass_reference_for_partial", False):
-                    kwargs["reference"] = chunk_text
-                if getattr(cfg, "create_pass_reference_answer_for_partial", True):
-                    kwargs["reference_answer"] = reference_answer
-                res = partial_answer_generator_perq(**kwargs)
-                answers = list(getattr(res, "answers", []))
-            except Exception as e:
-                print(f"Error generating partial answers for task {idx}: {e}")
-                answers = [
-                    f"Partial answer {i + 1} for question {idx}"
-                    for i in range(num_partial)
-                ]
-            for ans in answers:
-                all_answers.append(
-                    {
-                        "task_id": idx,
-                        "question": question,
-                        "reference_answer": reference_answer,
-                        "chunk_text": chunk_text,
-                        "topic": topic,
-                        "student_answer": ans,
-                        "intended_label": "partial",
-                    }
+                kwargs = _build_kwargs_perq(
+                    label, question, chunk_text, reference_answer, count
                 )
-
-        # Incorrect answers in one call
-        if num_incorrect > 0:
-            try:
-                kwargs = {
-                    "question": question,
-                    "number_of_answers_per_question": num_incorrect,
-                }
-                if getattr(cfg, "create_pass_reference_for_incorrect", False):
-                    kwargs["reference"] = chunk_text
-                if getattr(cfg, "create_pass_reference_answer_for_incorrect", False):
-                    kwargs["reference_answer"] = reference_answer
-                res = incorrect_answer_generator_perq(**kwargs)
-                answers = list(getattr(res, "answers", []))
+                res = predictor(**kwargs)
+                answers = res.answers
+                if len(answers) >= count:
+                    answers = answers[:count]
+                elif len(answers) < count:
+                    raise ValueError(
+                        f"Expected {count} answers for label '{label}' on task {idx}, got {len(answers)}. "
+                        f"Answers: {answers}"
+                    )
             except Exception as e:
-                print(f"Error generating incorrect answers for task {idx}: {e}")
-                answers = [
-                    f"Incorrect answer {i + 1} for question {idx}"
-                    for i in range(num_incorrect)
-                ]
-            for ans in answers:
-                all_answers.append(
-                    {
-                        "task_id": idx,
-                        "question": question,
-                        "reference_answer": reference_answer,
-                        "chunk_text": chunk_text,
-                        "topic": topic,
-                        "student_answer": ans,
-                        "intended_label": "incorrect",
-                    }
-                )
+                raise e
+            _append_rows(all_answers, idx, task, answers, label)
 
     return pd.DataFrame(all_answers)
 
 
 # All-questions batched generation (3 total LLM calls)
 def generate_student_answers_df_all(
-    tasks_df, num_correct, num_partial, num_incorrect, model
+    tasks_df, num_correct, num_partial, num_incorrect, models
 ):
     num_questions = len(tasks_df)
     assert num_questions > 0, "No questions to generate answers for"
@@ -275,10 +250,11 @@ def generate_student_answers_df_all(
             return [[] for _ in range(num_questions)]
         flat = flat_answers if isinstance(flat_answers, list) else []
         expected = per_q * num_questions
-        if len(flat) < expected:
-            flat = flat + [""] * (expected - len(flat))
-        else:
-            flat = flat[:expected]
+        # Strict validation: do not pad or truncate
+        if len(flat) != expected:
+            raise ValueError(
+                f"Expected {expected} answers (per_q={per_q} * num_questions={num_questions}), got {len(flat)}."
+            )
         grouped = []
         for i in range(num_questions):
             s = i * per_q
@@ -296,39 +272,36 @@ def generate_student_answers_df_all(
 
     try:
         if num_correct > 0:
-            kwargs = {
-                "questions": questions_list,
-                "number_of_answers_per_question": num_correct,
-            }
-            if getattr(cfg, "create_pass_reference_for_correct", False):
-                kwargs["references"] = reference_texts_list
-            if getattr(cfg, "create_pass_reference_answer_for_correct", True):
-                kwargs["reference_answers"] = reference_answers_list
-            result = model(**kwargs)
+            kwargs = _build_kwargs_all(
+                "correct",
+                questions_list,
+                reference_texts_list,
+                reference_answers_list,
+                num_correct,
+            )
+            result = models["correct"](**kwargs)
             correct_flat = result.answers
 
         if num_partial > 0:
-            kwargs = {
-                "questions": questions_list,
-                "number_of_answers_per_question": num_partial,
-            }
-            if getattr(cfg, "create_pass_reference_for_partial", False):
-                kwargs["references"] = reference_texts_list
-            if getattr(cfg, "create_pass_reference_answer_for_partial", True):
-                kwargs["reference_answers"] = reference_answers_list
-            result = model(**kwargs)
+            kwargs = _build_kwargs_all(
+                "partial",
+                questions_list,
+                reference_texts_list,
+                reference_answers_list,
+                num_partial,
+            )
+            result = models["partial"](**kwargs)
             partial_flat = result.answers
 
         if num_incorrect > 0:
-            kwargs = {
-                "questions": questions_list,
-                "number_of_answers_per_question": num_incorrect,
-            }
-            if getattr(cfg, "create_pass_reference_for_incorrect", False):
-                kwargs["references"] = reference_texts_list
-            if getattr(cfg, "create_pass_reference_answer_for_incorrect", False):
-                kwargs["reference_answers"] = reference_answers_list
-            result = model(**kwargs)
+            kwargs = _build_kwargs_all(
+                "incorrect",
+                questions_list,
+                reference_texts_list,
+                reference_answers_list,
+                num_incorrect,
+            )
+            result = models["incorrect"](**kwargs)
             incorrect_flat = result.answers
     except Exception as e:
         raise e
@@ -339,52 +312,72 @@ def generate_student_answers_df_all(
 
     rows = []
     for pos, (idx, task) in enumerate(tqdm(tasks_df.iterrows())):
-        question = task["question"]
-        reference_answer = task["answer"]
-        chunk_text = task["chunk_text"]
-        topic = task["topic"]
-
-        for ans in grouped_correct[pos]:
-            rows.append(
-                {
-                    "task_id": idx,
-                    "question": question,
-                    "reference_answer": reference_answer,
-                    "chunk_text": chunk_text,
-                    "topic": topic,
-                    "student_answer": ans,
-                    "intended_label": "correct",
-                }
-            )
-        for ans in grouped_partial[pos]:
-            rows.append(
-                {
-                    "task_id": idx,
-                    "question": question,
-                    "reference_answer": reference_answer,
-                    "chunk_text": chunk_text,
-                    "topic": topic,
-                    "student_answer": ans,
-                    "intended_label": "partial",
-                }
-            )
-        for ans in grouped_incorrect[pos]:
-            rows.append(
-                {
-                    "task_id": idx,
-                    "question": question,
-                    "reference_answer": reference_answer,
-                    "chunk_text": chunk_text,
-                    "topic": topic,
-                    "student_answer": ans,
-                    "intended_label": "incorrect",
-                }
-            )
+        _append_rows(rows, idx, task, grouped_correct[pos], "correct")
+        _append_rows(rows, idx, task, grouped_partial[pos], "partial")
+        _append_rows(rows, idx, task, grouped_incorrect[pos], "incorrect")
 
     return pd.DataFrame(rows)
 
 
 # %%
+
+
+def _validate_generated_counts(
+    student_answers_df: pd.DataFrame, tasks_df: pd.DataFrame, cfg
+) -> None:
+    """
+    Validate that the number of generated answers matches the configuration exactly,
+    both overall and per question for each intended label.
+    """
+    num_tasks = len(tasks_df)
+    # Overall expected totals
+    expected_per_label = {
+        "correct": int(getattr(cfg, "num_correct_answers", 0)),
+        "partial": int(getattr(cfg, "num_partial_answers", 0)),
+        "incorrect": int(getattr(cfg, "num_incorrect_answers", 0)),
+    }
+    expected_total = num_tasks * sum(expected_per_label.values())
+
+    actual_total = len(student_answers_df)
+    if actual_total != expected_total:
+        raise ValueError(
+            f"Total generated answers {actual_total} != expected {expected_total} (num_tasks={num_tasks}, per_question={expected_per_label})."
+        )
+
+    # Overall counts per label
+    for label, per_q in expected_per_label.items():
+        expected_label_total = num_tasks * per_q
+        actual_label_total = (student_answers_df["intended_label"] == label).sum()
+        if actual_label_total != expected_label_total:
+            raise ValueError(
+                f"Generated {actual_label_total} '{label}' answers != expected {expected_label_total} (num_tasks={num_tasks} * per_q={per_q})."
+            )
+
+    # Per-question counts per label
+    counts = (
+        student_answers_df.groupby(["task_id", "intended_label"])
+        .size()
+        .unstack(fill_value=0)
+    )
+    for task_id in tasks_df.index:
+        row = (
+            counts.loc[task_id]
+            if task_id in counts.index
+            else {"correct": 0, "partial": 0, "incorrect": 0}
+        )
+        for label, per_q in expected_per_label.items():
+            actual = (
+                int(row.get(label, 0))
+                if hasattr(row, "get")
+                else int(row[label])
+                if label in row
+                else 0
+            )
+            if actual != per_q:
+                raise ValueError(
+                    f"Task {task_id}: generated {actual} '{label}' answers != expected {per_q}."
+                )
+
 
 total_per_question = (
     cfg.num_correct_answers + cfg.num_partial_answers + cfg.num_incorrect_answers
@@ -396,40 +389,52 @@ print(
 )
 
 if cfg.create_mode == "single":
-    correct_answer_generator = dspy.Predict(CorrectAnswerGenerator)
-    partial_answer_generator = dspy.Predict(PartialAnswerGenerator)
-    incorrect_answer_generator = dspy.Predict(IncorrectAnswerGenerator)
+    models_single = {
+        "correct": dspy.Predict(CorrectAnswerGenerator),
+        "partial": dspy.Predict(PartialAnswerGenerator),
+        "incorrect": dspy.Predict(IncorrectAnswerGenerator),
+    }
 
     student_answers_df = generate_student_answers_df(
         tasks,
         cfg.num_correct_answers,
         cfg.num_partial_answers,
         cfg.num_incorrect_answers,
+        models_single,
     )
 elif cfg.create_mode == "per_question":
-    correct_answer_generator_perq = dspy.Predict(CorrectAnswerGeneratorPerQuestion)
-    partial_answer_generator_perq = dspy.Predict(PartialAnswerGeneratorPerQuestion)
-    incorrect_answer_generator_perq = dspy.Predict(IncorrectAnswerGeneratorPerQuestion)
+    models_perq = {
+        "correct": dspy.Predict(CorrectAnswerGeneratorPerQuestion),
+        "partial": dspy.Predict(PartialAnswerGeneratorPerQuestion),
+        "incorrect": dspy.Predict(IncorrectAnswerGeneratorPerQuestion),
+    }
 
     student_answers_df = generate_student_answers_df_per_question(
         tasks,
         cfg.num_correct_answers,
         cfg.num_partial_answers,
         cfg.num_incorrect_answers,
+        models_perq,
     )
 elif cfg.create_mode == "all":
-    correct_answer_generator_all = dspy.Predict(CorrectAnswerGeneratorAll)
-    partial_answer_generator_all = dspy.Predict(PartialAnswerGeneratorAll)
-    incorrect_answer_generator_all = dspy.Predict(IncorrectAnswerGeneratorAll)
+    models_all = {
+        "correct": dspy.Predict(CorrectAnswerGeneratorAll),
+        "partial": dspy.Predict(PartialAnswerGeneratorAll),
+        "incorrect": dspy.Predict(IncorrectAnswerGeneratorAll),
+    }
 
     student_answers_df = generate_student_answers_df_all(
         tasks,
         cfg.num_correct_answers,
         cfg.num_partial_answers,
         cfg.num_incorrect_answers,
+        models_all,
     )
 else:
     raise ValueError(f"Invalid create_mode: {cfg.create_mode}")
+
+# Validate exact counts before proceeding
+_validate_generated_counts(student_answers_df, tasks, cfg)
 
 print(f"Generated {len(student_answers_df)} total student answers")
 num_correct = (student_answers_df["intended_label"] == "correct").sum()
