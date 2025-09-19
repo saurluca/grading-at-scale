@@ -297,16 +297,25 @@ max_tokens = 8192 if cfg.eval_mode == "all" else 512
 # Build LM and Grader program(s)
 grader_lm = build_lm(
     cfg.teacher_model_name,
-    max_tokens=max_tokens,
-    # cache=False,
+    max_tokens=16000,
+    cache=cfg.lm_cache,
+    temperature=cfg.lm_temp_eval,
 )
 
-grader_single = dspy.Predict(GraderSingle)
-grader_single.set_lm(grader_lm)
-grader_perq = dspy.Predict(GraderPerQuestion)
-grader_perq.set_lm(grader_lm)
-grader_all = dspy.Predict(GraderAll)
-grader_all.set_lm(grader_lm)
+if cfg.chain_of_thought:
+    grader_single = dspy.ChainOfThought(GraderSingle)
+    grader_single.set_lm(grader_lm)
+    grader_perq = dspy.ChainOfThought(GraderPerQuestion)
+    grader_perq.set_lm(grader_lm)
+    grader_all = dspy.ChainOfThought(GraderAll)
+    grader_all.set_lm(grader_lm)
+else:
+    grader_single = dspy.Predict(GraderSingle)
+    grader_single.set_lm(grader_lm)
+    grader_perq = dspy.Predict(GraderPerQuestion)
+    grader_perq.set_lm(grader_lm)
+    grader_all = dspy.Predict(GraderAll)
+    grader_all.set_lm(grader_lm)
 
 # Load generated answers CSV based on config-driven naming
 generated_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{cfg.create_mode}.csv"
@@ -337,6 +346,30 @@ print(f"Accuracy: {metrics['accuracy']:.3f}")
 print(f"Precision (macro): {metrics['precision']:.3f}")
 print(f"Recall (macro): {metrics['recall']:.3f}")
 print(f"F1 Score (macro): {metrics['f1_score']:.3f}")
+
+# Classification summary: expected vs predicted counts and failures
+labels = [0, 1, 2]
+label_names = {0: "incorrect", 1: "partial", 2: "correct"}
+intended = metrics["intended_labels"]
+predicted = metrics["predicted_labels"]
+
+total = len(intended)
+misclassified_total = sum(1 for i, p in zip(intended, predicted) if p != i)
+invalid_predictions = sum(1 for p in predicted if p not in labels)
+
+print("\nClassification details")
+print(f"Total examples: {total}")
+print(f"Misclassified (predicted != intended): {misclassified_total}")
+if invalid_predictions > 0:
+    print(f"Invalid predictions (not in {labels}): {invalid_predictions}")
+
+for c in labels:
+    expected_c = sum(1 for i in intended if i == c)
+    predicted_c = sum(1 for p in predicted if p == c)
+    misclassified_c = sum(1 for i, p in zip(intended, predicted) if i == c and p != c)
+    print(
+        f"Class '{label_names[c]}' ({c}) -> expected: {expected_c}, predicted: {predicted_c}, misclassified: {misclassified_c}"
+    )
 
 # Plot confusion matrix
 mode_suffix = {"single": "single", "per_question": "perq", "all": "all"}.get(
