@@ -3,6 +3,13 @@ from typing import List
 
 
 class CorrectAnswerGenerator(dspy.Signature):
+    """
+    You are an excellent student answering a question.
+    Your job is to provide a short and correct answer to the question at hand.
+    Aim to achieve full points of the correct answer.
+    Be creative. The answer should be accurate and well-reasoned.
+    """
+
     question: str = dspy.InputField(description="The question text")
     reference: dspy.InputField = dspy.InputField(
         description="The correct reference text for this question",
@@ -18,6 +25,13 @@ class CorrectAnswerGenerator(dspy.Signature):
 
 
 class PartialAnswerGenerator(dspy.Signature):
+    """
+    You are a mediocre student answering a question.
+    Your job is to provide a short and partially correct answer to the question at hand.
+    Aim to achieve half the points of the correct answer.
+    Be creative. The answer should be plausible but wrong.
+    """
+
     question: str = dspy.InputField(description="The question text")
     reference: dspy.InputField = dspy.InputField(
         description="The correct reference text for this question",
@@ -33,6 +47,13 @@ class PartialAnswerGenerator(dspy.Signature):
 
 
 class IncorrectAnswerGenerator(dspy.Signature):
+    """
+    You are a bad student answering a question.
+    Your job is to provide a short and incorrect or irrelevant answer to the question at hand.
+    Aim to achieve zero points of the correct answer.
+    Be creative. The answer should be wrong but still somewhat plausible.
+    """
+
     question: str = dspy.InputField(description="The question text")
     reference: dspy.InputField = dspy.InputField(
         description="The correct reference text for this question",
@@ -49,6 +70,13 @@ class IncorrectAnswerGenerator(dspy.Signature):
 
 # Per-question batched generators (many answers for one question per call)
 class CorrectAnswerGeneratorPerQuestion(dspy.Signature):
+    """
+    You are an excellent student answering a question.
+    Your job is to provide multiple short and correct answers to the question at hand.
+    Aim to achieve full points for each answer.
+    Be creative. The answer should all be different from each other, accurate and well-reasoned.
+    """
+
     question: str = dspy.InputField(description="The question text")
     reference: dspy.InputField = dspy.InputField(
         description="The correct reference text for this question",
@@ -65,6 +93,13 @@ class CorrectAnswerGeneratorPerQuestion(dspy.Signature):
 
 
 class PartialAnswerGeneratorPerQuestion(dspy.Signature):
+    """
+    You are a mediocre student answering a question.
+    Your job is to provide multiple short and partially correct answers to the question at hand.
+    Aim to achieve half the points for each answer.
+    Be creative. The answer should all be different from each other, plausible but wrong.
+    """
+
     question: str = dspy.InputField(description="The question text")
     reference: dspy.InputField = dspy.InputField(
         description="The correct reference text for this question",
@@ -83,6 +118,13 @@ class PartialAnswerGeneratorPerQuestion(dspy.Signature):
 
 
 class IncorrectAnswerGeneratorPerQuestion(dspy.Signature):
+    """
+    You are a bad student answering a question.
+    Your job is to provide multiple short and incorrect or irrelevant answers to the question at hand.
+    Aim to achieve zero points for each answer.
+    Be creative. The answer should all be different from each other, wrong but still somewhat plausible.
+    """
+
     question: str = dspy.InputField(description="The question text")
     reference: dspy.InputField = dspy.InputField(
         description="The correct reference text for this question",
@@ -102,25 +144,39 @@ class IncorrectAnswerGeneratorPerQuestion(dspy.Signature):
 
 # All-questions batched generators (many answers for all questions in one call)
 class CorrectAnswerGeneratorAll(dspy.Signature):
+    """
+    You are an excellent student answering multiple questions.
+    Your job is to provide multiple short and correct answers to each question at hand in the order of the questions.
+    Aim to achieve full points for each answer and each question.
+    Be creative. The answer should all be different from each other, accurate and well-reasoned.
+    """
+
     questions: List[str] = dspy.InputField(description="The list of questions")
     # references: List[str] = dspy.InputField(description="Optional context texts")
     references: dspy.InputField = dspy.InputField(
-        description="The list of reference texts aligned with questions",
+        description="The list of reference texts that the information for the questions are extracted from",
         optional=True,
     )
     reference_answers: dspy.InputField = dspy.InputField(
-        description="The list of correct reference answers",
+        description="The list of correct reference answers for the questions",
         optional=True,
     )
     number_of_answers_per_question: int = dspy.InputField(
-        description="How many answers per question"
+        description="How many answers per question to generate"
     )
     answers: List[str] = dspy.OutputField(
-        description="Flat list of answers in question-major order"
+        description="Flat list of correct answers to the questions in order"
     )
 
 
 class PartialAnswerGeneratorAll(dspy.Signature):
+    """
+    You are a mediocre student answering multiple questions.
+    Your job is to provide multiple short and partially correct answers to the questions at hand in the order of the questions.
+    Aim to achieve half the points for each answer and each question.
+    Be creative. The answer should all be different from each other, plausible but wrong.
+    """
+
     questions: List[str] = dspy.InputField(description="The list of questions")
     # references: List[str] = dspy.InputField(description="Optional context texts")
     references: dspy.InputField = dspy.InputField(
@@ -140,6 +196,13 @@ class PartialAnswerGeneratorAll(dspy.Signature):
 
 
 class IncorrectAnswerGeneratorAll(dspy.Signature):
+    """
+    You are a bad student answering multiple questions.
+    Your job is to provide multiple short and incorrect or irrelevant answers to the questions at hand in the order of the questions.
+    Aim to achieve zero points for each answer and each question.
+    Be creative. The answer should all be different from each other, wrong but still somewhat plausible.
+    """
+
     questions: List[str] = dspy.InputField(description="The list of questions")
     references: dspy.InputField = dspy.InputField(
         description="The list of reference texts aligned with questions",
