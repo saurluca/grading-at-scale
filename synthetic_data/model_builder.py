@@ -52,6 +52,11 @@ model_configs = {
         "model": "openrouter/aion-labs/aion-rp-llama-3.1-8b",
         "api_key": os.getenv("OPENROUTER_API_KEY"),
     },
+    "llama3.2": {
+        "model": "ollama_chat/llama3.2:3b",
+        "api_key": "",
+        "api_base": "http://100.116.24.45:11434",
+    },
 }
 
 
