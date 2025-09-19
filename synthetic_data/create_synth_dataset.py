@@ -36,43 +36,17 @@ output_dir = os.path.normpath(
 
 max_tokens = 4096 if cfg.create_mode == "all" else 512
 
-student_lm = build_lm(
+lm = build_lm(
     cfg.model_name,
-    temperature=getattr(cfg, "lm_temperature_creation", None),
+    temperature=getattr(cfg, "lm_temp_generation", None),
     cache=False,
     max_tokens=max_tokens,
 )
+dspy.settings.configure(lm=lm)
 
 # read in data
 tasks_file_path = os.path.join(output_dir, cfg.tasks_filename)
 tasks = pd.read_csv(tasks_file_path)
-
-
-# Create DSPy programs
-correct_answer_generator = dspy.Predict(CorrectAnswerGenerator)
-partial_answer_generator = dspy.Predict(PartialAnswerGenerator)
-incorrect_answer_generator = dspy.Predict(IncorrectAnswerGenerator)
-
-correct_answer_generator_perq = dspy.Predict(CorrectAnswerGeneratorPerQuestion)
-partial_answer_generator_perq = dspy.Predict(PartialAnswerGeneratorPerQuestion)
-incorrect_answer_generator_perq = dspy.Predict(IncorrectAnswerGeneratorPerQuestion)
-
-correct_answer_generator_all = dspy.Predict(CorrectAnswerGeneratorAll)
-partial_answer_generator_all = dspy.Predict(PartialAnswerGeneratorAll)
-incorrect_answer_generator_all = dspy.Predict(IncorrectAnswerGeneratorAll)
-
-# Set the student LM for answer generation
-correct_answer_generator.set_lm(student_lm)
-partial_answer_generator.set_lm(student_lm)
-incorrect_answer_generator.set_lm(student_lm)
-
-correct_answer_generator_perq.set_lm(student_lm)
-partial_answer_generator_perq.set_lm(student_lm)
-incorrect_answer_generator_perq.set_lm(student_lm)
-
-correct_answer_generator_all.set_lm(student_lm)
-partial_answer_generator_all.set_lm(student_lm)
-incorrect_answer_generator_all.set_lm(student_lm)
 
 
 def generate_student_answers_df(tasks_df, num_correct, num_partial, num_incorrect):
@@ -290,7 +264,9 @@ def generate_student_answers_df_per_question(
 
 
 # All-questions batched generation (3 total LLM calls)
-def generate_student_answers_df_all(tasks_df, num_correct, num_partial, num_incorrect):
+def generate_student_answers_df_all(
+    tasks_df, num_correct, num_partial, num_incorrect, model
+):
     num_questions = len(tasks_df)
     assert num_questions > 0, "No questions to generate answers for"
 
@@ -328,8 +304,8 @@ def generate_student_answers_df_all(tasks_df, num_correct, num_partial, num_inco
                 kwargs["references"] = reference_texts_list
             if getattr(cfg, "create_pass_reference_answer_for_correct", True):
                 kwargs["reference_answers"] = reference_answers_list
-            r = correct_answer_generator_all(**kwargs)
-            correct_flat = getattr(r, "answers", [])
+            result = model(**kwargs)
+            correct_flat = result.answers
 
         if num_partial > 0:
             kwargs = {
@@ -340,8 +316,8 @@ def generate_student_answers_df_all(tasks_df, num_correct, num_partial, num_inco
                 kwargs["references"] = reference_texts_list
             if getattr(cfg, "create_pass_reference_answer_for_partial", True):
                 kwargs["reference_answers"] = reference_answers_list
-            r = partial_answer_generator_all(**kwargs)
-            partial_flat = getattr(r, "answers", [])
+            result = model(**kwargs)
+            partial_flat = result.answers
 
         if num_incorrect > 0:
             kwargs = {
@@ -352,8 +328,8 @@ def generate_student_answers_df_all(tasks_df, num_correct, num_partial, num_inco
                 kwargs["references"] = reference_texts_list
             if getattr(cfg, "create_pass_reference_answer_for_incorrect", False):
                 kwargs["reference_answers"] = reference_answers_list
-            r = incorrect_answer_generator_all(**kwargs)
-            incorrect_flat = getattr(r, "answers", [])
+            result = model(**kwargs)
+            incorrect_flat = result.answers
     except Exception as e:
         raise e
 
@@ -419,22 +395,33 @@ print(
     f"Per-question targets -> correct: {cfg.num_correct_answers}, partial: {cfg.num_partial_answers}, incorrect: {cfg.num_incorrect_answers}"
 )
 
-create_mode = getattr(cfg, "create_mode", "single")
-if create_mode == "single":
+if cfg.create_mode == "single":
+    correct_answer_generator = dspy.Predict(CorrectAnswerGenerator)
+    partial_answer_generator = dspy.Predict(PartialAnswerGenerator)
+    incorrect_answer_generator = dspy.Predict(IncorrectAnswerGenerator)
+
     student_answers_df = generate_student_answers_df(
         tasks,
         cfg.num_correct_answers,
         cfg.num_partial_answers,
         cfg.num_incorrect_answers,
     )
-elif create_mode == "per_question":
+elif cfg.create_mode == "per_question":
+    correct_answer_generator_perq = dspy.Predict(CorrectAnswerGeneratorPerQuestion)
+    partial_answer_generator_perq = dspy.Predict(PartialAnswerGeneratorPerQuestion)
+    incorrect_answer_generator_perq = dspy.Predict(IncorrectAnswerGeneratorPerQuestion)
+
     student_answers_df = generate_student_answers_df_per_question(
         tasks,
         cfg.num_correct_answers,
         cfg.num_partial_answers,
         cfg.num_incorrect_answers,
     )
-elif create_mode == "all":
+elif cfg.create_mode == "all":
+    correct_answer_generator_all = dspy.Predict(CorrectAnswerGeneratorAll)
+    partial_answer_generator_all = dspy.Predict(PartialAnswerGeneratorAll)
+    incorrect_answer_generator_all = dspy.Predict(IncorrectAnswerGeneratorAll)
+
     student_answers_df = generate_student_answers_df_all(
         tasks,
         cfg.num_correct_answers,
@@ -442,7 +429,7 @@ elif create_mode == "all":
         cfg.num_incorrect_answers,
     )
 else:
-    raise ValueError(f"Invalid create_mode: {create_mode}")
+    raise ValueError(f"Invalid create_mode: {cfg.create_mode}")
 
 print(f"Generated {len(student_answers_df)} total student answers")
 num_correct = (student_answers_df["intended_label"] == "correct").sum()
@@ -453,29 +440,24 @@ print(f"Intended partial answers: {num_partial}")
 print(f"Intended incorrect answers: {num_incorrect}")
 
 # Save the dataframe
-mode_suffix = {
-    "single": "single",
-    "per_question": "per_question",
-    "all": "all",
-}.get(create_mode, create_mode)
-student_answers_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{mode_suffix}.csv"
+student_answers_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{cfg.create_mode}.csv"
 output_path = os.path.join(output_dir, student_answers_filename)
 student_answers_df.to_csv(output_path, index=False)
 print(f"Saved student answers to: {output_path}")
 
 # %%
 
-"""
-Sample a few random incorrect student answers to display
-"""
-incorrect_df = student_answers_df[student_answers_df["intended_label"] == "incorrect"]
-sample_n = min(5, len(incorrect_df))
-if sample_n > 0:
-    incorrect_examples = incorrect_df.sample(n=sample_n, random_state=42)
-    for idx, example in incorrect_examples.iterrows():
-        print("\nSampled Incorrect Example:")
-        print("question: ", example["question"])
-        print("reference_answer: ", example["reference_answer"])
-        print("chunk_text: ", example["chunk_text"])
-        print("topic: ", example["topic"])
-        print("student_answer: ", example["student_answer"])
+# """
+# Sample a few random incorrect student answers to display
+# """
+# incorrect_df = student_answers_df[student_answers_df["intended_label"] == "incorrect"]
+# sample_n = min(5, len(incorrect_df))
+# if sample_n > 0:
+#     incorrect_examples = incorrect_df.sample(n=sample_n, random_state=42)
+#     for idx, example in incorrect_examples.iterrows():
+#         print("\nSampled Incorrect Example:")
+#         print("question: ", example["question"])
+#         print("reference_answer: ", example["reference_answer"])
+#         print("chunk_text: ", example["chunk_text"])
+#         print("topic: ", example["topic"])
+#         print("student_answer: ", example["student_answer"])
