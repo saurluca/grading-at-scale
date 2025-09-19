@@ -1,5 +1,5 @@
 # models: apertus-8b, apertus-70b, gpt-4o-mini, gpt-4o, DeepSeek-V3.1,
-model_name: gpt-4o-mini
+model_name: gpt-4o
 teacher_model_name: gpt-4o-mini
 
 # Raw input folders (JSON)
@@ -15,5 +15,9 @@ num_partial_answers: 1
 num_incorrect_answers: 1
 
 lm_temperature: 1.0
-lm_temperature_creation: 1.4
+lm_temperature_creation: 1.0
 lm_cache: false
+
+# Evaluation batching mode: single | per_question | all
+eval_mode: per_question
+create_mode: all

@@ -56,7 +56,7 @@ model_configs = {
 
 
 def build_lm(
-    model_name: str, cache: bool = True, temperature: float = 0.5, max_tokens: int = 256
+    model_name: str, cache: bool = True, temperature: float = 1.0, max_tokens: int = 512
 ):
     config = model_configs[model_name]
     lm_kwargs = {
