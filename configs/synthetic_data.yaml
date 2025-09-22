@@ -1,5 +1,5 @@
 # models: apertus-8b, apertus-70b, gpt-4o-mini, gpt-4o, llama3.2:3b, deepseek-r1, llama3.1:8b
-model_name: llama3.1:8b
+model_name: gpt-4o
 teacher_model_name: gpt-4o-mini
 
 # Raw input folders (JSON)
@@ -10,12 +10,12 @@ raw_chunks_dir: data/raw/chunks
 output_dir: data/synth
 tasks_filename: tasks_unified.csv
 
-num_correct_answers: 2
-num_partial_answers: 2
-num_incorrect_answers: 2
+num_correct_answers: 4
+num_partial_answers: 4
+num_incorrect_answers: 4
 
 lm_temp_eval: 0.6
-lm_temp_generation: 0.3
+lm_temp_generation: 1.3
 lm_cache: true
 
 # Evaluation batching mode: single | per_question | all
@@ -29,7 +29,9 @@ eval_pass_reference: false # pass chunk_text as `reference`
 eval_pass_reference_answer: false # pass ground-truth as `reference_answer`
 
 # Creation flags (per generator type)
-# TODO chain of thought
+generation:
+  chain_of_thought: false
+
 create_pass_reference_for_correct: false
 create_pass_reference_answer_for_correct: true
 create_pass_reference_for_partial: false

@@ -389,11 +389,18 @@ print(
 )
 
 if cfg.create_mode == "single":
-    models_single = {
-        "correct": dspy.Predict(CorrectAnswerGenerator),
-        "partial": dspy.Predict(PartialAnswerGenerator),
-        "incorrect": dspy.Predict(IncorrectAnswerGenerator),
-    }
+    if cfg.generation.chain_of_thought:
+        models_single = {
+            "correct": dspy.ChainOfThought(CorrectAnswerGenerator),
+            "partial": dspy.ChainOfThought(PartialAnswerGenerator),
+            "incorrect": dspy.ChainOfThought(IncorrectAnswerGenerator),
+        }
+    else:
+        models_single = {
+            "correct": dspy.Predict(CorrectAnswerGenerator),
+            "partial": dspy.Predict(PartialAnswerGenerator),
+            "incorrect": dspy.Predict(IncorrectAnswerGenerator),
+        }
 
     student_answers_df = generate_student_answers_df(
         tasks,
@@ -403,11 +410,18 @@ if cfg.create_mode == "single":
         models_single,
     )
 elif cfg.create_mode == "per_question":
-    models_perq = {
-        "correct": dspy.Predict(CorrectAnswerGeneratorPerQuestion),
-        "partial": dspy.Predict(PartialAnswerGeneratorPerQuestion),
-        "incorrect": dspy.Predict(IncorrectAnswerGeneratorPerQuestion),
-    }
+    if cfg.generation.chain_of_thought:
+        models_perq = {
+            "correct": dspy.ChainOfThought(CorrectAnswerGeneratorPerQuestion),
+            "partial": dspy.ChainOfThought(PartialAnswerGeneratorPerQuestion),
+            "incorrect": dspy.ChainOfThought(IncorrectAnswerGeneratorPerQuestion),
+        }
+    else:
+        models_perq = {
+            "correct": dspy.Predict(CorrectAnswerGeneratorPerQuestion),
+            "partial": dspy.Predict(PartialAnswerGeneratorPerQuestion),
+            "incorrect": dspy.Predict(IncorrectAnswerGeneratorPerQuestion),
+        }
 
     student_answers_df = generate_student_answers_df_per_question(
         tasks,
@@ -417,11 +431,18 @@ elif cfg.create_mode == "per_question":
         models_perq,
     )
 elif cfg.create_mode == "all":
-    models_all = {
-        "correct": dspy.Predict(CorrectAnswerGeneratorAll),
-        "partial": dspy.Predict(PartialAnswerGeneratorAll),
-        "incorrect": dspy.Predict(IncorrectAnswerGeneratorAll),
-    }
+    if cfg.generation.chain_of_thought:
+        models_all = {
+            "correct": dspy.ChainOfThought(CorrectAnswerGeneratorAll),
+            "partial": dspy.ChainOfThought(PartialAnswerGeneratorAll),
+            "incorrect": dspy.ChainOfThought(IncorrectAnswerGeneratorAll),
+        }
+    else:
+        models_all = {
+            "correct": dspy.Predict(CorrectAnswerGeneratorAll),
+            "partial": dspy.Predict(PartialAnswerGeneratorAll),
+            "incorrect": dspy.Predict(IncorrectAnswerGeneratorAll),
+        }
 
     student_answers_df = generate_student_answers_df_all(
         tasks,
