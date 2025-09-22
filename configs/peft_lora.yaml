@@ -1,0 +1,31 @@
+# Minimal PEFT/LoRA config for classifying student answers
+
+# Small base model that works well with LoRA and runs on CPU/GPU easily
+model_name: distilbert-base-uncased
+
+# Path to the CSV produced by synthetic_data/create_synth_dataset.py
+# Expected columns: question, student_answer, intended_label (incorrect|partial|correct)
+dataset_csv: data/synth/student_answers_c3_p3_i3_gpt-4o-mini_per_question.csv
+
+# Where to save model outputs and adapter
+output_dir: data/peft_output
+hf_cache_dir: .hf_cache
+
+seed: 42
+
+lora:
+  r: 8
+  lora_alpha: 16
+  lora_dropout: 0.05
+  # For DistilBERT, target q_lin/v_lin in attention blocks
+  target_modules: ["q_lin", "v_lin"]
+
+training:
+  num_train_epochs: 2
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 32
+  learning_rate: 2e-4
+  weight_decay: 0.01
+  eval_strategy: epoch
+  save_strategy: epoch
+  logging_steps: 10
