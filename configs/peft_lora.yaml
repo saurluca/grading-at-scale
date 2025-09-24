@@ -2,8 +2,8 @@
 
 # Small base model that works well with LoRA and runs on CPU/GPU easily
 # model_name: distilbert-base-uncased
-model_name: meta-llama/Llama-3.2-3B-Instruct
 # model_name: meta-llama/Llama-3.2-3B-Instruct
+model_name: meta-llama/Llama-3.2-1B-Instruct
 # model_name: swiss-ai/Apertus-8B-Instruct-2509
 
 # Path to the CSV produced by synthetic_data/create_synth_dataset.py
@@ -17,8 +17,8 @@ hf_cache_dir: .hf_cache
 seed: 42
 
 lora:
-  r: 8 # 16
-  lora_alpha: 8 # 16
+  r: 16
+  lora_alpha: 16
   lora_dropout: 0.05
   # For DistilBERT, target q_lin/v_lin in attention blocks
   # target_modules: ["q_lin", "v_lin"]
@@ -28,8 +28,8 @@ training:
   num_train_epochs: 3
   # per_device_train_batch_size: 32
   # per_device_eval_batch_size: 32
-  per_device_train_batch_size: 1
-  per_device_eval_batch_size: 1
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 4
   learning_rate: 0.0001
   weight_decay: 0.0001
   eval_strategy: epoch
