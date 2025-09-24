@@ -1,16 +1,8 @@
 import os
 from pathlib import Path
-from typing import Any, Dict
 import sys
 
 import mlflow
-from transformers import (
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
-    DataCollatorWithPadding,
-    TrainingArguments,
-    Trainer,
-)
 from peft import LoraConfig, get_peft_model, TaskType
 
 if "__file__" in globals():
@@ -22,45 +14,13 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from utils import load_config
 from common import (
-    LossLoggingCallback,
+    setup_training_args,
+    setup_trainer,
     load_and_preprocess_data,
     tokenize_dataset,
-    compute_metrics,
     detailed_evaluation,
+    setup_model_and_tokenizer,
 )
-
-
-def setup_model_and_tokenizer(
-    model_name: str,
-    label2id: Dict[str, int],
-    id2label: Dict[int, str],
-    cache_dir: str | None,
-):
-    print(f"Loading tokenizer and model from {model_name}...")
-    tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
-
-    # Ensure tokenizer has a pad token (required for batching/padding)
-    if tokenizer.pad_token is None:
-        if tokenizer.eos_token is not None:
-            tokenizer.pad_token = tokenizer.eos_token
-        else:
-            tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-
-    base_model = AutoModelForSequenceClassification.from_pretrained(
-        model_name,
-        num_labels=3,
-        id2label=id2label,
-        label2id=label2id,
-        cache_dir=cache_dir,
-    )
-
-    # Resize embeddings if new tokens were added and align pad_token_id
-    if hasattr(base_model, "resize_token_embeddings"):
-        base_model.resize_token_embeddings(len(tokenizer))
-    if getattr(base_model.config, "pad_token_id", None) is None:
-        base_model.config.pad_token_id = tokenizer.pad_token_id
-
-    return tokenizer, base_model
 
 
 def setup_lora_model(base_model, cfg):
@@ -73,48 +33,6 @@ def setup_lora_model(base_model, cfg):
         task_type=TaskType.SEQ_CLS,
     )
     return get_peft_model(base_model, lora_cfg)
-
-
-def setup_training_args(cfg, output_dir: str):
-    """Setup training arguments."""
-    return TrainingArguments(
-        output_dir=output_dir,
-        num_train_epochs=float(cfg.training.num_train_epochs),
-        per_device_train_batch_size=int(cfg.training.per_device_train_batch_size),
-        per_device_eval_batch_size=int(cfg.training.per_device_eval_batch_size),
-        learning_rate=float(cfg.training.learning_rate),
-        weight_decay=float(cfg.training.weight_decay),
-        eval_strategy=str(cfg.training.eval_strategy),
-        save_strategy=str(getattr(cfg.training, "save_strategy", "epoch")),
-        logging_steps=int(getattr(cfg.training, "logging_steps", 10)),
-        logging_strategy="steps",  # Log per step for training accuracy
-        load_best_model_at_end=True,
-        metric_for_best_model="accuracy",
-        greater_is_better=True,
-        report_to=[],
-        seed=int(getattr(cfg, "seed", 42)),
-        # Enable evaluation and logging
-        save_total_limit=2,
-    )
-
-
-def setup_trainer(model, training_args, tokenized_data, tokenizer):
-    print("Setting up trainer...")
-    data_collator = DataCollatorWithPadding(tokenizer)
-
-    # Create the loss logging callback
-    loss_callback = LossLoggingCallback()
-
-    return Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=tokenized_data["train"],
-        eval_dataset=tokenized_data["test"],
-        tokenizer=tokenizer,
-        data_collator=data_collator,
-        compute_metrics=compute_metrics,
-        callbacks=[loss_callback],
-    ), loss_callback
 
 
 def main() -> None:
