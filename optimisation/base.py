@@ -5,8 +5,7 @@ import sys
 
 import numpy as np
 import mlflow
-import mlflow.transformers
-from datasets import load_dataset
+from datasets import load_dataset, ClassLabel
 from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,
@@ -125,25 +124,39 @@ def compute_metrics(eval_pred):
 
 
 def load_and_preprocess_data(dataset_csv: str, cache_dir: str | None, seed: int = 42):
-    """Load and preprocess the dataset."""
-    print("Loading dataset...")
-    raw = load_dataset(
+    print(f"Loading dataset from {dataset_csv}...")
+    full_dataset = load_dataset(
         "csv",
         data_files={"data": dataset_csv},
         cache_dir=cache_dir,
-    )["data"].train_test_split(test_size=0.1, seed=seed)
-
-    print(f"Number of training samples: {len(raw['train'])}")
-    print(f"Number of test samples: {len(raw['test'])}")
-    print(f"Total samples: {len(raw['train']) + len(raw['test'])}")
+    )["data"]
 
     # Labels mapping (order matters)
     label_order = ["incorrect", "partial", "correct"]
     label2id: Dict[str, int] = {name: i for i, name in enumerate(label_order)}
     id2label: Dict[int, str] = {i: name for name, i in label2id.items()}
 
-    # Map labels
-    raw = raw.map(lambda x: map_labels(x, label2id))
+    # Map labels on the full dataset (before splitting)
+    full_dataset = full_dataset.map(lambda x: map_labels(x, label2id))
+
+    # Ensure 'labels' is a ClassLabel feature to support stratified splitting
+    full_dataset = full_dataset.cast_column("labels", ClassLabel(names=label_order))
+
+    # use stratified split
+    raw = full_dataset.train_test_split(
+        test_size=0.2, seed=seed, stratify_by_column="labels"
+    )
+
+    print(f"Number of training samples: {len(raw['train'])}")
+    print(f"Number of test samples: {len(raw['test'])}")
+    print(f"Total samples: {len(raw['train']) + len(raw['test'])}")
+
+    # Show per-class counts in test set for verification
+    test_labels = raw["test"]["labels"]
+    counts = {name: 0 for name in label_order}
+    for v in test_labels:
+        counts[id2label[int(v)]] += 1
+    print("Test set per-class counts (stratified):", counts)
 
     return raw, label_order, label2id, id2label
 
@@ -154,7 +167,7 @@ def setup_model_and_tokenizer(
     id2label: Dict[int, str],
     cache_dir: str | None,
 ):
-    """Setup the base model and tokenizer."""
+    print(f"Loading tokenizer and model from {model_name}...")
     tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
 
     base_model = AutoModelForSequenceClassification.from_pretrained(
@@ -169,7 +182,7 @@ def setup_model_and_tokenizer(
 
 
 def setup_lora_model(base_model, cfg):
-    """Setup LoRA configuration and apply to base model."""
+    print("Setting up LoRA configuration and applying to base model...")
     lora_cfg = LoraConfig(
         r=int(cfg.lora.r),
         lora_alpha=int(cfg.lora.lora_alpha),
@@ -204,7 +217,7 @@ def setup_training_args(cfg, output_dir: str):
 
 
 def setup_trainer(model, training_args, tokenized_data, tokenizer):
-    """Setup the trainer with model, data, and configuration."""
+    print("Setting up trainer...")
     data_collator = DataCollatorWithPadding(tokenizer)
 
     # Create the loss logging callback
@@ -223,7 +236,7 @@ def setup_trainer(model, training_args, tokenized_data, tokenizer):
 
 
 def tokenize_dataset(raw_data, tokenizer):
-    """Tokenize the dataset for training."""
+    print("Tokenizing dataset...")
 
     def tokenize_batch(batch: Dict[str, Any]) -> Dict[str, Any]:
         return tokenize_fn(batch, tokenizer)
@@ -238,9 +251,6 @@ def tokenize_dataset(raw_data, tokenizer):
 
 
 def detailed_evaluation(trainer, test_dataset, label_order):
-    """
-    Perform detailed evaluation on the test dataset and calculate comprehensive metrics.
-    """
     print("\n" + "=" * 60)
     print("DETAILED EVALUATION")
     print("=" * 60)
@@ -261,6 +271,29 @@ def detailed_evaluation(trainer, test_dataset, label_order):
     macro_recall = np.mean(recall)
     macro_f1 = np.mean(f1)
 
+    # Baselines
+    # Naive majority-class classifier
+    majority_class = np.bincount(y_true).argmax()
+    y_pred_naive = np.full_like(y_true, fill_value=majority_class)
+    _, _, f1_naive, _ = precision_recall_fscore_support(
+        y_true, y_pred_naive, average=None, zero_division=0
+    )
+    macro_f1_naive = np.mean(f1_naive)
+
+    # Random classifier proportional to label frequencies
+    class_counts = np.bincount(y_true, minlength=len(label_order))
+    class_probs = (
+        class_counts / class_counts.sum()
+        if class_counts.sum() > 0
+        else np.ones(len(label_order)) / len(label_order)
+    )
+    rng = np.random.default_rng(42)
+    y_pred_random = rng.choice(len(label_order), size=len(y_true), p=class_probs)
+    _, _, f1_random, _ = precision_recall_fscore_support(
+        y_true, y_pred_random, average=None, zero_division=0
+    )
+    macro_f1_random = np.mean(f1_random)
+
     # Calculate weighted averages
     weighted_precision, weighted_recall, weighted_f1, _ = (
         precision_recall_fscore_support(
@@ -271,16 +304,9 @@ def detailed_evaluation(trainer, test_dataset, label_order):
     # Print detailed results
     print(f"Overall Accuracy: {accuracy:.4f}")
     print(f"Macro F1 Score: {macro_f1:.4f}")
+    print(f"Macro F1 (naive majority): {macro_f1_naive:.4f}")
+    print(f"Macro F1 (random label-proportional): {macro_f1_random:.4f}")
     print(f"Weighted F1 Score: {weighted_f1:.4f}")
-    print()
-
-    # Per-class metrics
-    print("Per-class Metrics:")
-    print("-" * 50)
-    for i, label in enumerate(label_order):
-        print(
-            f"{label:>10}: Precision={precision[i]:.4f}, Recall={recall[i]:.4f}, F1={f1[i]:.4f}, Support={support[i]}"
-        )
 
     print()
     print("Classification Report:")
@@ -310,6 +336,8 @@ def detailed_evaluation(trainer, test_dataset, label_order):
         "macro_precision": macro_precision,
         "macro_recall": macro_recall,
         "macro_f1": macro_f1,
+        "macro_f1_naive": macro_f1_naive,
+        "macro_f1_random": macro_f1_random,
         "weighted_precision": weighted_precision,
         "weighted_recall": weighted_recall,
         "weighted_f1": weighted_f1,

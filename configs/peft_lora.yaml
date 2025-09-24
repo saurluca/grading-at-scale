@@ -1,8 +1,8 @@
 # Minimal PEFT/LoRA config for classifying student answers
 
 # Small base model that works well with LoRA and runs on CPU/GPU easily
-# model_name: distilbert-base-uncased
-model_name: meta-llama/Llama-3.2-3B-Instruct
+model_name: distilbert-base-uncased
+# model_name: meta-llama/Llama-3.2-1B-Instruct
 
 # Path to the CSV produced by synthetic_data/create_synth_dataset.py
 # Expected columns: question, student_answer, intended_label (incorrect|partial|correct)
