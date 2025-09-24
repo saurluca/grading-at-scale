@@ -1,0 +1,24 @@
+services:
+  vllm-apertus:
+    # Build from local Dockerfile to allow customization (inherits vllm/vllm-openai:latest)
+    build: .
+    image: vllm-openai-apertus:latest
+    container_name: vllm-apertus
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      # Enable faster HF downloads (optional)
+      # - HF_HUB_ENABLE_HF_TRANSFER=1
+    volumes:
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+    ports:
+      - "8000:8000"
+    ipc: host
+    # Request all NVIDIA GPUs (Docker Compose v2 with NVIDIA Container Toolkit)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: --model swiss-ai/Apertus-8B-Instruct-2509
