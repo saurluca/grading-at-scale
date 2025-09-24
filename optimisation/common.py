@@ -18,60 +18,79 @@ from transformers import (
     TrainerCallback,
     TrainerState,
     TrainerControl,
+    ApertusForCausalLM,
 )
+
+# AutoConfig.register("new-model", NewModelConfig)
+# AutoModel.register(NewModelConfig, NewModel)
 
 
 class LossLoggingCallback(TrainerCallback):
-    """Custom callback to log training and validation metrics per step and epoch."""
+    """Log training and evaluation metrics per epoch only."""
 
     def __init__(self):
-        self.train_losses = []
-        self.eval_losses = []
+        self.train_losses = []  # historical epoch means
+        self.eval_losses = []  # historical epoch eval losses
+        self._current_epoch_train_losses = []
+
+    def on_epoch_begin(
+        self, args, state: TrainerState, control: TrainerControl, **kwargs
+    ):
+        # Reset per-epoch accumulators
+        self._current_epoch_train_losses = []
 
     def on_log(self, args, state: TrainerState, control: TrainerControl, **kwargs):
-        """Log metrics at each logging step."""
-        if state.log_history:
-            latest_log = state.log_history[-1]
+        """Collect training loss during the epoch; do not log per-step."""
+        if not state.log_history:
+            return
+        latest_log = state.log_history[-1]
 
-            # Log training metrics per step
-            if "train_loss" in latest_log:
-                train_loss = latest_log["train_loss"]
-                self.train_losses.append(train_loss)
-                mlflow.log_metric("train_loss_step", train_loss, step=state.global_step)
-
-            if "train_accuracy" in latest_log:
-                train_acc = latest_log["train_accuracy"]
-                mlflow.log_metric(
-                    "train_accuracy_step", train_acc, step=state.global_step
-                )
+        # HF Trainer emits per-step training loss under key 'loss'
+        if "loss" in latest_log:
+            loss_value = latest_log["loss"]
+            try:
+                # Some logs include NaNs during warmup; filter them out
+                if loss_value is not None and np.isfinite(float(loss_value)):
+                    self._current_epoch_train_losses.append(float(loss_value))
+            except Exception:
+                pass
 
     def on_epoch_end(
         self, args, state: TrainerState, control: TrainerControl, **kwargs
     ):
-        """Log loss at the end of each epoch."""
+        """Aggregate and log metrics at the end of each epoch."""
+        epoch_index = int(state.epoch) if state.epoch is not None else 0
+
+        # 1) Training loss (epoch average of step losses)
+        if self._current_epoch_train_losses:
+            train_loss_epoch = float(np.mean(self._current_epoch_train_losses))
+            self.train_losses.append(train_loss_epoch)
+            print(f"Epoch {epoch_index}: Training Loss = {train_loss_epoch:.4f}")
+            mlflow.log_metric("train_loss", train_loss_epoch, step=epoch_index)
+
+        # 2) Evaluation metrics from the most recent eval of this epoch
+        eval_log = None
         if state.log_history:
-            # Get the latest log entry
-            latest_log = state.log_history[-1]
+            # Iterate in reverse to find the last eval for this epoch
+            for log_entry in reversed(state.log_history):
+                if "eval_loss" in log_entry:
+                    # If 'epoch' is present, prefer entries matching this epoch
+                    entry_epoch = log_entry.get("epoch")
+                    if entry_epoch is None or int(entry_epoch) == epoch_index:
+                        eval_log = log_entry
+                        break
 
-            # Extract training loss if available
-            if "train_loss" in latest_log:
-                train_loss = latest_log["train_loss"]
-                self.train_losses.append(train_loss)
-                print(f"Epoch {state.epoch}: Training Loss = {train_loss:.4f}")
-                mlflow.log_metric("train_loss", train_loss, step=int(state.epoch))
-
-            # Extract evaluation loss if available
-            if "eval_loss" in latest_log:
-                eval_loss = latest_log["eval_loss"]
+        if eval_log is not None:
+            if "eval_loss" in eval_log:
+                eval_loss = float(eval_log["eval_loss"])  # type: ignore[arg-type]
                 self.eval_losses.append(eval_loss)
-                print(f"Epoch {state.epoch}: Evaluation Loss = {eval_loss:.4f}")
-                mlflow.log_metric("eval_loss", eval_loss, step=int(state.epoch))
+                print(f"Epoch {epoch_index}: Evaluation Loss = {eval_loss:.4f}")
+                mlflow.log_metric("eval_loss", eval_loss, step=epoch_index)
 
-            # Log other metrics if available
-            if "eval_accuracy" in latest_log:
-                eval_acc = latest_log["eval_accuracy"]
-                print(f"Epoch {state.epoch}: Evaluation Accuracy = {eval_acc:.4f}")
-                mlflow.log_metric("eval_accuracy", eval_acc, step=int(state.epoch))
+            if "eval_accuracy" in eval_log:
+                eval_acc = float(eval_log["eval_accuracy"])  # type: ignore[arg-type]
+                print(f"Epoch {epoch_index}: Evaluation Accuracy = {eval_acc:.4f}")
+                mlflow.log_metric("eval_accuracy", eval_acc, step=epoch_index)
 
 
 def map_labels(example: Dict[str, Any], label2id: Dict[str, int]) -> Dict[str, Any]:
@@ -131,7 +150,7 @@ def load_and_preprocess_data(dataset_csv: str, cache_dir: str | None, seed: int 
 
     # use stratified split
     raw = full_dataset.train_test_split(
-        test_size=0.2, seed=seed, stratify_by_column="labels"
+        test_size=0.5, seed=seed, stratify_by_column="labels"
     )
 
     print(f"Number of training samples: {len(raw['train'])}")
@@ -164,13 +183,17 @@ def setup_model_and_tokenizer(
         else:
             tokenizer.add_special_tokens({"pad_token": "[PAD]"})
 
-    base_model = AutoModelForSequenceClassification.from_pretrained(
-        model_name,
-        num_labels=3,
-        id2label=id2label,
-        label2id=label2id,
-        cache_dir=cache_dir,
-    )
+    if model_name == "swiss-ai/Apertus-8B-Instruct-2509":
+        base_model = ApertusForCausalLM.from_pretrained(model_name)
+
+    else:
+        base_model = AutoModelForSequenceClassification.from_pretrained(
+            model_name,
+            num_labels=3,
+            id2label=id2label,
+            label2id=label2id,
+            cache_dir=cache_dir,
+        )
 
     # Resize embeddings if new tokens were added and align pad_token_id
     if hasattr(base_model, "resize_token_embeddings"):
