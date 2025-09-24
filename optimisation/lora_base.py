@@ -1,0 +1,249 @@
+import os
+from pathlib import Path
+from typing import Any, Dict
+import sys
+
+import mlflow
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    DataCollatorWithPadding,
+    TrainingArguments,
+    Trainer,
+)
+from peft import LoraConfig, get_peft_model, TaskType
+
+if "__file__" in globals():
+    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+else:
+    _PROJECT_ROOT = Path.cwd().parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(_PROJECT_ROOT))
+
+from utils import load_config
+from common import (
+    LossLoggingCallback,
+    load_and_preprocess_data,
+    tokenize_dataset,
+    compute_metrics,
+    detailed_evaluation,
+)
+
+
+def setup_model_and_tokenizer(
+    model_name: str,
+    label2id: Dict[str, int],
+    id2label: Dict[int, str],
+    cache_dir: str | None,
+):
+    print(f"Loading tokenizer and model from {model_name}...")
+    tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
+
+    # Ensure tokenizer has a pad token (required for batching/padding)
+    if tokenizer.pad_token is None:
+        if tokenizer.eos_token is not None:
+            tokenizer.pad_token = tokenizer.eos_token
+        else:
+            tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+
+    base_model = AutoModelForSequenceClassification.from_pretrained(
+        model_name,
+        num_labels=3,
+        id2label=id2label,
+        label2id=label2id,
+        cache_dir=cache_dir,
+    )
+
+    # Resize embeddings if new tokens were added and align pad_token_id
+    if hasattr(base_model, "resize_token_embeddings"):
+        base_model.resize_token_embeddings(len(tokenizer))
+    if getattr(base_model.config, "pad_token_id", None) is None:
+        base_model.config.pad_token_id = tokenizer.pad_token_id
+
+    return tokenizer, base_model
+
+
+def setup_lora_model(base_model, cfg):
+    print("Setting up LoRA configuration and applying to base model...")
+    lora_cfg = LoraConfig(
+        r=int(cfg.lora.r),
+        lora_alpha=int(cfg.lora.lora_alpha),
+        lora_dropout=float(cfg.lora.lora_dropout),
+        target_modules=list(cfg.lora.target_modules),
+        task_type=TaskType.SEQ_CLS,
+    )
+    return get_peft_model(base_model, lora_cfg)
+
+
+def setup_training_args(cfg, output_dir: str):
+    """Setup training arguments."""
+    return TrainingArguments(
+        output_dir=output_dir,
+        num_train_epochs=float(cfg.training.num_train_epochs),
+        per_device_train_batch_size=int(cfg.training.per_device_train_batch_size),
+        per_device_eval_batch_size=int(cfg.training.per_device_eval_batch_size),
+        learning_rate=float(cfg.training.learning_rate),
+        weight_decay=float(cfg.training.weight_decay),
+        eval_strategy=str(cfg.training.eval_strategy),
+        save_strategy=str(getattr(cfg.training, "save_strategy", "epoch")),
+        logging_steps=int(getattr(cfg.training, "logging_steps", 10)),
+        logging_strategy="steps",  # Log per step for training accuracy
+        load_best_model_at_end=True,
+        metric_for_best_model="accuracy",
+        greater_is_better=True,
+        report_to=[],
+        seed=int(getattr(cfg, "seed", 42)),
+        # Enable evaluation and logging
+        save_total_limit=2,
+    )
+
+
+def setup_trainer(model, training_args, tokenized_data, tokenizer):
+    print("Setting up trainer...")
+    data_collator = DataCollatorWithPadding(tokenizer)
+
+    # Create the loss logging callback
+    loss_callback = LossLoggingCallback()
+
+    return Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=tokenized_data["train"],
+        eval_dataset=tokenized_data["test"],
+        tokenizer=tokenizer,
+        data_collator=data_collator,
+        compute_metrics=compute_metrics,
+        callbacks=[loss_callback],
+    ), loss_callback
+
+
+def main() -> None:
+    print("Loading config...")
+    cfg = load_config("peft_lora")
+
+    dataset_csv: str = str(cfg.dataset_csv)
+    model_name: str = str(cfg.model_name)
+    output_dir: str = str(cfg.output_dir)
+    cache_dir: str | None = str(cfg.hf_cache_dir) if "hf_cache_dir" in cfg else None
+
+    os.makedirs(output_dir, exist_ok=True)
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
+
+    # Start MLflow experiment
+    experiment_name = "peft_lora_training"
+    mlflow.set_experiment(experiment_name)
+
+    with mlflow.start_run(run_name=f"lora_training_{model_name.split('/')[-1]}"):
+        # Log parameters
+        mlflow.log_params(
+            {
+                "model_name": model_name,
+                "dataset_csv": dataset_csv,
+                "output_dir": output_dir,
+                "lora_r": int(cfg.lora.r),
+                "lora_alpha": int(cfg.lora.lora_alpha),
+                "lora_dropout": float(cfg.lora.lora_dropout),
+                "target_modules": str(list(cfg.lora.target_modules)),
+                "num_train_epochs": float(cfg.training.num_train_epochs),
+                "per_device_train_batch_size": int(
+                    cfg.training.per_device_train_batch_size
+                ),
+                "per_device_eval_batch_size": int(
+                    cfg.training.per_device_eval_batch_size
+                ),
+                "learning_rate": float(cfg.training.learning_rate),
+                "weight_decay": float(cfg.training.weight_decay),
+                "eval_strategy": str(cfg.training.eval_strategy),
+                "seed": int(getattr(cfg, "seed", 42)),
+            }
+        )
+
+        # Load and preprocess data
+        raw_data, label_order, label2id, id2label = load_and_preprocess_data(
+            dataset_csv, cache_dir, int(getattr(cfg, "seed", 42))
+        )
+
+        # Log dataset info
+        mlflow.log_params(
+            {
+                "train_size": len(raw_data["train"]),
+                "test_size": len(raw_data["test"]),
+                "total_size": len(raw_data["train"]) + len(raw_data["test"]),
+            }
+        )
+
+        # Setup model and tokenizer
+        tokenizer, base_model = setup_model_and_tokenizer(
+            model_name, label2id, id2label, cache_dir
+        )
+
+        # Setup LoRA model
+        model = setup_lora_model(base_model, cfg)
+
+        model.print_trainable_parameters()
+
+        # Tokenize dataset
+        tokenized_data = tokenize_dataset(raw_data, tokenizer)
+
+        # Setup training arguments and trainer
+        training_args = setup_training_args(cfg, output_dir)
+        trainer, loss_callback = setup_trainer(
+            model, training_args, tokenized_data, tokenizer
+        )
+
+        # Training
+        print("Starting training...")
+        trainer.train()
+        metrics = trainer.evaluate()
+
+        # Log final loss information
+        if loss_callback.train_losses:
+            print(f"\nFinal Training Loss: {loss_callback.train_losses[-1]:.4f}")
+            mlflow.log_metric("final_train_loss", loss_callback.train_losses[-1])
+
+        if loss_callback.eval_losses:
+            print(f"Final Evaluation Loss: {loss_callback.eval_losses[-1]:.4f}")
+            mlflow.log_metric("final_eval_loss", loss_callback.eval_losses[-1])
+
+        # Log final metrics
+        mlflow.log_metrics(metrics)
+
+        # Perform detailed evaluation
+        print("\nPerforming detailed evaluation on test dataset...")
+        detailed_metrics = detailed_evaluation(
+            trainer, tokenized_data["test"], label_order
+        )
+
+        # Log detailed evaluation metrics to MLflow
+        mlflow.log_metrics(detailed_metrics)
+
+        # Save adapter and tokenizer
+        # model.save_pretrained(Path(output_dir) / "adapter")
+        # tokenizer.save_pretrained(output_dir)
+
+        # Log model artifacts
+        # mlflow.log_artifacts(output_dir, "model_outputs")
+
+        # Log the trained model using MLflow transformers integration
+        # try:
+        #     mlflow.transformers.log_model(
+        #         transformers_model={
+        #             "model": model,
+        #             "tokenizer": tokenizer,
+        #         },
+        #         artifact_path="model",
+        #         task="text-classification",
+        #     )
+        #     print("Model logged to MLflow successfully")
+        # except Exception as e:
+        #     print(f"Warning: Could not log model to MLflow: {e}")
+
+        # print("Training complete. Eval metrics:", metrics)
+        # print(f"Adapter saved to: {Path(output_dir) / 'adapter'}")
+        # print(f"MLflow run ID: {mlflow.active_run().info.run_id}")
+
+
+if __name__ == "__main__":
+    print("Starting...")
+    main()
