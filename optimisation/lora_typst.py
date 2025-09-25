@@ -10,10 +10,13 @@ from peft import LoraConfig, get_peft_model, TaskType
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
+    AutoModelForSequenceClassification,
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling,
 )
+from huggingface_hub import HfApi
+from dotenv import load_dotenv
 
 if "__file__" in globals():
     _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -25,35 +28,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from utils import load_config
 from optimisation.common import LossLoggingCallback  # reuse logging callback
 
-
-def _infer_default_lora_targets(model_type: str) -> list[str]:
-    # Sensible defaults by architecture
-    mt = (model_type or "").lower()
-    if mt in {"llama"}:
-        return ["q_proj", "v_proj"]
-    if mt in {"distilbert"}:  # includes distilroberta which uses DistilBERT blocks
-        return ["q_lin", "v_lin"]
-    if mt in {"roberta", "bert"}:
-        return ["query", "value"]
-    # Fallback
-    return ["q_proj", "v_proj"]
-
-
-def _resolve_target_modules_for_model(cfg, base_model) -> list[str]:
-    configured = list(getattr(cfg.lora, "target_modules", []))
-    model_type = str(getattr(getattr(base_model, "config", object()), "model_type", ""))
-    default_targets = _infer_default_lora_targets(model_type)
-
-    # If user configured values, prefer them if they match any module names
-    if configured:
-        module_names = "\n".join(dict(base_model.named_modules()).keys())
-        if any(t in module_names for t in configured):
-            return configured
-        print(
-            f"Warning: None of the configured LoRA target_modules {configured} were found in model modules; "
-            f"falling back to defaults for model_type={model_type}: {default_targets}"
-        )
-    return default_targets
+load_dotenv()
 
 
 def load_typst_dataset(
@@ -185,35 +160,24 @@ def tokenize_and_group(
 def setup_lora_causal_lm(model_name: str, cfg, tokenizer, cache_dir: str | None):
     print(f"Loading base CausalLM model from {model_name} and applying LoRA...")
 
-    # Encoder-only models (DistilBERT/DistilRoBERTa/BERT/Roberta) lack native CLM heads.
-    # Use a generation-capable checkpoint per web guidance (distilroberta-base-finetuned-wikitext2).
-    # Ref: fxis.ai guidance on using distilroberta-base-finetuned-wikitext2 for generation.
-    resolved_model_name = model_name
-    lower_name = model_name.lower()
-    if (
-        any(s in lower_name for s in ["distilroberta", "distilbert", "roberta", "bert"])
-        and "gpt" not in lower_name
-    ):
-        print(
-            "Info: encoder-only backbone detected; switching to 'distilroberta-base-finetuned-wikitext2' for causal generation."
+    if model_name == "distilroberta-base":
+        base_model = AutoModelForSequenceClassification.from_pretrained(
+            model_name, cache_dir=cache_dir
         )
-        resolved_model_name = "distilroberta-base-finetuned-wikitext2"
-
-    base_model = AutoModelForCausalLM.from_pretrained(
-        resolved_model_name, cache_dir=cache_dir
-    )
+    else:
+        base_model = AutoModelForCausalLM.from_pretrained(
+            model_name, cache_dir=cache_dir
+        )
 
     # If we added a new pad token, resize embeddings
     if hasattr(base_model, "resize_token_embeddings"):
         base_model.resize_token_embeddings(len(tokenizer))
 
-    target_modules = _resolve_target_modules_for_model(cfg, base_model)
-
     lora_cfg = LoraConfig(
         r=int(cfg.lora.r),
         lora_alpha=int(cfg.lora.lora_alpha),
         lora_dropout=float(cfg.lora.lora_dropout),
-        target_modules=target_modules,
+        target_modules=list(cfg.lora.target_modules),
         task_type=TaskType.CAUSAL_LM,
     )
     model = get_peft_model(base_model, lora_cfg)
@@ -222,18 +186,28 @@ def setup_lora_causal_lm(model_name: str, cfg, tokenizer, cache_dir: str | None)
 
 
 def setup_training_args(cfg, output_dir: str) -> TrainingArguments:
-    return TrainingArguments(
+    quick_run = bool(getattr(cfg, "quick_run", False))
+    eval_strategy = str(cfg.training.eval_strategy)
+    save_strategy = str(getattr(cfg.training, "save_strategy", "epoch"))
+
+    if quick_run:
+        # Disable eval and saving, run only a single optimizer step
+        eval_strategy = "no"
+        save_strategy = "no"
+
+    # IT IS EVAL_STRATEGY, NOT EVALUATION_STRATEGY
+    args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=float(cfg.training.num_train_epochs),
         per_device_train_batch_size=int(cfg.training.per_device_train_batch_size),
         per_device_eval_batch_size=int(cfg.training.per_device_eval_batch_size),
         learning_rate=float(cfg.training.learning_rate),
         weight_decay=float(cfg.training.weight_decay),
-        eval_strategy=str(cfg.training.eval_strategy),
-        save_strategy=str(getattr(cfg.training, "save_strategy", "epoch")),
+        eval_strategy=eval_strategy,
+        save_strategy=save_strategy,
         logging_steps=int(getattr(cfg.training, "logging_steps", 10)),
         logging_strategy="steps",
-        load_best_model_at_end=True,
+        load_best_model_at_end=not quick_run,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
         report_to=[],
@@ -241,6 +215,11 @@ def setup_training_args(cfg, output_dir: str) -> TrainingArguments:
         seed=int(getattr(cfg, "seed", 42)),
         save_total_limit=2,
     )
+
+    if quick_run:
+        # Force a single batch update
+        args.max_steps = 1
+    return args
 
 
 def train_and_evaluate(
@@ -263,8 +242,20 @@ def train_and_evaluate(
     print("Starting training...")
     trainer.train()
 
-    print("Evaluating...")
-    eval_metrics = trainer.evaluate()
+    # Evaluation
+    eval_metrics: Dict[str, Any]
+    quick_run_mode = bool(getattr(training_args, "max_steps", 0) == 1)
+    if quick_run_mode:
+        print("Quick run: evaluating on a single batch...")
+        batch_size = int(getattr(training_args, "per_device_eval_batch_size", 1))
+        test_ds = tokenized_data["test"]
+        subset = test_ds.select(range(min(len(test_ds), batch_size)))
+        eval_metrics = trainer.evaluate(eval_dataset=subset)
+    elif str(training_args.eval_strategy) == "no":
+        eval_metrics = {"eval_loss": float("nan")}
+    else:
+        print("Evaluating...")
+        eval_metrics = trainer.evaluate()
     if "eval_loss" in eval_metrics and math.isfinite(eval_metrics["eval_loss"]):
         eval_metrics["perplexity"] = math.exp(eval_metrics["eval_loss"])  # type: ignore[index]
 
@@ -360,10 +351,46 @@ def main() -> None:
         adapter_dir = Path(output_dir) / "adapter"
         try:
             adapter_dir.mkdir(parents=True, exist_ok=True)
-            # model.save_pretrained(adapter_dir)  # Uncomment to save adapter
-            # tokenizer.save_pretrained(output_dir)
+            model.save_pretrained(adapter_dir)
+            tokenizer.save_pretrained(output_dir)
         except Exception as e:
             print(f"Warning: could not save adapter: {e}")
+
+        # Push to Hugging Face Hub if configured
+        hub_cfg = getattr(cfg, "hub", None)
+        if hub_cfg and bool(getattr(hub_cfg, "push_to_hub", False)):
+            repo_id = getattr(hub_cfg, "repo_id", None)
+            private = bool(getattr(hub_cfg, "private", True))
+            token_env = str(getattr(hub_cfg, "token_env", "HUGGING_FACE_HUB_TOKEN"))
+            token = os.getenv(token_env)
+            commit_message = str(
+                getattr(hub_cfg, "commit_message", "Upload LoRA adapter")
+            )
+
+            if not repo_id:
+                print(
+                    "Hub push requested but 'repo_id' is not set in config.hub. Skipping push."
+                )
+            elif not token:
+                print(
+                    f"Hub push requested but token env '{token_env}' is not set. Skipping push."
+                )
+            else:
+                try:
+                    print(
+                        f"Pushing adapter to Hugging Face Hub: {repo_id} (private={private})"
+                    )
+                    api = HfApi(token=token)
+                    api.create_repo(repo_id=repo_id, private=private, exist_ok=True)
+                    # Prefer using model's push_to_hub to preserve card and config
+                    model.push_to_hub(
+                        repo_id,
+                        commit_message=commit_message,
+                        token=token,
+                        safe_serialization=True,
+                    )
+                except Exception as e:
+                    print(f"Warning: failed to push to Hugging Face Hub: {e}")
 
         print("Evaluation metrics:")
         for k, v in eval_metrics.items():
