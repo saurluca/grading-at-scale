@@ -9,6 +9,7 @@ dependencies = [
     "bitsandbytes>=0.47.0",
     "dotenv>=0.9.9",
     "dspy>=3.0.2",
+    "dvc>=3.63.0",
     "evaluate>=0.4.5",
     "huggingface-hub>=0.34.4",
     "iprogress>=0.4",
