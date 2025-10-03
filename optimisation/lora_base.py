@@ -29,8 +29,10 @@ def setup_lora_model(base_model, cfg):
         r=int(cfg.lora.r),
         lora_alpha=int(cfg.lora.lora_alpha),
         lora_dropout=float(cfg.lora.lora_dropout),
-        target_modules=list(cfg.lora.target_modules),
+        # target_modules=list(cfg.lora.target_modules),
+        target_modules="all-linear",
         task_type=TaskType.SEQ_CLS,
+        init_lora_weights=str(cfg.lora.init_lora_weights),
     )
     return get_peft_model(base_model, lora_cfg)
 
