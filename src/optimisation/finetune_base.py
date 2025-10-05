@@ -20,7 +20,9 @@ from src.common import (  # noqa: E402
 
 def main() -> None:
     print("Loading config...")
-    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "training.yaml")
+    base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
+    training_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "training.yaml")
+    cfg = OmegaConf.merge(base_cfg, training_cfg)
 
     dataset_csv: str = str(PROJECT_ROOT / cfg.dataset.csv_path)
     model_name: str = str(cfg.model.base)

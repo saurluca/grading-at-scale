@@ -13,24 +13,6 @@ paths:
   output_dir: data/output
   hf_cache_dir: .hf_cache
 
-# Model registry - reference these by key in other configs
-models:
-  llama_1b:
-    name: meta-llama/Llama-3.2-1B-Instruct
-    type: causal_lm
-  llama_3b:
-    name: meta-llama/Llama-3.2-3B-Instruct
-    type: causal_lm
-  apertus_8b:
-    name: swiss-ai/Apertus-8B-Instruct-2509
-    type: causal_lm
-  gpt_4o_mini:
-    name: gpt-4o-mini
-    type: api
-  gpt_4o:
-    name: gpt-4o
-    type: api
-
 # Common label configuration for classification tasks
 labels:
   order: [incorrect, partial, correct]

@@ -1,8 +1,6 @@
 # Configuration for model training/fine-tuning
 # Used by: src/optimisation/finetune_*.py
-
-defaults:
-  - base
+# Note: This config is merged with base.yaml in the Python code
 
 # Model selection
 model:

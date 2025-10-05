@@ -1,8 +1,6 @@
 # Configuration for model evaluation
 # Used by: src/evaluation/evaluate_*.py
-
-defaults:
-  - base
+# Note: This config is merged with base.yaml in the Python code
 
 # Evaluation type
 eval_type: api # api | local_classifier

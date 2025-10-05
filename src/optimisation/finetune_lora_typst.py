@@ -273,7 +273,9 @@ def train_and_evaluate(
 
 def main() -> None:
     print("Loading config training...")
-    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "training.yaml")
+    base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
+    training_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "training.yaml")
+    cfg = OmegaConf.merge(base_cfg, training_cfg)
 
     model_name: str = str(cfg.model.base)
     output_dir = str(PROJECT_ROOT / cfg.output.dir / "typst_lora")

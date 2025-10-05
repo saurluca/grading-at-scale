@@ -27,7 +27,9 @@ from src.common import (  # noqa: E402
 
 def main() -> None:
     print("Evaluating SciEntsBank classifier")
-    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "evaluation.yaml")
+    base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
+    eval_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "evaluation.yaml")
+    cfg = OmegaConf.merge(base_cfg, eval_cfg)
 
     dataset_dir = os.path.normpath(
         os.path.join(PROJECT_ROOT, cfg.classifier_eval.dataset.dir)

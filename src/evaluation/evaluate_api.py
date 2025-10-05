@@ -287,7 +287,9 @@ Main evaluation pipeline
 """
 
 # Load config and paths
-cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "evaluation.yaml")
+base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
+eval_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "evaluation.yaml")
+cfg = OmegaConf.merge(base_cfg, eval_cfg)
 output_dir = os.path.join(PROJECT_ROOT, cfg.output.dir)
 
 print(f"Using model {cfg.api_eval.model} for evaluation")
