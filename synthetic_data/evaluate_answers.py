@@ -79,7 +79,7 @@ def evaluate_grader_performance(
     Evaluate the grader's performance on the generated answers.
 
     Args:
-        answers_df: DataFrame with student answers and intended labels
+        answers_df: DataFrame with student answers and labels
         grader_single: The Grader instance for single evaluations
         mode: One of {"single", "per_question", "all"}
 
@@ -96,17 +96,17 @@ def evaluate_grader_performance(
         "correct": 2,
     }
 
-    def compute_intended_list(df: pd.DataFrame):
+    def compute_labels_list(df: pd.DataFrame):
         vals = []
         for _, row in df.iterrows():
-            val = row.get("intended_label", None)
+            val = row.get("label", None)
             if isinstance(val, str):
-                intended = label_name_to_int.get(val.strip().lower(), -1)
+                label = label_name_to_int.get(val.strip().lower(), -1)
             elif pd.notna(val):
-                intended = int(val)
+                label = int(val)
             else:
-                intended = -1
-            vals.append(intended)
+                label = -1
+            vals.append(label)
         return vals
 
     if mode == "single":
@@ -130,19 +130,19 @@ def evaluate_grader_performance(
                 tqdm.write(f"Error grading answer: {e}")
                 raise e
 
-            val = row.get("intended_label", None)
+            val = row.get("label", None)
             if isinstance(val, str):
-                intended = label_name_to_int.get(val.strip().lower(), 0)
+                label = label_name_to_int.get(val.strip().lower(), 0)
             elif pd.notna(val):
-                intended = int(val)
+                label = int(val)
             else:
-                intended = 0
+                label = 0
 
-            return {"predicted": predicted, "intended": intended}
+            return {"predicted": predicted, "label": label}
 
         results = answers_df.progress_apply(grade_row, axis=1)
         predicted_labels = results.map(lambda d: d["predicted"]).tolist()
-        intended_labels = results.map(lambda d: d["intended"]).tolist()
+        labels = results.map(lambda d: d["label"]).tolist()
 
     elif mode == "per_question":
         # Group by task_id if available, else by question text
@@ -185,7 +185,7 @@ def evaluate_grader_performance(
                 tqdm.write(f"Error grading group: {e}")
                 raise e
 
-        intended_labels = compute_intended_list(answers_df)
+        labels = compute_labels_list(answers_df)
 
     else:  # mode == "all"
         # Build compact inputs without repetition
@@ -242,27 +242,27 @@ def evaluate_grader_performance(
             tqdm.write(f"Error grading all answers in batch: {e}")
             raise e
 
-        intended_labels = compute_intended_list(answers_df)
+        labels = compute_labels_list(answers_df)
 
     # Calculate metrics
     labels = [0, 1, 2]
-    accuracy = accuracy_score(intended_labels, predicted_labels)
+    accuracy = accuracy_score(labels, predicted_labels)
     precision = precision_score(
-        intended_labels,
+        labels,
         predicted_labels,
         labels=labels,
         average="macro",
         zero_division=0,
     )
     recall = recall_score(
-        intended_labels,
+        labels,
         predicted_labels,
         labels=labels,
         average="macro",
         zero_division=0,
     )
     f1 = f1_score(
-        intended_labels,
+        labels,
         predicted_labels,
         labels=labels,
         average="macro",
@@ -270,7 +270,7 @@ def evaluate_grader_performance(
     )
 
     # Confusion matrix
-    cm = confusion_matrix(intended_labels, predicted_labels, labels=labels)
+    cm = confusion_matrix(labels, predicted_labels, labels=labels)
 
     return {
         "accuracy": accuracy,
@@ -279,7 +279,7 @@ def evaluate_grader_performance(
         "f1_score": f1,
         "confusion_matrix": cm,
         "predicted_labels": predicted_labels,
-        "intended_labels": intended_labels,
+        "labels": labels,
     }
 
 
@@ -354,23 +354,23 @@ print(f"F1 Score (macro): {metrics['f1_score']:.3f}")
 # Classification summary: expected vs predicted counts and failures
 labels = [0, 1, 2]
 label_names = {0: "incorrect", 1: "partial", 2: "correct"}
-intended = metrics["intended_labels"]
+labels = metrics["labels"]
 predicted = metrics["predicted_labels"]
 
-total = len(intended)
-misclassified_total = sum(1 for i, p in zip(intended, predicted) if p != i)
+total = len(labels)
+misclassified_total = sum(1 for i, p in zip(labels, predicted) if p != i)
 invalid_predictions = sum(1 for p in predicted if p not in labels)
 
 print("\nClassification details")
 print(f"Total examples: {total}")
-print(f"Misclassified (predicted != intended): {misclassified_total}")
+print(f"Misclassified (predicted != labels): {misclassified_total}")
 if invalid_predictions > 0:
     print(f"Invalid predictions (not in {labels}): {invalid_predictions}")
 
 for c in labels:
-    expected_c = sum(1 for i in intended if i == c)
+    expected_c = sum(1 for i in labels if i == c)
     predicted_c = sum(1 for p in predicted if p == c)
-    misclassified_c = sum(1 for i, p in zip(intended, predicted) if i == c and p != c)
+    misclassified_c = sum(1 for i, p in zip(labels, predicted) if i == c and p != c)
     print(
         f"Class '{label_names[c]}' ({c}) -> expected: {expected_c}, predicted: {predicted_c}, misclassified: {misclassified_c}"
     )
@@ -382,7 +382,7 @@ mode_suffix = {"single": "single", "per_question": "perq", "all": "all"}.get(
 plot_filename = f"confusion_matrix_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{mode_suffix}_{cfg.create_mode}.png"
 plot_path = os.path.join(output_dir, plot_filename)
 plot_confusion_matrix(
-    metrics["intended_labels"],
+    metrics["labels"],
     metrics["predicted_labels"],
     save_path=plot_path,
 )
@@ -403,10 +403,10 @@ print(f"\nSaved complete results to: {complete_output_path}")
 # print("SAMPLE RESULTS")
 # print("=" * 50)
 # print_df = student_answers_df[
-#     ["question", "student_answer", "predicted_label_name", "intended_label"]
+#     ["question", "student_answer", "predicted_label_name", "label"]
 # ]
 # print_df = print_df.sample(n=5)
 # for idx, row in print_df.iterrows():
 #     print(
-#         f"Question: {row['question']}\nStudent Answer: {row['student_answer']}\nPredicted Label: {row['predicted_label_name']}\nTrue Label: {row['intended_label']}\n{'-' * 40}"
+#         f"Question: {row['question']}\nStudent Answer: {row['student_answer']}\nPredicted Label: {row['predicted_label_name']}\nTrue Label: {row['label']}\n{'-' * 40}"
 #     )

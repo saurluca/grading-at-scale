@@ -95,18 +95,39 @@ class LossLoggingCallback(TrainerCallback):
 
 def map_labels(example: Dict[str, Any], label2id: Dict[str, int]) -> Dict[str, Any]:
     """Map string labels to integer IDs."""
-    label_val = str(example.get("intended_label", "")).strip().lower()
-    example["labels"] = label2id.get(label_val, 0)
+    label_raw = example.get("label", "")
+    # Try to interpret as a number (float or int)
+    try:
+        label_num = float(label_raw)
+        # If it's an integer (e.g., 0, 1, 2), use as is
+        if label_num.is_integer():
+            example["labels"] = int(label_num)
+        else:
+            raise ValueError(
+                f"Label value '{label_raw}' is not an integer class index."
+            )
+    except (ValueError, TypeError):
+        # Not a number, treat as string label
+        label_val = str(label_raw).strip().lower()
+        if label_val in label2id:
+            example["labels"] = label2id[label_val]
+        else:
+            raise ValueError(
+                f"Label '{label_raw}' not found in label2id mapping: {label2id}"
+            )
     return example
 
 
 def tokenize_fn(batch: Dict[str, Any], tokenizer) -> Dict[str, Any]:
     """Tokenize text data for model input."""
+    # Determine batch size from any available field
+    batch_size = len(next(iter(batch.values())))
+
     texts = [
         f"Question: {q}\nAnswer: {a}"
         for q, a in zip(
-            batch.get("question", [""] * len(batch["labels"])),
-            batch.get("student_answer", [""] * len(batch["labels"])),
+            batch.get("question", [""] * batch_size),
+            batch.get("student_answer", [""] * batch_size),
         )
     ]
     return tokenizer(texts, truncation=True)
