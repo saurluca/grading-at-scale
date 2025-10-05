@@ -30,6 +30,7 @@ class PartialAnswerGenerator(dspy.Signature):
     Your job is to provide a short and partially correct answer to the question at hand.
     Aim to achieve half the points of the correct answer.
     Be creative. The answer should be plausible but wrong.
+    The answer may not have any explanation, or the explanation may be wrong while the answer is correct.
     """
 
     question: str = dspy.InputField(description="The question text")
@@ -101,6 +102,7 @@ class PartialAnswerGeneratorPerQuestion(dspy.Signature):
     Aim to achieve half the points for each answer.
     The answers should be different from each other.
     Generate exactly the number of answers specified.
+    The answer may not have any explanation, or the explanation may be wrong while the answer is correct.
     """
 
     question: str = dspy.InputField(description="The question text")
@@ -182,6 +184,7 @@ class PartialAnswerGeneratorAll(dspy.Signature):
     Your job is to provide multiple short and partially correct answers to the questions at hand in the order of the questions.
     Aim to achieve half the points for each answer and each question.
     Be creative. The answer should all be different from each other, plausible but wrong.
+    The answers may not have any explanation, or the explanation may be wrong while the answer is correct.
 
     Generate exactly the number of answers specified.
     """
