@@ -95,7 +95,10 @@ class LossLoggingCallback(TrainerCallback):
 
 def map_labels(example: Dict[str, Any], label2id: Dict[str, int]) -> Dict[str, Any]:
     """Map string labels to integer IDs."""
-    label_raw = example.get("label", "")
+    label_raw = example.get("label") or example.get("labels")
+    if label_raw is None:
+        raise ValueError("No label found in example.")
+
     # Try to interpret as a number (float or int)
     try:
         label_num = float(label_raw)
@@ -157,7 +160,7 @@ def load_and_preprocess_data(
     test_size: float = 0.5,
     use_unseen_questions: bool = False,
 ):
-    print(f"Loading dataset from {dataset_csv}...")
+    print(f"Loading dataset from {dataset_csv} ...")
     full_dataset = load_dataset(
         "csv",
         data_files={"data": dataset_csv},
@@ -269,15 +272,16 @@ def setup_model_and_tokenizer(
 
 def setup_training_args(cfg, output_dir: str):
     """Setup training arguments."""
+    # IT IS EVAL_STRATEGY, NOT EVALUATION_STRATEGY
     return TrainingArguments(
         output_dir=output_dir,
-        num_train_epochs=float(cfg.training.num_train_epochs),
-        per_device_train_batch_size=int(cfg.training.per_device_train_batch_size),
-        per_device_eval_batch_size=int(cfg.training.per_device_eval_batch_size),
+        num_train_epochs=float(cfg.training.num_epochs),
+        per_device_train_batch_size=int(cfg.training.batch_size.train),
+        per_device_eval_batch_size=int(cfg.training.batch_size.eval),
         learning_rate=float(cfg.training.learning_rate),
         weight_decay=float(cfg.training.weight_decay),
-        eval_strategy=str(cfg.training.eval_strategy),
-        save_strategy=str(getattr(cfg.training, "save_strategy", "epoch")),
+        eval_strategy=str(getattr(cfg.training, "eval_strategy", "epoch")),
+        save_strategy=str(getattr(cfg.output, "save_strategy", "epoch")),
         logging_steps=int(getattr(cfg.training, "logging_steps", 10)),
         logging_strategy="steps",  # Log per step for training accuracy
         load_best_model_at_end=True,

@@ -10,7 +10,8 @@ paths:
   data_dir: data
   raw_dir: data/raw
   synth_dir: data/synth
-  output_dir: data/output
+  output_dir: results/
+  results_dir: results/
   hf_cache_dir: .hf_cache
 
 # Common label configuration for classification tasks

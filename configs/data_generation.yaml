@@ -13,7 +13,7 @@ input:
   raw_chunks_dir: ${paths.raw_dir}/chunks
 
 output:
-  dir: ${paths.synth_dir}
+  dir: ${paths.results_dir}
   infer_filename: true # Auto-generate filename from params
 
 # Generation parameters

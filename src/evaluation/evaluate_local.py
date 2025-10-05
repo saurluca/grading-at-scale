@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List
 
-from datasets import DatasetDict
+from datasets import DatasetDict, load_dataset
 from omegaconf import OmegaConf
 from peft import PeftModel
 from transformers import (
@@ -22,52 +22,56 @@ from src.common import (  # noqa: E402
     detailed_evaluation,
     setup_model_and_tokenizer,
     tokenize_dataset,
+    map_labels,
 )
 
 
 def main() -> None:
-    print("Evaluating SciEntsBank classifier")
+    print("Evaluating Classifier")
     base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
     eval_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "evaluation.yaml")
     cfg = OmegaConf.merge(base_cfg, eval_cfg)
 
-    dataset_dir = os.path.normpath(
-        os.path.join(PROJECT_ROOT, cfg.classifier_eval.dataset.dir)
-    )
-    if not os.path.exists(dataset_dir):
-        raise FileNotFoundError(
-            f"SciEntsBank dataset directory not found: {dataset_dir}"
-        )
-
-    # Optional warnings about reference/topic usage flags (dataset lacks these semantically)
-    if getattr(cfg.api_eval, "pass_reference", False):
-        print(
-            "Warning: 'pass_reference' is True, but SciEntsBank has no reference text; using empty strings."
-        )
-
-    print(f"Loading SciEntsBank from: {dataset_dir}")
-    ds_dict: DatasetDict = DatasetDict.load_from_disk(dataset_dir)
-
-    # Build DatasetDict with at least 'test' split for evaluation and a dummy 'train'
-    eval_split_name = str(getattr(cfg.classifier_eval.dataset, "split", "test"))
-    if eval_split_name not in ds_dict:
-        raise ValueError(
-            f"Requested eval_split '{eval_split_name}' not found in dataset: {list(ds_dict.keys())}"
-        )
-
-    eval_split = ds_dict[eval_split_name]
-    train_split = ds_dict.get("train", eval_split)
-    raw = DatasetDict({"train": train_split, "test": eval_split})
-
-    # Print first 3 examples from the eval split
-    print("An examples from eval split:")
-    for i in range(min(1, len(eval_split))):
-        print(eval_split[i])
-
-    # Label maps
+    # Label maps (fixed order)
     label_order: List[str] = ["incorrect", "partial", "correct"]
     label2id: Dict[str, int] = {name: i for i, name in enumerate(label_order)}
     id2label: Dict[int, str] = {i: name for name, i in label2id.items()}
+
+    # Load dataset exclusively from CSV
+    csv_path_cfg = getattr(cfg.classifier_eval.dataset, "csv_path", None)
+    if not csv_path_cfg:
+        raise ValueError("classifier_eval.dataset.csv_path must be set to a CSV file")
+
+    csv_path = os.path.normpath(os.path.join(PROJECT_ROOT, str(csv_path_cfg)))
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"CSV file not found at: {csv_path}")
+
+    print(f"Loading evaluation data from CSV: {csv_path}")
+
+    # Use semicolon as separator to match existing data generation unless changed later
+    ds = load_dataset(
+        "csv",
+        data_files={"test": csv_path},
+        cache_dir=str(
+            getattr(
+                cfg,
+                "hf_cache_dir",
+                getattr(cfg.paths, "hf_cache_dir", ".hf_cache"),
+            )
+        ),
+        sep=";",
+    )["test"]
+
+    # Map labels to class indices
+    ds = ds.map(lambda x: map_labels(x, label2id))
+
+    # Build a DatasetDict expected by downstream code; we evaluate on the provided CSV
+    raw: DatasetDict = DatasetDict({"train": ds, "test": ds})
+
+    # Print a sample example
+    print("An example from eval split:")
+    if len(ds) > 0:
+        print(ds[0])
 
     # Load tokenizer and base model, then optionally attach LoRA adapter
     base_model_name = str(cfg.classifier_eval.base_model)
@@ -136,13 +140,6 @@ def main() -> None:
         data_collator=data_collator,
         compute_metrics=compute_metrics,
     )
-
-    # Evaluate and detailed metrics
-    print("\n" + "=" * 50)
-    print("EVALUATING CLASSIFIER ON SCIENTSBANK")
-    print("=" * 50)
-    metrics = trainer.evaluate()
-    print(f"Evaluation metrics: {metrics}")
 
     detailed_evaluation(trainer, tokenized["test"], label_order)
 

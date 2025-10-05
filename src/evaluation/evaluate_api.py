@@ -388,16 +388,16 @@ plot_confusion_matrix(
     save_path=plot_path,
 )
 
-# Add predictions to DF and save
-label_int_to_name = {0: "incorrect", 1: "partial", 2: "correct"}
-student_answers_df["predicted_label"] = metrics["predicted_labels"]
-student_answers_df["predicted_label_name"] = student_answers_df["predicted_label"].map(
-    label_int_to_name
-)
-complete_output_filename = f"student_answers_with_predictions_c{cfg.api_eval.data.num_correct_answers}_p{cfg.api_eval.data.num_partial_answers}_i{cfg.api_eval.data.num_incorrect_answers}_{cfg.api_eval.data.generation_model}_{mode_suffix}_{cfg.api_eval.data.generation_mode}.csv"
-complete_output_path = os.path.join(output_dir, complete_output_filename)
-student_answers_df.to_csv(complete_output_path, index=False, sep=";")
-print(f"\nSaved complete results to: {complete_output_path}")
+# # Add predictions to DF and save
+# label_int_to_name = {0: "incorrect", 1: "partial", 2: "correct"}
+# student_answers_df["predicted_label"] = metrics["predicted_labels"]
+# student_answers_df["predicted_label_name"] = student_answers_df["predicted_label"].map(
+#     label_int_to_name
+# )
+# complete_output_filename = f"student_answers_with_predictions_c{cfg.api_eval.data.num_correct_answers}_p{cfg.api_eval.data.num_partial_answers}_i{cfg.api_eval.data.num_incorrect_answers}_{cfg.api_eval.data.generation_model}_{mode_suffix}_{cfg.api_eval.data.generation_mode}.csv"
+# complete_output_path = os.path.join(output_dir, complete_output_filename)
+# student_answers_df.to_csv(complete_output_path, index=False, sep=";")
+# print(f"\nSaved complete results to: {complete_output_path}")
 
 # # Sample a few rows for inspection
 # print("\n" + "=" * 50)

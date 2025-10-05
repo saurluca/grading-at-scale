@@ -1,3 +1,4 @@
+# %%
 import os
 from pathlib import Path
 import sys
@@ -39,6 +40,7 @@ def main() -> None:
     cfg = OmegaConf.merge(base_cfg, training_cfg)
 
     dataset_csv: str = str(PROJECT_ROOT / cfg.dataset.csv_path)
+    print(f"dataset_csv: {dataset_csv}")
     model_name: str = str(cfg.model.base)
     output_dir: str = str(PROJECT_ROOT / cfg.output.dir)
     cache_dir: str | None = str(cfg.paths.hf_cache_dir) if "paths" in cfg else None
@@ -152,8 +154,12 @@ def main() -> None:
         mlflow.log_metrics(detailed_metrics)
 
         # Save adapter and tokenizer
-        model.save_pretrained(Path(output_dir) / f"adapter-{model_name}")
-        tokenizer.save_pretrained(Path(output_dir) / f"tokenizer-{model_name}")
+        model.save_pretrained(
+            Path(output_dir) / f"adapter-{model_name}-{cfg.dataset.dataset_name}"
+        )
+        tokenizer.save_pretrained(
+            Path(output_dir) / f"tokenizer-{model_name}-{cfg.dataset.dataset_name}"
+        )
 
         # Log model artifacts
         mlflow.log_artifacts(

@@ -2,9 +2,6 @@
 # Used by: src/evaluation/evaluate_*.py
 # Note: This config is merged with base.yaml in the Python code
 
-# Evaluation type
-eval_type: api # api | local_classifier
-
 # API-based evaluation (DSPy graders)
 api_eval:
   model: gpt-4o-mini
@@ -21,8 +18,10 @@ api_eval:
 
   # Data source
   data:
-    infer_path: true # Auto-infer from generation config
-    manual_path: null # Or specify directly
+    infer_path: false # Auto-infer from generation config
+    manual_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv # our dataset
+    # manual_path: data/SciEntsBank_3way/test_ua.csv # scientsbank dataset
+
     # If infer_path=true, uses generation config to build filename
     # Format: student_answers_c{num_correct}_p{num_partial}_i{num_incorrect}_{model}_{mode}.csv
     num_correct_answers: 1
@@ -37,15 +36,19 @@ classifier_eval:
   lora_adapter_dir: ${paths.output_dir}/peft_output/adapter-meta-llama/Llama-3.2-1B-Instruct
 
   dataset:
-    dir: data/SciEntsBank_3way
-    split: test_ua
+    load_from_csv: true
+    # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
+    csv_path: data/SciEntsBank_3way/test_50.csv
+    # else load from dataset directory
+    # dir: data/SciEntsBank_3way
+    # split: test_ua
 
-  batch_size: 16
+  batch_size: 8
   output_dir: ${paths.output_dir}/scientsbank_eval
 
 # Output settings
 output:
-  dir: ${paths.synth_dir}
+  dir: ${paths.results_dir}
   save_predictions: true
   save_confusion_matrix: true
   save_classification_report: true

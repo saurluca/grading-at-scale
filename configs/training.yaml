@@ -9,9 +9,11 @@ model:
 
 # Dataset
 dataset:
-  csv_path: ${paths.synth_dir}/student_answers_c1_p1_i1_gpt-4o-mini_per_question.csv
-  test_size: 0.5
-  use_unseen_questions: true # Split by question ID, not random
+  # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
+  csv_path: data/SciEntsBank_3way/train.csv
+  test_size: 0.1
+  use_unseen_questions: false # Split by question ID, not random
+  dataset_name: SciEntsBank
 
 # Output
 output:
@@ -38,10 +40,10 @@ quantization:
 training:
   num_epochs: 1
   batch_size:
-    train: 4
-    eval: 4
+    train: 2
+    eval: 2
   learning_rate: 0.0001
-  weight_decay: 0.0001
+  weight_decay: 0.001
   eval_strategy: epoch
   logging_steps: 10
 
