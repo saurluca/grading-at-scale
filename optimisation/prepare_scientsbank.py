@@ -1,9 +1,11 @@
 # %%
 from datasets import load_dataset, ClassLabel
+from pathlib import Path
 
+# Load the dataset
 dataset = load_dataset("nkazi/SciEntsBank")
 
-
+# Align labels with mapping
 dataset = dataset.align_labels_with_mapping(
     {
         "correct": 2,
@@ -18,31 +20,49 @@ dataset = dataset.cast_column(
     "label", ClassLabel(names=["incorrect", "partial", "correct"])
 )
 
-# columns to have: task_id; question; reference_answer; chunk_text; topic; student_answer; label
-
-# rename id to task_id
+# Rename columns to match expected format
 dataset = dataset.rename_column("id", "task_id")
 dataset = dataset.rename_column("label", "labels")
 
 
-# add column chunk_text with ""
+# Add missing columns
 def add_chunk_text(example):
     example["chunk_text"] = ""
     return example
 
 
-dataset = dataset.map(add_chunk_text)
-
-
-# add column topic with "scientsbank"
 def add_topic(example):
     example["topic"] = "scientsbank"
     return example
 
 
+dataset = dataset.map(add_chunk_text)
 dataset = dataset.map(add_topic)
 
-dataset.save_to_disk("../data/SciEntsBank_3way")
+# Save each split as CSV with semicolon separator
+output_dir = Path("../data/SciEntsBank_3way")
+output_dir.mkdir(parents=True, exist_ok=True)
+
+for split_name, split_data in dataset.items():
+    # Convert to pandas DataFrame
+    df = split_data.to_pandas()
+
+    # Ensure columns are in the expected order
+    expected_columns = [
+        "task_id",
+        "question",
+        "reference_answer",
+        "chunk_text",
+        "topic",
+        "student_answer",
+        "labels",
+    ]
+    df = df[expected_columns]
+
+    # Save as CSV with semicolon separator
+    output_file = output_dir / f"{split_name}.csv"
+    df.to_csv(output_file, index=False, sep=";")
+    print(f"Saved {split_name} split to {output_file} with {len(df)} examples")
 
 # %%
 
