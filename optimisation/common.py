@@ -281,7 +281,7 @@ def setup_trainer(model, training_args, tokenized_data, tokenizer):
         args=training_args,
         train_dataset=tokenized_data["train"],
         eval_dataset=tokenized_data["test"],
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
         callbacks=[loss_callback],

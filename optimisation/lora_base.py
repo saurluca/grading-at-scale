@@ -79,6 +79,7 @@ def main() -> None:
                 "use_unseen_questions": bool(
                     getattr(cfg.training, "use_unseen_questions", False)
                 ),
+                "save_model": bool(getattr(cfg, "save_model", True)),
             }
         )
 
@@ -152,29 +153,37 @@ def main() -> None:
         mlflow.log_metrics(detailed_metrics)
 
         # Save adapter and tokenizer
-        # model.save_pretrained(Path(output_dir) / "adapter")
-        # tokenizer.save_pretrained(output_dir)
+        model.save_pretrained(Path(output_dir) / f"adapter-{model_name}")
+        tokenizer.save_pretrained(Path(output_dir) / f"tokenizer-{model_name}")
 
         # Log model artifacts
-        # mlflow.log_artifacts(output_dir, "model_outputs")
+        mlflow.log_artifacts(
+            Path(output_dir) / f"model_outputs-{model_name}", "model_outputs"
+        )
+        mlflow.log_artifacts(Path(output_dir) / f"tokenizer-{model_name}", "tokenizer")
+        mlflow.log_artifacts(Path(output_dir) / f"adapter-{model_name}", "adapter")
 
         # Log the trained model using MLflow transformers integration
-        # try:
-        #     mlflow.transformers.log_model(
-        #         transformers_model={
-        #             "model": model,
-        #             "tokenizer": tokenizer,
-        #         },
-        #         artifact_path="model",
-        #         task="text-classification",
-        #     )
-        #     print("Model logged to MLflow successfully")
-        # except Exception as e:
-        #     print(f"Warning: Could not log model to MLflow: {e}")
+        save_model = bool(getattr(cfg, "save_model", True))
+        if save_model:
+            try:
+                mlflow.transformers.log_model(
+                    transformers_model={
+                        "model": model,
+                        "tokenizer": tokenizer,
+                    },
+                    name="model",
+                    task="text-classification",
+                )
+                print("Model logged to MLflow successfully")
+            except Exception as e:
+                print(f"Warning: Could not log model to MLflow: {e}")
+        else:
+            print("Model saving to MLflow skipped (save_model=false in config)")
 
-        # print("Training complete. Eval metrics:", metrics)
-        # print(f"Adapter saved to: {Path(output_dir) / 'adapter'}")
-        # print(f"MLflow run ID: {mlflow.active_run().info.run_id}")
+        print("Training complete. Eval metrics:", metrics)
+        print(f"Adapter saved to: {Path(output_dir) / f'adapter-{model_name}'}")
+        print(f"MLflow run ID: {mlflow.active_run().info.run_id}")
 
 
 if __name__ == "__main__":

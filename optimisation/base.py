@@ -118,8 +118,12 @@ def main() -> None:
         mlflow.log_metrics(detailed_metrics)
 
         # Optionally save the fine-tuned model and tokenizer
-        # model.save_pretrained(Path(output_dir) / "model")
-        # tokenizer.save_pretrained(output_dir)
+        model.save_pretrained(Path(output_dir) / f"model-{model_name}")
+        tokenizer.save_pretrained(output_dir)
+
+        # Log model artifacts
+        mlflow.log_artifacts(Path(output_dir) / f"model-{model_name}", "model")
+        mlflow.log_artifacts(output_dir, "tokenizer")
 
 
 if __name__ == "__main__":
