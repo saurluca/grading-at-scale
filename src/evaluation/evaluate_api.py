@@ -7,7 +7,7 @@ import dspy
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-from signatures.eval_signatures import GraderAll, GraderPerQuestion, GraderSingle
+from signatures import GraderAll, GraderPerQuestion, GraderSingle
 from model_builder import build_lm
 from sklearn.metrics import (
     accuracy_score,
@@ -17,9 +17,9 @@ from sklearn.metrics import (
     recall_score,
 )
 from tqdm import tqdm
-
-
 from omegaconf import OmegaConf
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 logging.getLogger("dspy").setLevel(logging.ERROR)
 
@@ -284,12 +284,8 @@ Main evaluation pipeline
 """
 
 # Load config and paths
-cfg = OmegaConf.load(
-    Path(__file__).resolve().parent.parent / "configs" / "synthetic_data.yaml"
-)
-output_dir = os.path.normpath(
-    os.path.join(Path(__file__).resolve().parent, "../", cfg.output_dir)
-)
+cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "synthetic_data.yaml")
+output_dir = os.path.join(PROJECT_ROOT, cfg.output_dir)
 
 print(f"Using model {cfg.teacher_model_name} for evaluation on {cfg.data_path}")
 
@@ -324,9 +320,7 @@ if cfg.infer_data_path:
     generated_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{cfg.create_mode}.csv"
     generated_path = os.path.join(output_dir, generated_filename)
 else:
-    generated_path = os.path.join(
-        os.path.join(Path(__file__).resolve().parent, "../", cfg.data_path)
-    )
+    generated_path = os.path.join(PROJECT_ROOT, cfg.data_path)
 
 if not os.path.exists(generated_path):
     raise FileNotFoundError(f"Dataset CSV not found at: {generated_path}")

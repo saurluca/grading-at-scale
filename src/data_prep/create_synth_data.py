@@ -5,7 +5,7 @@ import pandas as pd
 import dspy
 from tqdm import tqdm
 from model_builder import build_lm
-from signatures.gen_signatures import (
+from signatures import (
     CorrectAnswerGenerator,
     PartialAnswerGenerator,
     IncorrectAnswerGenerator,
@@ -23,13 +23,11 @@ logging.getLogger("dspy").setLevel(logging.ERROR)
 
 tqdm.pandas(desc="Creating synthetic dataset")
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 # Configuration via YAML (OmegaConf)
-cfg = OmegaConf.load(
-    Path(__file__).resolve().parent.parent / "configs" / "synthetic_data.yaml"
-)
-output_dir = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "../", cfg.output_dir)
-)
+cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "synthetic_data.yaml")
+output_dir = os.path.join(PROJECT_ROOT, cfg.output_dir)
 
 max_tokens = 4096 if cfg.create_mode == "all" else 512
 

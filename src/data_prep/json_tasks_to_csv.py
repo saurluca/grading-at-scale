@@ -5,18 +5,16 @@ import os
 from pathlib import Path
 from omegaconf import OmegaConf
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Load configuration
 config_path = PROJECT_ROOT / "configs" / "synthetic_data.yaml"
 cfg = OmegaConf.load(config_path)
 
-
 # Resolve directories relative to project root
-base_dir = os.path.dirname(__file__)
-output_dir = os.path.normpath(os.path.join(base_dir, "../", cfg.output_dir))
-raw_tasks_dir = os.path.normpath(os.path.join(base_dir, "../", cfg.raw_tasks_dir))
-raw_chunks_dir = os.path.normpath(os.path.join(base_dir, "../", cfg.raw_chunks_dir))
+output_dir = PROJECT_ROOT / cfg.output_dir
+raw_tasks_dir = PROJECT_ROOT / cfg.raw_tasks_dir
+raw_chunks_dir = PROJECT_ROOT / cfg.raw_chunks_dir
 
 """
 Unify all task/chunk JSON pairs under raw directories into a single CSV with columns:

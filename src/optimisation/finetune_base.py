@@ -13,12 +13,12 @@ from common import (
     detailed_evaluation,
 )
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 
 def main() -> None:
     print("Loading config...")
-    cfg = OmegaConf.load(
-        Path(__file__).resolve().parent.parent / "configs" / "vanilla.yaml"
-    )
+    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "vanilla.yaml")
 
     dataset_csv: str = str(cfg.dataset_csv)
     model_name: str = str(cfg.model_name)

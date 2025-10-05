@@ -2,6 +2,8 @@
 from datasets import load_dataset, ClassLabel
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 # Load the dataset
 dataset = load_dataset("nkazi/SciEntsBank")
 
@@ -40,7 +42,7 @@ dataset = dataset.map(add_chunk_text)
 dataset = dataset.map(add_topic)
 
 # Save each split as CSV with semicolon separator
-output_dir = Path("../data/SciEntsBank_3way")
+output_dir = PROJECT_ROOT / "data" / "SciEntsBank_3way"
 output_dir.mkdir(parents=True, exist_ok=True)
 
 for split_name, split_data in dataset.items():

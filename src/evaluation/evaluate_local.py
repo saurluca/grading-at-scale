@@ -1,6 +1,5 @@
 # %%
 import os
-import sys
 from pathlib import Path
 from typing import Dict, List
 
@@ -11,16 +10,10 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
-
-# Ensure project root is on sys.path for absolute imports (works in scripts and notebooks)
-if "__file__" in globals():
-    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-else:
-    _PROJECT_ROOT = Path.cwd().parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(_PROJECT_ROOT))
-
 from omegaconf import OmegaConf
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # from synthetic_data.evaluate_answers import plot_confusion_matrix
 from common import (
@@ -38,7 +31,7 @@ def main() -> None:
     )
 
     dataset_dir = os.path.normpath(
-        os.path.join(_PROJECT_ROOT, cfg.scientsbank.dataset_dir)
+        os.path.join(PROJECT_ROOT, cfg.scientsbank.dataset_dir)
     )
     if not os.path.exists(dataset_dir):
         raise FileNotFoundError(
@@ -86,7 +79,7 @@ def main() -> None:
     )
     output_dir = os.path.normpath(
         os.path.join(
-            _PROJECT_ROOT,
+            PROJECT_ROOT,
             str(getattr(cfg.classifier_eval, "output_dir", "data/scientsbank_eval")),
         )
     )
@@ -101,7 +94,7 @@ def main() -> None:
     if lora_adapter_dir:
         print(f"Loading LoRA adapter from: {lora_adapter_dir}")
         adapter_path = os.path.normpath(
-            os.path.join(_PROJECT_ROOT, str(lora_adapter_dir))
+            os.path.join(PROJECT_ROOT, str(lora_adapter_dir))
         )
         if not os.path.exists(adapter_path):
             raise FileNotFoundError(
