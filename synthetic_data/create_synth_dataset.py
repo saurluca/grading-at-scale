@@ -1,6 +1,5 @@
 # %%
 import os
-import sys
 from pathlib import Path
 import pandas as pd
 import dspy
@@ -17,16 +16,7 @@ from signatures.gen_signatures import (
     PartialAnswerGeneratorAll,
     IncorrectAnswerGeneratorAll,
 )
-
-# Ensure project root is on sys.path for absolute imports (works in scripts and notebooks)
-if "__file__" in globals():
-    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-else:
-    _PROJECT_ROOT = Path.cwd().parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(_PROJECT_ROOT))
-
-from utils import load_config
+from omegaconf import OmegaConf
 import logging
 
 logging.getLogger("dspy").setLevel(logging.ERROR)
@@ -34,7 +24,9 @@ logging.getLogger("dspy").setLevel(logging.ERROR)
 tqdm.pandas(desc="Creating synthetic dataset")
 
 # Configuration via YAML (OmegaConf)
-cfg = load_config("synthetic_data")
+cfg = OmegaConf.load(
+    Path(__file__).resolve().parent.parent / "configs" / "synthetic_data.yaml"
+)
 output_dir = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "../", cfg.output_dir)
 )

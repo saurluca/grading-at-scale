@@ -2,21 +2,15 @@
 import json
 import pandas as pd
 import os
-import sys
 from pathlib import Path
+from omegaconf import OmegaConf
 
-# Ensure project root is on sys.path for absolute imports (works in scripts and notebooks)
-if "__file__" in globals():
-    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-else:
-    _PROJECT_ROOT = Path.cwd().parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(_PROJECT_ROOT))
-
-from utils import load_config
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 # Load configuration
-cfg = load_config("synthetic_data")
+config_path = PROJECT_ROOT / "configs" / "synthetic_data.yaml"
+cfg = OmegaConf.load(config_path)
+
 
 # Resolve directories relative to project root
 base_dir = os.path.dirname(__file__)

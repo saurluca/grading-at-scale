@@ -1,6 +1,5 @@
 # %%
 import os
-import sys
 from pathlib import Path
 import logging
 
@@ -19,16 +18,8 @@ from sklearn.metrics import (
 )
 from tqdm import tqdm
 
-# Ensure project root is on sys.path for absolute imports (works in scripts and notebooks)
-if "__file__" in globals():
-    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-else:
-    _PROJECT_ROOT = Path.cwd().parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(_PROJECT_ROOT))
 
-
-from utils import load_config
+from omegaconf import OmegaConf
 
 logging.getLogger("dspy").setLevel(logging.ERROR)
 
@@ -293,7 +284,9 @@ Main evaluation pipeline
 """
 
 # Load config and paths
-cfg = load_config("synthetic_data")
+cfg = OmegaConf.load(
+    Path(__file__).resolve().parent.parent / "configs" / "synthetic_data.yaml"
+)
 output_dir = os.path.normpath(
     os.path.join(Path(__file__).resolve().parent, "../", cfg.output_dir)
 )
