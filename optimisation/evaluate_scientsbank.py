@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List
 
-from datasets import ClassLabel, Dataset, DatasetDict
+from datasets import DatasetDict
 from peft import PeftModel
 from transformers import (
     DataCollatorWithPadding,
@@ -62,6 +62,11 @@ def main() -> None:
     eval_split = ds_dict[eval_split_name]
     train_split = ds_dict.get("train", eval_split)
     raw = DatasetDict({"train": train_split, "test": eval_split})
+
+    # Print first 3 examples from the eval split
+    print("An examples from eval split:")
+    for i in range(min(1, len(eval_split))):
+        print(eval_split[i])
 
     # Label maps
     label_order: List[str] = ["incorrect", "partial", "correct"]
@@ -149,7 +154,7 @@ def main() -> None:
     #         "question",
     #         "student_answer",
     #         "predicted_label_name",
-    #         "intended_label",
+    #         "label",
     #     ]
     #     if c in df.columns
     # ]
@@ -159,7 +164,7 @@ def main() -> None:
     # f"Question: {row.get('question', '')}\n"
     # f"Student Answer: {row.get('student_answer', '')}\n"
     # f"Predicted Label: {row.get('predicted_label_name', '')}\n"
-    # f"True Label: {row.get('intended_label', '')}\n" + ("-" * 40)
+    # f"True Label: {row.get('label', '')}\n" + ("-" * 40)
     # )
 
 

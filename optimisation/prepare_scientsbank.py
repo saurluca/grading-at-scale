@@ -18,10 +18,11 @@ dataset = dataset.cast_column(
     "label", ClassLabel(names=["incorrect", "partial", "correct"])
 )
 
-# columns to have: task_id; question; reference_answer; chunk_text; topic; student_answer; intended_label
+# columns to have: task_id; question; reference_answer; chunk_text; topic; student_answer; label
 
 # rename id to task_id
 dataset = dataset.rename_column("id", "task_id")
+dataset = dataset.rename_column("label", "labels")
 
 
 # add column chunk_text with ""
@@ -41,9 +42,6 @@ def add_topic(example):
 
 dataset = dataset.map(add_topic)
 
-# rename label to intended_label
-dataset = dataset.rename_column("label", "intended_label")
-
 dataset.save_to_disk("../data/SciEntsBank_3way")
 
 # %%
@@ -55,9 +53,9 @@ dataset.save_to_disk("../data/SciEntsBank_3way")
 #     for split_name in dataset:
 #         print(split_name, ":")
 #         num_examples = 0
-#         for label in dataset[split_name].features["intended_label"].names:
-#             count = dataset[split_name]["intended_label"].count(
-#                 dataset[split_name].features["intended_label"].str2int(label)
+#         for label in dataset[split_name].features["label"].names:
+#             count = dataset[split_name]["label"].count(
+#                 dataset[split_name].features["label"].str2int(label)
 #             )
 #             print(" ", label, ":", count)
 #             num_examples += count
