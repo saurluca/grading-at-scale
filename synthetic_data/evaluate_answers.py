@@ -326,12 +326,17 @@ else:
     grader_all = dspy.Predict(GraderAll)
     grader_all.set_lm(grader_lm)
 
-# Load generated answers CSV based on config-driven naming
-generated_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{cfg.create_mode}.csv"
-generated_path = os.path.join(output_dir, generated_filename)
-if not os.path.exists(generated_path):
-    raise FileNotFoundError(f"Generated answers CSV not found at: {generated_path}")
+if cfg.infer_data_path:
+    # Load generated answers CSV based on config-driven naming
+    generated_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{cfg.create_mode}.csv"
+    generated_path = os.path.join(output_dir, generated_filename)
+else:
+    generated_path = os.path.join(
+        os.path.join(Path(__file__).resolve().parent, "../", cfg.data_path)
+    )
 
+if not os.path.exists(generated_path):
+    raise FileNotFoundError(f"Dataset CSV not found at: {generated_path}")
 student_answers_df = pd.read_csv(generated_path, sep=";")
 
 # Evaluate

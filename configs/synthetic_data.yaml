@@ -10,6 +10,8 @@ raw_chunks_dir: data/raw/chunks
 output_dir: data/synth
 # tasks_filename: tasks_unified.csv
 tasks_filename: all_tasks.csv
+infer_data_path: false
+data_path: data/SciEntsBank_3way/test_ua.csv
 
 num_correct_answers: 3
 num_partial_answers: 3
