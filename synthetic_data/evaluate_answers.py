@@ -45,8 +45,13 @@ def plot_confusion_matrix(y_true, y_pred, save_path=None):
     - y_pred: List or array of predicted labels
     - save_path: Optional path to save the plot
     """
-    labels = [0, 1, 2]
-    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    unique_labels = sorted(list(set(y_true + y_pred)))
+    cm = confusion_matrix(y_true, y_pred, labels=unique_labels)
+
+    label_names = {0: "Incorrect", 1: "Partially Correct", 2: "Correct"}
+    label_display_names = [
+        label_names.get(label, f"Label {label}") for label in unique_labels
+    ]
 
     plt.figure(figsize=(8, 6))
     sns.heatmap(
@@ -54,8 +59,8 @@ def plot_confusion_matrix(y_true, y_pred, save_path=None):
         annot=True,
         fmt="d",
         cmap="Blues",
-        xticklabels=["Incorrect", "Partially Correct", "Correct"],
-        yticklabels=["Incorrect", "Partially Correct", "Correct"],
+        xticklabels=label_display_names,
+        yticklabels=label_display_names,
     )
     plt.xlabel("Predicted Labels")
     plt.ylabel("True Labels")
@@ -99,7 +104,7 @@ def evaluate_grader_performance(
     def compute_labels_list(df: pd.DataFrame):
         vals = []
         for _, row in df.iterrows():
-            val = row.get("label", None)
+            val = row.get("labels", None)
             if isinstance(val, str):
                 label = label_name_to_int.get(val.strip().lower(), -1)
             elif pd.notna(val):
@@ -130,7 +135,7 @@ def evaluate_grader_performance(
                 tqdm.write(f"Error grading answer: {e}")
                 raise e
 
-            val = row.get("label", None)
+            val = row.get("labels", None)
             if isinstance(val, str):
                 label = label_name_to_int.get(val.strip().lower(), 0)
             elif pd.notna(val):
@@ -245,32 +250,32 @@ def evaluate_grader_performance(
         labels = compute_labels_list(answers_df)
 
     # Calculate metrics
-    labels = [0, 1, 2]
     accuracy = accuracy_score(labels, predicted_labels)
     precision = precision_score(
         labels,
         predicted_labels,
-        labels=labels,
+        labels=[0, 1, 2],
         average="macro",
         zero_division=0,
     )
     recall = recall_score(
         labels,
         predicted_labels,
-        labels=labels,
+        labels=[0, 1, 2],
         average="macro",
         zero_division=0,
     )
     f1 = f1_score(
         labels,
         predicted_labels,
-        labels=labels,
+        labels=[0, 1, 2],
         average="macro",
         zero_division=0,
     )
 
     # Confusion matrix
-    cm = confusion_matrix(labels, predicted_labels, labels=labels)
+    unique_labels = sorted(list(set(labels + predicted_labels)))
+    cm = confusion_matrix(labels, predicted_labels, labels=unique_labels)
 
     return {
         "accuracy": accuracy,
@@ -352,22 +357,21 @@ print(f"Recall (macro): {metrics['recall']:.3f}")
 print(f"F1 Score (macro): {metrics['f1_score']:.3f}")
 
 # Classification summary: expected vs predicted counts and failures
-labels = [0, 1, 2]
 label_names = {0: "incorrect", 1: "partial", 2: "correct"}
 labels = metrics["labels"]
 predicted = metrics["predicted_labels"]
 
 total = len(labels)
 misclassified_total = sum(1 for i, p in zip(labels, predicted) if p != i)
-invalid_predictions = sum(1 for p in predicted if p not in labels)
+invalid_predictions = sum(1 for p in predicted if p not in [0, 1, 2])
 
 print("\nClassification details")
 print(f"Total examples: {total}")
 print(f"Misclassified (predicted != labels): {misclassified_total}")
 if invalid_predictions > 0:
-    print(f"Invalid predictions (not in {labels}): {invalid_predictions}")
+    print(f"Invalid predictions (not in [0, 1, 2]): {invalid_predictions}")
 
-for c in labels:
+for c in [0, 1, 2]:
     expected_c = sum(1 for i in labels if i == c)
     predicted_c = sum(1 for p in predicted if p == c)
     misclassified_c = sum(1 for i, p in zip(labels, predicted) if i == c and p != c)
