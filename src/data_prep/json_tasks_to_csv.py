@@ -8,13 +8,13 @@ from omegaconf import OmegaConf
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Load configuration
-config_path = PROJECT_ROOT / "configs" / "synthetic_data.yaml"
+config_path = PROJECT_ROOT / "configs" / "data_generation.yaml"
 cfg = OmegaConf.load(config_path)
 
 # Resolve directories relative to project root
-output_dir = PROJECT_ROOT / cfg.output_dir
-raw_tasks_dir = PROJECT_ROOT / cfg.raw_tasks_dir
-raw_chunks_dir = PROJECT_ROOT / cfg.raw_chunks_dir
+output_dir = PROJECT_ROOT / cfg.output.dir
+raw_tasks_dir = PROJECT_ROOT / cfg.input.raw_tasks_dir
+raw_chunks_dir = PROJECT_ROOT / cfg.input.raw_chunks_dir
 
 """
 Unify all task/chunk JSON pairs under raw directories into a single CSV with columns:
@@ -72,7 +72,7 @@ df = pd.DataFrame(data)
 os.makedirs(output_dir, exist_ok=True)
 
 # Save to CSV using config filename
-output_path = os.path.join(output_dir, cfg.tasks_filename)
+output_path = os.path.join(output_dir, cfg.input.tasks_filename)
 df.to_csv(output_path, index=False, sep=";")
 
 print(f"Processed topics: {', '.join(os.path.splitext(f)[0] for f in common_files)}")

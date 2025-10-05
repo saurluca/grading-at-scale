@@ -1,0 +1,70 @@
+# Configuration for model training/fine-tuning
+# Used by: src/optimisation/finetune_*.py
+
+defaults:
+  - base
+
+# Model selection
+model:
+  base: meta-llama/Llama-3.2-1B-Instruct
+  type: lora # vanilla | lora | lora_quantized | lora_typst
+
+# Dataset
+dataset:
+  csv_path: ${paths.synth_dir}/student_answers_c1_p1_i1_gpt-4o-mini_per_question.csv
+  test_size: 0.5
+  use_unseen_questions: true # Split by question ID, not random
+
+# Output
+output:
+  dir: ${paths.output_dir}/peft_output
+  save_model: true
+  save_strategy: epoch
+
+# LoRA configuration (used for lora, lora_quantized, lora_typst types)
+lora:
+  r: 16
+  alpha: 16
+  dropout: 0.05
+  target_modules: [all-linear] # or ["q_proj", "v_proj"]
+  init_weights: olora
+
+# Quantization (only used if model.type == lora_quantized)
+quantization:
+  load_in_4bit: true
+  bnb_4bit_compute_dtype: float16
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+
+# Training hyperparameters
+training:
+  num_epochs: 1
+  batch_size:
+    train: 4
+    eval: 4
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  eval_strategy: epoch
+  logging_steps: 10
+
+# MLflow tracking
+mlflow:
+  experiment_name: peft_lora_training
+  tracking_uri: null # Uses default (./mlruns)
+
+# Typst-specific settings (only used if model.type == lora_typst)
+typst:
+  dataset: TechxGenus/Typst-Train
+  typst_only: true
+  test_size: 0.1
+  block_size: 256
+  num_proc: 8
+  quick_run: false
+
+  # Hugging Face Hub settings
+  hub:
+    push_to_hub: false
+    repo_id: null
+    private: false
+    token_env: HUGGING_FACE_HUB_TOKEN
+    commit_message: "Upload LoRA adapter"

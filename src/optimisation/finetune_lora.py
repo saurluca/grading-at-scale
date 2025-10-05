@@ -22,24 +22,24 @@ def setup_lora_model(base_model, cfg):
     print("Setting up LoRA configuration and applying to base model...")
     lora_cfg = LoraConfig(
         r=int(cfg.lora.r),
-        lora_alpha=int(cfg.lora.lora_alpha),
-        lora_dropout=float(cfg.lora.lora_dropout),
+        lora_alpha=int(cfg.lora.alpha),
+        lora_dropout=float(cfg.lora.dropout),
         # target_modules=list(cfg.lora.target_modules),
         target_modules="all-linear",
         task_type=TaskType.SEQ_CLS,
-        init_lora_weights=str(cfg.lora.init_lora_weights),
+        init_lora_weights=str(cfg.lora.init_weights),
     )
     return get_peft_model(base_model, lora_cfg)
 
 
 def main() -> None:
     print("Loading config...")
-    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "peft_lora.yaml")
+    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "training.yaml")
 
-    dataset_csv: str = str(cfg.dataset_csv)
-    model_name: str = str(cfg.model_name)
-    output_dir: str = str(cfg.output_dir)
-    cache_dir: str | None = str(cfg.hf_cache_dir) if "hf_cache_dir" in cfg else None
+    dataset_csv: str = str(PROJECT_ROOT / cfg.dataset.csv_path)
+    model_name: str = str(cfg.model.base)
+    output_dir: str = str(PROJECT_ROOT / cfg.output.dir)
+    cache_dir: str | None = str(cfg.paths.hf_cache_dir) if "paths" in cfg else None
 
     os.makedirs(output_dir, exist_ok=True)
     if cache_dir:
@@ -52,7 +52,7 @@ def main() -> None:
         os.makedirs(cache_path, exist_ok=True)
 
     # Start MLflow experiment
-    experiment_name = "peft_lora_training"
+    experiment_name = getattr(cfg.mlflow, "experiment_name", "peft_lora_training")
     mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(run_name=f"lora_training_{model_name.split('/')[-1]}"):
@@ -63,24 +63,20 @@ def main() -> None:
                 "dataset_csv": dataset_csv,
                 "output_dir": output_dir,
                 "lora_r": int(cfg.lora.r),
-                "lora_alpha": int(cfg.lora.lora_alpha),
-                "lora_dropout": float(cfg.lora.lora_dropout),
+                "lora_alpha": int(cfg.lora.alpha),
+                "lora_dropout": float(cfg.lora.dropout),
                 "target_modules": str(list(cfg.lora.target_modules)),
-                "num_train_epochs": float(cfg.training.num_train_epochs),
-                "per_device_train_batch_size": int(
-                    cfg.training.per_device_train_batch_size
-                ),
-                "per_device_eval_batch_size": int(
-                    cfg.training.per_device_eval_batch_size
-                ),
+                "num_train_epochs": float(cfg.training.num_epochs),
+                "per_device_train_batch_size": int(cfg.training.batch_size.train),
+                "per_device_eval_batch_size": int(cfg.training.batch_size.eval),
                 "learning_rate": float(cfg.training.learning_rate),
                 "weight_decay": float(cfg.training.weight_decay),
                 "eval_strategy": str(cfg.training.eval_strategy),
-                "seed": int(getattr(cfg, "seed", 42)),
+                "seed": int(getattr(cfg.project, "seed", 42)),
                 "use_unseen_questions": bool(
-                    getattr(cfg.training, "use_unseen_questions", False)
+                    getattr(cfg.dataset, "use_unseen_questions", False)
                 ),
-                "save_model": bool(getattr(cfg, "save_model", True)),
+                "save_model": bool(getattr(cfg.output, "save_model", True)),
             }
         )
 
@@ -88,10 +84,10 @@ def main() -> None:
         raw_data, label_order, label2id, id2label = load_and_preprocess_data(
             dataset_csv,
             cache_dir,
-            int(getattr(cfg, "seed", 42)),
-            test_size=cfg.training.test_size,
+            int(getattr(cfg.project, "seed", 42)),
+            test_size=cfg.dataset.test_size,
             use_unseen_questions=bool(
-                getattr(cfg.training, "use_unseen_questions", False)
+                getattr(cfg.dataset, "use_unseen_questions", False)
             ),
         )
 
@@ -165,7 +161,7 @@ def main() -> None:
         mlflow.log_artifacts(Path(output_dir) / f"adapter-{model_name}", "adapter")
 
         # Log the trained model using MLflow transformers integration
-        save_model = bool(getattr(cfg, "save_model", True))
+        save_model = bool(getattr(cfg.output, "save_model", True))
         if save_model:
             try:
                 mlflow.transformers.log_model(

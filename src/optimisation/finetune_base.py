@@ -20,12 +20,12 @@ from src.common import (  # noqa: E402
 
 def main() -> None:
     print("Loading config...")
-    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "vanilla.yaml")
+    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "training.yaml")
 
-    dataset_csv: str = str(cfg.dataset_csv)
-    model_name: str = str(cfg.model_name)
-    output_dir: str = str(PROJECT_ROOT / cfg.output_dir)
-    cache_dir: str | None = str(cfg.hf_cache_dir) if "hf_cache_dir" in cfg else None
+    dataset_csv: str = str(PROJECT_ROOT / cfg.dataset.csv_path)
+    model_name: str = str(cfg.model.base)
+    output_dir: str = str(PROJECT_ROOT / cfg.output.dir)
+    cache_dir: str | None = str(cfg.paths.hf_cache_dir) if "paths" in cfg else None
 
     os.makedirs(output_dir, exist_ok=True)
     if cache_dir:
@@ -48,17 +48,13 @@ def main() -> None:
                 "model_name": model_name,
                 "dataset_csv": dataset_csv,
                 "output_dir": output_dir,
-                "num_train_epochs": float(cfg.training.num_train_epochs),
-                "per_device_train_batch_size": int(
-                    cfg.training.per_device_train_batch_size
-                ),
-                "per_device_eval_batch_size": int(
-                    cfg.training.per_device_eval_batch_size
-                ),
+                "num_train_epochs": float(cfg.training.num_epochs),
+                "per_device_train_batch_size": int(cfg.training.batch_size.train),
+                "per_device_eval_batch_size": int(cfg.training.batch_size.eval),
                 "learning_rate": float(cfg.training.learning_rate),
                 "weight_decay": float(cfg.training.weight_decay),
                 "eval_strategy": str(cfg.training.eval_strategy),
-                "seed": int(getattr(cfg, "seed", 42)),
+                "seed": int(getattr(cfg.project, "seed", 42)),
             }
         )
 
@@ -66,8 +62,8 @@ def main() -> None:
         raw_data, label_order, label2id, id2label = load_and_preprocess_data(
             dataset_csv,
             cache_dir,
-            int(getattr(cfg, "seed", 42)),
-            test_size=cfg.training.test_size,
+            int(getattr(cfg.project, "seed", 42)),
+            test_size=cfg.dataset.test_size,
         )
 
         # Log dataset info

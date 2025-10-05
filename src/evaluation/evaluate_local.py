@@ -27,10 +27,10 @@ from src.common import (  # noqa: E402
 
 def main() -> None:
     print("Evaluating SciEntsBank classifier")
-    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "synthetic_data.yaml")
+    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "evaluation.yaml")
 
     dataset_dir = os.path.normpath(
-        os.path.join(PROJECT_ROOT, cfg.scientsbank.dataset_dir)
+        os.path.join(PROJECT_ROOT, cfg.classifier_eval.dataset.dir)
     )
     if not os.path.exists(dataset_dir):
         raise FileNotFoundError(
@@ -38,16 +38,16 @@ def main() -> None:
         )
 
     # Optional warnings about reference/topic usage flags (dataset lacks these semantically)
-    if getattr(cfg, "eval_pass_reference", False):
+    if getattr(cfg.api_eval, "pass_reference", False):
         print(
-            "Warning: 'eval_pass_reference' is True, but SciEntsBank has no reference text; using empty strings."
+            "Warning: 'pass_reference' is True, but SciEntsBank has no reference text; using empty strings."
         )
 
     print(f"Loading SciEntsBank from: {dataset_dir}")
     ds_dict: DatasetDict = DatasetDict.load_from_disk(dataset_dir)
 
     # Build DatasetDict with at least 'test' split for evaluation and a dummy 'train'
-    eval_split_name = str(getattr(cfg.classifier_eval, "eval_split", "test"))
+    eval_split_name = str(getattr(cfg.classifier_eval.dataset, "split", "test"))
     if eval_split_name not in ds_dict:
         raise ValueError(
             f"Requested eval_split '{eval_split_name}' not found in dataset: {list(ds_dict.keys())}"
@@ -68,12 +68,12 @@ def main() -> None:
     id2label: Dict[int, str] = {i: name for name, i in label2id.items()}
 
     # Load tokenizer and base model, then optionally attach LoRA adapter
-    base_model_name = str(cfg.classifier_eval.base_model_name)
+    base_model_name = str(cfg.classifier_eval.base_model)
     cache_dir = str(
         getattr(
-            cfg.classifier_eval,
+            cfg,
             "hf_cache_dir",
-            getattr(cfg, "hf_cache_dir", ".hf_cache"),
+            getattr(cfg.paths, "hf_cache_dir", ".hf_cache"),
         )
     )
     # Ensure cache directory is at project root

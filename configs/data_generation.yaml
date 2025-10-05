@@ -1,0 +1,57 @@
+# Configuration for synthetic data generation
+# Used by: src/data_prep/create_synth_data.py
+
+defaults:
+  - base
+
+# Model selection for generation and evaluation
+generation_model: gpt-4o-mini
+teacher_model: gpt-4o-mini
+
+# Input/Output paths
+input:
+  tasks_filename: tasks_short.csv
+  raw_tasks_dir: ${paths.raw_dir}/tasks
+  raw_chunks_dir: ${paths.raw_dir}/chunks
+
+output:
+  dir: ${paths.synth_dir}
+  infer_filename: true # Auto-generate filename from params
+
+# Generation parameters
+generation:
+  num_correct_answers: 1
+  num_partial_answers: 1
+  num_incorrect_answers: 1
+  mode: per_question # single | per_question | all
+  chain_of_thought: false
+
+  # Control what information is passed to generators
+  pass_reference_for:
+    correct: false
+    partial: false
+    incorrect: false
+  pass_reference_answer_for:
+    correct: true
+    partial: true
+    incorrect: false
+
+# Evaluation parameters (for grading generated answers)
+evaluation:
+  mode: per_question # single | per_question | all
+  chain_of_thought: false
+  pass_reference: false
+  pass_reference_answer: true
+
+# LM settings
+lm:
+  temp_generation: 1.0
+  temp_evaluation: 0.6
+  cache: true
+  max_tokens: 512 # Overridden based on mode
+
+# External dataset configuration
+external_datasets:
+  scientsbank:
+    dataset_dir: data/SciEntsBank_3way
+    eval_split: test_ua

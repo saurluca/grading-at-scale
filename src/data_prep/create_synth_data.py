@@ -33,21 +33,21 @@ tqdm.pandas(desc="Creating synthetic dataset")
 
 
 # Configuration via YAML (OmegaConf)
-cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "synthetic_data.yaml")
-output_dir = os.path.join(PROJECT_ROOT, cfg.output_dir)
+cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "data_generation.yaml")
+output_dir = os.path.join(PROJECT_ROOT, cfg.output.dir)
 
-max_tokens = 4096 if cfg.create_mode == "all" else 512
+max_tokens = 4096 if cfg.generation.mode == "all" else 512
 
 lm = build_lm(
-    cfg.model_name,
-    temperature=getattr(cfg, "lm_temp_generation", None),
+    cfg.generation_model,
+    temperature=getattr(cfg.lm, "temp_generation", None),
     cache=False,
     max_tokens=max_tokens,
 )
 dspy.settings.configure(lm=lm)
 
 # read in data
-tasks_file_path = os.path.join(output_dir, cfg.tasks_filename)
+tasks_file_path = os.path.join(output_dir, cfg.input.tasks_filename)
 tasks = pd.read_csv(tasks_file_path, sep=";")
 
 
@@ -69,17 +69,15 @@ DEFAULT_PASS_REFERENCE_ANSWER = {
 
 def _should_pass_reference(label: str) -> bool:
     return bool(
-        getattr(
-            cfg, f"create_pass_reference_for_{label}", DEFAULT_PASS_REFERENCE[label]
-        )
+        getattr(cfg.generation.pass_reference_for, label, DEFAULT_PASS_REFERENCE[label])
     )
 
 
 def _should_pass_reference_answer(label: str) -> bool:
     return bool(
         getattr(
-            cfg,
-            f"create_pass_reference_answer_for_{label}",
+            cfg.generation.pass_reference_answer_for,
+            label,
             DEFAULT_PASS_REFERENCE_ANSWER[label],
         )
     )
@@ -326,9 +324,9 @@ def _validate_generated_counts(
     num_tasks = len(tasks_df)
     # Overall expected totals
     expected_per_label = {
-        "correct": int(getattr(cfg, "num_correct_answers", 0)),
-        "partial": int(getattr(cfg, "num_partial_answers", 0)),
-        "incorrect": int(getattr(cfg, "num_incorrect_answers", 0)),
+        "correct": int(getattr(cfg.generation, "num_correct_answers", 0)),
+        "partial": int(getattr(cfg.generation, "num_partial_answers", 0)),
+        "incorrect": int(getattr(cfg.generation, "num_incorrect_answers", 0)),
     }
     expected_total = num_tasks * sum(expected_per_label.values())
 
@@ -372,15 +370,17 @@ def _validate_generated_counts(
 
 
 total_per_question = (
-    cfg.num_correct_answers + cfg.num_partial_answers + cfg.num_incorrect_answers
+    cfg.generation.num_correct_answers
+    + cfg.generation.num_partial_answers
+    + cfg.generation.num_incorrect_answers
 )
 print(f"Generating {total_per_question} student answers per question...")
-print(f"Using mode: {cfg.create_mode} with model: {cfg.model_name}")
+print(f"Using mode: {cfg.generation.mode} with model: {cfg.generation_model}")
 print(
-    f"Per-question targets -> correct: {cfg.num_correct_answers}, partial: {cfg.num_partial_answers}, incorrect: {cfg.num_incorrect_answers}"
+    f"Per-question targets -> correct: {cfg.generation.num_correct_answers}, partial: {cfg.generation.num_partial_answers}, incorrect: {cfg.generation.num_incorrect_answers}"
 )
 
-if cfg.create_mode == "single":
+if cfg.generation.mode == "single":
     if cfg.generation.chain_of_thought:
         models_single = {
             "correct": dspy.ChainOfThought(CorrectAnswerGenerator),
@@ -396,12 +396,12 @@ if cfg.create_mode == "single":
 
     student_answers_df = generate_student_answers_df(
         tasks,
-        cfg.num_correct_answers,
-        cfg.num_partial_answers,
-        cfg.num_incorrect_answers,
+        cfg.generation.num_correct_answers,
+        cfg.generation.num_partial_answers,
+        cfg.generation.num_incorrect_answers,
         models_single,
     )
-elif cfg.create_mode == "per_question":
+elif cfg.generation.mode == "per_question":
     if cfg.generation.chain_of_thought:
         models_perq = {
             "correct": dspy.ChainOfThought(CorrectAnswerGeneratorPerQuestion),
@@ -417,12 +417,12 @@ elif cfg.create_mode == "per_question":
 
     student_answers_df = generate_student_answers_df_per_question(
         tasks,
-        cfg.num_correct_answers,
-        cfg.num_partial_answers,
-        cfg.num_incorrect_answers,
+        cfg.generation.num_correct_answers,
+        cfg.generation.num_partial_answers,
+        cfg.generation.num_incorrect_answers,
         models_perq,
     )
-elif cfg.create_mode == "all":
+elif cfg.generation.mode == "all":
     if cfg.generation.chain_of_thought:
         models_all = {
             "correct": dspy.ChainOfThought(CorrectAnswerGeneratorAll),
@@ -438,13 +438,13 @@ elif cfg.create_mode == "all":
 
     student_answers_df = generate_student_answers_df_all(
         tasks,
-        cfg.num_correct_answers,
-        cfg.num_partial_answers,
-        cfg.num_incorrect_answers,
+        cfg.generation.num_correct_answers,
+        cfg.generation.num_partial_answers,
+        cfg.generation.num_incorrect_answers,
         models_all,
     )
 else:
-    raise ValueError(f"Invalid create_mode: {cfg.create_mode}")
+    raise ValueError(f"Invalid create_mode: {cfg.generation.mode}")
 
 # Validate exact counts before proceeding
 _validate_generated_counts(student_answers_df, tasks, cfg)
@@ -458,7 +458,7 @@ print(f"Intended partial answers: {num_partial}")
 print(f"Intended incorrect answers: {num_incorrect}")
 
 # Save the dataframe
-student_answers_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{cfg.create_mode}.csv"
+student_answers_filename = f"student_answers_c{cfg.generation.num_correct_answers}_p{cfg.generation.num_partial_answers}_i{cfg.generation.num_incorrect_answers}_{cfg.generation_model}_{cfg.generation.mode}.csv"
 output_path = os.path.join(output_dir, student_answers_filename)
 student_answers_df.to_csv(output_path, index=False, sep=";")
 print(f"Saved student answers to: {output_path}")

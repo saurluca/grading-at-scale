@@ -117,11 +117,11 @@ def evaluate_grader_performance(
                     "answer": row["student_answer"],
                 }
                 if (
-                    getattr(cfg, "eval_pass_reference", False)
+                    getattr(cfg.api_eval, "pass_reference", False)
                     and "chunk_text" in row.index
                 ):
                     kwargs["reference"] = row["chunk_text"]
-                if getattr(cfg, "eval_pass_reference_answer", True):
+                if getattr(cfg.api_eval, "pass_reference_answer", True):
                     kwargs["reference_answer"] = row["reference_answer"]
                 result = grader_single(**kwargs)
                 predicted = int(result.label)
@@ -167,11 +167,11 @@ def evaluate_grader_performance(
                     "answers": answers,
                 }
                 if (
-                    getattr(cfg, "eval_pass_reference", False)
+                    getattr(cfg.api_eval, "pass_reference", False)
                     and reference_text is not None
                 ):
                     kwargs["reference"] = reference_text
-                if getattr(cfg, "eval_pass_reference_answer", True):
+                if getattr(cfg.api_eval, "pass_reference_answer", True):
                     kwargs["reference_answer"] = reference_answer
                 batch_result = grader_perq(**kwargs)
                 labels = batch_result.predicted_labels
@@ -211,9 +211,9 @@ def evaluate_grader_performance(
                 "counts_per_question": counts_per_question,
                 "answers_flat": answers_flat,
             }
-            if getattr(cfg, "eval_pass_reference", False):
+            if getattr(cfg.api_eval, "pass_reference", False):
                 kwargs["references"] = reference_texts_unique
-            if getattr(cfg, "eval_pass_reference_answer", True):
+            if getattr(cfg.api_eval, "pass_reference_answer", True):
                 # Build aligned reference answers per unique question
                 reference_answers_unique = []
                 for _, group in answers_df.groupby(group_key):
@@ -287,23 +287,23 @@ Main evaluation pipeline
 """
 
 # Load config and paths
-cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "synthetic_data.yaml")
-output_dir = os.path.join(PROJECT_ROOT, cfg.output_dir)
+cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "evaluation.yaml")
+output_dir = os.path.join(PROJECT_ROOT, cfg.output.dir)
 
-print(f"Using model {cfg.teacher_model_name} for evaluation on {cfg.data_path}")
+print(f"Using model {cfg.api_eval.model} for evaluation")
 
 # Increase max_tokens
-max_tokens = 8192 if cfg.eval_mode == "all" else 512
+max_tokens = 8192 if cfg.api_eval.mode == "all" else 512
 
 # Build LM and Grader program(s)
 grader_lm = build_lm(
-    cfg.teacher_model_name,
+    cfg.api_eval.model,
     max_tokens=16000,
-    cache=cfg.lm_cache,
-    temperature=cfg.lm_temp_eval,
+    cache=cfg.api_eval.cache,
+    temperature=cfg.api_eval.temperature,
 )
 
-if cfg.chain_of_thought:
+if cfg.api_eval.chain_of_thought:
     grader_single = dspy.ChainOfThought(GraderSingle)
     grader_single.set_lm(grader_lm)
     grader_perq = dspy.ChainOfThought(GraderPerQuestion)
@@ -318,12 +318,12 @@ else:
     grader_all = dspy.Predict(GraderAll)
     grader_all.set_lm(grader_lm)
 
-if cfg.infer_data_path:
+if cfg.api_eval.data.infer_path:
     # Load generated answers CSV based on config-driven naming
-    generated_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{cfg.create_mode}.csv"
+    generated_filename = f"student_answers_c{cfg.api_eval.data.num_correct_answers}_p{cfg.api_eval.data.num_partial_answers}_i{cfg.api_eval.data.num_incorrect_answers}_{cfg.api_eval.data.generation_model}_{cfg.api_eval.data.generation_mode}.csv"
     generated_path = os.path.join(output_dir, generated_filename)
 else:
-    generated_path = os.path.join(PROJECT_ROOT, cfg.data_path)
+    generated_path = os.path.join(PROJECT_ROOT, cfg.api_eval.data.manual_path)
 
 if not os.path.exists(generated_path):
     raise FileNotFoundError(f"Dataset CSV not found at: {generated_path}")
@@ -333,7 +333,7 @@ student_answers_df = pd.read_csv(generated_path, sep=";")
 print("\n" + "=" * 50)
 print("EVALUATING GRADER PERFORMANCE")
 print("=" * 50)
-eval_mode = getattr(cfg, "eval_mode", "single")
+eval_mode = getattr(cfg.api_eval, "mode", "single")
 metrics = evaluate_grader_performance(
     student_answers_df,
     grader_single,
@@ -378,7 +378,7 @@ for c in [0, 1, 2]:
 mode_suffix = {"single": "single", "per_question": "perq", "all": "all"}.get(
     eval_mode, eval_mode
 )
-plot_filename = f"confusion_matrix_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{mode_suffix}_{cfg.create_mode}.png"
+plot_filename = f"confusion_matrix_c{cfg.api_eval.data.num_correct_answers}_p{cfg.api_eval.data.num_partial_answers}_i{cfg.api_eval.data.num_incorrect_answers}_{cfg.api_eval.data.generation_model}_{mode_suffix}_{cfg.api_eval.data.generation_mode}.png"
 plot_path = os.path.join(output_dir, plot_filename)
 plot_confusion_matrix(
     metrics["labels"],
@@ -392,7 +392,7 @@ student_answers_df["predicted_label"] = metrics["predicted_labels"]
 student_answers_df["predicted_label_name"] = student_answers_df["predicted_label"].map(
     label_int_to_name
 )
-complete_output_filename = f"student_answers_with_predictions_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{mode_suffix}_{cfg.create_mode}.csv"
+complete_output_filename = f"student_answers_with_predictions_c{cfg.api_eval.data.num_correct_answers}_p{cfg.api_eval.data.num_partial_answers}_i{cfg.api_eval.data.num_incorrect_answers}_{cfg.api_eval.data.generation_model}_{mode_suffix}_{cfg.api_eval.data.generation_mode}.csv"
 complete_output_path = os.path.join(output_dir, complete_output_filename)
 student_answers_df.to_csv(complete_output_path, index=False, sep=";")
 print(f"\nSaved complete results to: {complete_output_path}")

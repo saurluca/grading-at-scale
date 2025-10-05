@@ -177,8 +177,8 @@ def setup_lora_causal_lm(model_name: str, cfg, tokenizer, cache_dir: str | None)
 
     lora_cfg = LoraConfig(
         r=int(cfg.lora.r),
-        lora_alpha=int(cfg.lora.lora_alpha),
-        lora_dropout=float(cfg.lora.lora_dropout),
+        lora_alpha=int(cfg.lora.alpha),
+        lora_dropout=float(cfg.lora.dropout),
         target_modules=list(cfg.lora.target_modules),
         task_type=TaskType.CAUSAL_LM,
     )
@@ -188,9 +188,9 @@ def setup_lora_causal_lm(model_name: str, cfg, tokenizer, cache_dir: str | None)
 
 
 def setup_training_args(cfg, output_dir: str) -> TrainingArguments:
-    quick_run = bool(getattr(cfg, "quick_run", False))
+    quick_run = bool(getattr(cfg.typst, "quick_run", False))
     eval_strategy = str(cfg.training.eval_strategy)
-    save_strategy = str(getattr(cfg.training, "save_strategy", "epoch"))
+    save_strategy = str(getattr(cfg.output, "save_strategy", "epoch"))
 
     if quick_run:
         # Disable eval and saving, run only a single optimizer step
@@ -200,9 +200,9 @@ def setup_training_args(cfg, output_dir: str) -> TrainingArguments:
     # IT IS EVAL_STRATEGY, NOT EVALUATION_STRATEGY
     args = TrainingArguments(
         output_dir=output_dir,
-        num_train_epochs=float(cfg.training.num_train_epochs),
-        per_device_train_batch_size=int(cfg.training.per_device_train_batch_size),
-        per_device_eval_batch_size=int(cfg.training.per_device_eval_batch_size),
+        num_train_epochs=float(cfg.training.num_epochs),
+        per_device_train_batch_size=int(cfg.training.batch_size.train),
+        per_device_eval_batch_size=int(cfg.training.batch_size.eval),
         learning_rate=float(cfg.training.learning_rate),
         weight_decay=float(cfg.training.weight_decay),
         eval_strategy=eval_strategy,
@@ -214,7 +214,7 @@ def setup_training_args(cfg, output_dir: str) -> TrainingArguments:
         greater_is_better=False,
         report_to=[],
         remove_unused_columns=False,
-        seed=int(getattr(cfg, "seed", 42)),
+        seed=int(getattr(cfg.project, "seed", 42)),
         save_total_limit=2,
     )
 
@@ -272,17 +272,19 @@ def train_and_evaluate(
 
 
 def main() -> None:
-    print("Loading config peft_lora...")
-    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "peft_lora_typst.yaml")
+    print("Loading config training...")
+    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "training.yaml")
 
-    model_name: str = str(cfg.model_name)
-    output_dir = str(PROJECT_ROOT / cfg.output_dir / "typst_lora")
-    cache_dir: str | None = str(cfg.hf_cache_dir) if "hf_cache_dir" in cfg else None
-    seed: int = int(getattr(cfg, "seed", 42))
-    block_size: int = int(getattr(cfg, "block_size", 1024))
-    typst_only: bool = bool(getattr(cfg, "typst_only", True))
-    test_size: float = float(getattr(cfg, "test_size", 0.1))
-    num_proc: int = int(getattr(cfg, "num_proc", max(1, (os.cpu_count() or 1) - 1)))
+    model_name: str = str(cfg.model.base)
+    output_dir = str(PROJECT_ROOT / cfg.output.dir / "typst_lora")
+    cache_dir: str | None = str(cfg.paths.hf_cache_dir) if "paths" in cfg else None
+    seed: int = int(getattr(cfg.project, "seed", 42))
+    block_size: int = int(getattr(cfg.typst, "block_size", 1024))
+    typst_only: bool = bool(getattr(cfg.typst, "typst_only", True))
+    test_size: float = float(getattr(cfg.typst, "test_size", 0.1))
+    num_proc: int = int(
+        getattr(cfg.typst, "num_proc", max(1, (os.cpu_count() or 1) - 1))
+    )
 
     os.makedirs(output_dir, exist_ok=True)
     if cache_dir:
@@ -300,20 +302,16 @@ def main() -> None:
         # Log configuration
         mlflow.log_params(
             {
-                "dataset": "TechxGenus/Typst-Train",
+                "dataset": getattr(cfg.typst, "dataset", "TechxGenus/Typst-Train"),
                 "model_name": model_name,
                 "output_dir": output_dir,
                 "lora_r": int(cfg.lora.r),
-                "lora_alpha": int(cfg.lora.lora_alpha),
-                "lora_dropout": float(cfg.lora.lora_dropout),
+                "lora_alpha": int(cfg.lora.alpha),
+                "lora_dropout": float(cfg.lora.dropout),
                 "target_modules": str(list(cfg.lora.target_modules)),
-                "num_train_epochs": float(cfg.training.num_train_epochs),
-                "per_device_train_batch_size": int(
-                    cfg.training.per_device_train_batch_size
-                ),
-                "per_device_eval_batch_size": int(
-                    cfg.training.per_device_eval_batch_size
-                ),
+                "num_train_epochs": float(cfg.training.num_epochs),
+                "per_device_train_batch_size": int(cfg.training.batch_size.train),
+                "per_device_eval_batch_size": int(cfg.training.batch_size.eval),
                 "learning_rate": float(cfg.training.learning_rate),
                 "weight_decay": float(cfg.training.weight_decay),
                 "eval_strategy": str(cfg.training.eval_strategy),
@@ -365,7 +363,7 @@ def main() -> None:
             print(f"Warning: could not save adapter: {e}")
 
         # Push to Hugging Face Hub if configured
-        hub_cfg = getattr(cfg, "hub", None)
+        hub_cfg = getattr(cfg.typst, "hub", None)
         if hub_cfg and bool(getattr(hub_cfg, "push_to_hub", False)):
             repo_id = getattr(hub_cfg, "repo_id", None)
             private = bool(getattr(hub_cfg, "private", True))
