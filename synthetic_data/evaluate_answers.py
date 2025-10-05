@@ -398,17 +398,15 @@ complete_output_path = os.path.join(output_dir, complete_output_filename)
 student_answers_df.to_csv(complete_output_path, index=False, sep=";")
 print(f"\nSaved complete results to: {complete_output_path}")
 
-# %%
-
-# Sample a few rows for inspection
-print("\n" + "=" * 50)
-print("SAMPLE RESULTS")
-print("=" * 50)
-print_df = student_answers_df[
-    ["question", "student_answer", "predicted_label_name", "intended_label"]
-]
-print_df = print_df.sample(n=5)
-for idx, row in print_df.iterrows():
-    print(
-        f"Question: {row['question']}\nStudent Answer: {row['student_answer']}\nPredicted Label: {row['predicted_label_name']}\nTrue Label: {row['intended_label']}\n{'-' * 40}"
-    )
+# # Sample a few rows for inspection
+# print("\n" + "=" * 50)
+# print("SAMPLE RESULTS")
+# print("=" * 50)
+# print_df = student_answers_df[
+#     ["question", "student_answer", "predicted_label_name", "intended_label"]
+# ]
+# print_df = print_df.sample(n=5)
+# for idx, row in print_df.iterrows():
+#     print(
+#         f"Question: {row['question']}\nStudent Answer: {row['student_answer']}\nPredicted Label: {row['predicted_label_name']}\nTrue Label: {row['intended_label']}\n{'-' * 40}"
+#     )
