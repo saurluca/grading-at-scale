@@ -1,4 +1,5 @@
 data/*
+results/*
 mlruns/
 mlartifacts/
 
@@ -21,4 +22,3 @@ SciEntsBank_2way/
 output.txt
 output_file.txt
 
-results/
