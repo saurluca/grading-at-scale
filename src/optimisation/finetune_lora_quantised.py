@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-
+import sys
 import mlflow
 import torch
 from transformers import (
@@ -12,7 +12,11 @@ from transformers import (
 from peft import LoraConfig, get_peft_model, TaskType, prepare_model_for_kbit_training
 
 from omegaconf import OmegaConf
-from common import (
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(PROJECT_ROOT))
+
+from src.common import (  # noqa: E402
     setup_training_args,
     setup_trainer,
     load_and_preprocess_data,
@@ -60,9 +64,7 @@ def setup_quantized_lora_model(
 
 
 def main() -> None:
-    cfg = OmegaConf.load(
-        Path(__file__).resolve().parent.parent / "configs" / "peft_lora.yaml"
-    )
+    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "peft_lora.yaml")
 
     dataset_csv: str = str(cfg.dataset_csv)
     model_name: str = str(cfg.model_name)
@@ -71,7 +73,13 @@ def main() -> None:
 
     os.makedirs(output_dir, exist_ok=True)
     if cache_dir:
-        os.makedirs(cache_dir, exist_ok=True)
+        # Ensure cache directory is at project root
+        cache_path = (
+            os.path.join(PROJECT_ROOT, cache_dir)
+            if not os.path.isabs(cache_dir)
+            else cache_dir
+        )
+        os.makedirs(cache_path, exist_ok=True)
 
     experiment_name = "peft_lora_training_4bit"
     mlflow.set_experiment(experiment_name)
@@ -117,7 +125,7 @@ def main() -> None:
             }
         )
 
-        tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
+        tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_path)
         if tokenizer.pad_token is None:
             if tokenizer.eos_token is not None:
                 tokenizer.pad_token = tokenizer.eos_token
@@ -129,7 +137,7 @@ def main() -> None:
             num_labels=3,
             label2id=label2id,
             id2label=id2label,
-            cache_dir=cache_dir,
+            cache_dir=cache_path,
             cfg=cfg,
         )
 

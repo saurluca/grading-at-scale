@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from omegaconf import OmegaConf
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Load configuration
 config_path = PROJECT_ROOT / "configs" / "synthetic_data.yaml"

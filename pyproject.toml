@@ -30,3 +30,8 @@ dependencies = [
     "transformers>=4.56.2",
     "trl>=0.21.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.13.3",
+]

@@ -1,14 +1,15 @@
 # %%
-import os
-from pathlib import Path
 import logging
+import os
+import sys
+from pathlib import Path
 
 import dspy
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+from omegaconf import OmegaConf
 from signatures import GraderAll, GraderPerQuestion, GraderSingle
-from model_builder import build_lm
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
@@ -17,9 +18,11 @@ from sklearn.metrics import (
     recall_score,
 )
 from tqdm import tqdm
-from omegaconf import OmegaConf
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(PROJECT_ROOT))
+
+from src.model_builder import build_lm  # noqa: E402
 
 logging.getLogger("dspy").setLevel(logging.ERROR)
 

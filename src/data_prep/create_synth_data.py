@@ -1,29 +1,36 @@
 # %%
+import logging
 import os
+import sys
 from pathlib import Path
-import pandas as pd
+
 import dspy
-from tqdm import tqdm
-from model_builder import build_lm
+import pandas as pd
+from omegaconf import OmegaConf
 from signatures import (
     CorrectAnswerGenerator,
-    PartialAnswerGenerator,
-    IncorrectAnswerGenerator,
-    CorrectAnswerGeneratorPerQuestion,
-    PartialAnswerGeneratorPerQuestion,
-    IncorrectAnswerGeneratorPerQuestion,
     CorrectAnswerGeneratorAll,
-    PartialAnswerGeneratorAll,
+    CorrectAnswerGeneratorPerQuestion,
+    IncorrectAnswerGenerator,
     IncorrectAnswerGeneratorAll,
+    IncorrectAnswerGeneratorPerQuestion,
+    PartialAnswerGenerator,
+    PartialAnswerGeneratorAll,
+    PartialAnswerGeneratorPerQuestion,
 )
-from omegaconf import OmegaConf
-import logging
+from tqdm import tqdm
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(PROJECT_ROOT))
+
+
+from src.model_builder import build_lm  # noqa: E402
+
 
 logging.getLogger("dspy").setLevel(logging.ERROR)
 
 tqdm.pandas(desc="Creating synthetic dataset")
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Configuration via YAML (OmegaConf)
 cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "synthetic_data.yaml")
@@ -309,9 +316,6 @@ def generate_student_answers_df_all(
     return pd.DataFrame(rows)
 
 
-# %%
-
-
 def _validate_generated_counts(
     student_answers_df: pd.DataFrame, tasks_df: pd.DataFrame, cfg
 ) -> None:
@@ -458,8 +462,6 @@ student_answers_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.nu
 output_path = os.path.join(output_dir, student_answers_filename)
 student_answers_df.to_csv(output_path, index=False, sep=";")
 print(f"Saved student answers to: {output_path}")
-
-# %%
 
 # """
 # Sample a few random incorrect student answers to display

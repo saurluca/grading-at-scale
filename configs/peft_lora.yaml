@@ -8,7 +8,8 @@ model_name: meta-llama/Llama-3.2-1B-Instruct
 
 # Path to the CSV produced by synthetic_data/create_synth_dataset.py
 # Expected columns: question, student_answer, label (incorrect|partial|correct)
-dataset_csv: data/synth/student_answers_c3_p3_i3_gpt-4o_per_question.csv
+# dataset_csv: data/synth/student_answers_c3_p3_i3_gpt-4o_per_question.csv
+dataset_csv: data/synth/student_answers_c1_p1_i1_gpt-4o-mini_per_question.csv
 # dataset_csv: data/synth/student_answers_c6_p6_i6_gpt-4o-mini_per_question.csv
 
 # Where to save model outputs and adapter
@@ -33,8 +34,8 @@ training:
   num_train_epochs: 1
   # per_device_train_batch_size: 32
   # per_device_eval_batch_size: 32
-  per_device_train_batch_size: 6
-  per_device_eval_batch_size: 8
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 4
   learning_rate: 0.0001
   weight_decay: 0.0001
   eval_strategy: epoch

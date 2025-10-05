@@ -1,34 +1,33 @@
 # %%
 import os
+import sys
 from pathlib import Path
 from typing import Dict, List
 
 from datasets import DatasetDict
+from omegaconf import OmegaConf
 from peft import PeftModel
 from transformers import (
     DataCollatorWithPadding,
     Trainer,
     TrainingArguments,
 )
-from omegaconf import OmegaConf
 
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(PROJECT_ROOT))
 
 # from synthetic_data.evaluate_answers import plot_confusion_matrix
-from common import (
+from src.common import (  # noqa: E402
+    compute_metrics,
+    detailed_evaluation,
     setup_model_and_tokenizer,
     tokenize_dataset,
-    detailed_evaluation,
-    compute_metrics,
 )
 
 
 def main() -> None:
     print("Evaluating SciEntsBank classifier")
-    cfg = OmegaConf.load(
-        Path(__file__).resolve().parent.parent / "configs" / "synthetic_data.yaml"
-    )
+    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "synthetic_data.yaml")
 
     dataset_dir = os.path.normpath(
         os.path.join(PROJECT_ROOT, cfg.scientsbank.dataset_dir)
@@ -77,6 +76,12 @@ def main() -> None:
             getattr(cfg, "hf_cache_dir", ".hf_cache"),
         )
     )
+    # Ensure cache directory is at project root
+    cache_path = (
+        os.path.join(PROJECT_ROOT, cache_dir)
+        if not os.path.isabs(cache_dir)
+        else cache_dir
+    )
     output_dir = os.path.normpath(
         os.path.join(
             PROJECT_ROOT,
@@ -86,7 +91,7 @@ def main() -> None:
     os.makedirs(output_dir, exist_ok=True)
 
     tokenizer, base_model = setup_model_and_tokenizer(
-        base_model_name, label2id, id2label, cache_dir
+        base_model_name, label2id, id2label, cache_path
     )
 
     lora_adapter_dir = getattr(cfg.classifier_eval, "lora_adapter_dir", None)

@@ -1,13 +1,20 @@
 # %%
+from pathlib import Path
 import pandas as pd
 
 # df = pd.read_csv(
 #     "../data/synth/student_answers_c3_p3_i3_gpt-4o_per_question.csv", sep=";"
 # )
 
-df_neuro = pd.read_csv("../data/synth/neuro_tasks_with_explanation.csv", sep=";")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-df_ai = pd.read_csv("../data/synth/ai_tasks_with_explanation.csv", sep=";")
+df_neuro = pd.read_csv(
+    PROJECT_ROOT / "data" / "synth" / "neuro_tasks_with_explanation.csv", sep=";"
+)
+
+df_ai = pd.read_csv(
+    PROJECT_ROOT / "data" / "synth" / "ai_tasks_with_explanation.csv", sep=";"
+)
 
 
 # %%
@@ -22,9 +29,9 @@ print(f"len df: {len(df)}")
 
 df.head()
 
-df.to_csv("../data/synth/all_tasks.csv", index=False, sep=";")
 
 # %%
+df.to_csv(PROJECT_ROOT / "data" / "synth" / "all_tasks.csv", index=False, sep=";")
 
 
 def preprocess_ai_tasks(df):

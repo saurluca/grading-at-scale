@@ -1,11 +1,14 @@
 import os
 from pathlib import Path
-
+import sys
 import mlflow
 from peft import LoraConfig, get_peft_model, TaskType
 from omegaconf import OmegaConf
 
-from common import (
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(PROJECT_ROOT))
+
+from src.common import (  # noqa: E402
     setup_training_args,
     setup_trainer,
     load_and_preprocess_data,
@@ -31,9 +34,7 @@ def setup_lora_model(base_model, cfg):
 
 def main() -> None:
     print("Loading config...")
-    cfg = OmegaConf.load(
-        Path(__file__).resolve().parent.parent / "configs" / "peft_lora.yaml"
-    )
+    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "peft_lora.yaml")
 
     dataset_csv: str = str(cfg.dataset_csv)
     model_name: str = str(cfg.model_name)
@@ -42,7 +43,13 @@ def main() -> None:
 
     os.makedirs(output_dir, exist_ok=True)
     if cache_dir:
-        os.makedirs(cache_dir, exist_ok=True)
+        # Ensure cache directory is at project root
+        cache_path = (
+            os.path.join(PROJECT_ROOT, cache_dir)
+            if not os.path.isabs(cache_dir)
+            else cache_dir
+        )
+        os.makedirs(cache_path, exist_ok=True)
 
     # Start MLflow experiment
     experiment_name = "peft_lora_training"
@@ -99,7 +106,7 @@ def main() -> None:
 
         # Setup model and tokenizer
         tokenizer, base_model = setup_model_and_tokenizer(
-            model_name, label2id, id2label, cache_dir
+            model_name, label2id, id2label, cache_path
         )
 
         # Setup LoRA model

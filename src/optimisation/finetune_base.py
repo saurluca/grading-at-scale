@@ -1,10 +1,14 @@
 import os
 from pathlib import Path
+import sys
 
 import mlflow
 from omegaconf import OmegaConf
 
-from common import (
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(PROJECT_ROOT))
+
+from src.common import (  # noqa: E402
     load_and_preprocess_data,
     setup_model_and_tokenizer,
     setup_training_args,
@@ -13,8 +17,6 @@ from common import (
     detailed_evaluation,
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
 
 def main() -> None:
     print("Loading config...")
@@ -22,12 +24,18 @@ def main() -> None:
 
     dataset_csv: str = str(cfg.dataset_csv)
     model_name: str = str(cfg.model_name)
-    output_dir: str = str(cfg.output_dir)
+    output_dir: str = str(PROJECT_ROOT / cfg.output_dir)
     cache_dir: str | None = str(cfg.hf_cache_dir) if "hf_cache_dir" in cfg else None
 
     os.makedirs(output_dir, exist_ok=True)
     if cache_dir:
-        os.makedirs(cache_dir, exist_ok=True)
+        # Ensure cache directory is at project root
+        cache_path = (
+            os.path.join(PROJECT_ROOT, cache_dir)
+            if not os.path.isabs(cache_dir)
+            else cache_dir
+        )
+        os.makedirs(cache_path, exist_ok=True)
 
     # Start MLflow experiment
     experiment_name = "vanilla_training"

@@ -2,7 +2,7 @@
 from datasets import load_dataset, ClassLabel
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Load the dataset
 dataset = load_dataset("nkazi/SciEntsBank")

@@ -1,32 +1,29 @@
-import os
 import math
-from pathlib import Path
+import os
 import sys
-from typing import Dict, Any, Tuple
+from pathlib import Path
+from typing import Any, Dict, Tuple
 
 import mlflow
-from datasets import load_dataset, DatasetDict, load_from_disk
-from peft import LoraConfig, get_peft_model, TaskType
+from datasets import DatasetDict, load_dataset, load_from_disk
+from dotenv import load_dotenv
+from huggingface_hub import HfApi
+from peft import LoraConfig, TaskType, get_peft_model
 from transformers import (
-    AutoTokenizer,
     AutoModelForCausalLM,
     AutoModelForSequenceClassification,
-    TrainingArguments,
-    Trainer,
+    AutoTokenizer,
     DataCollatorForLanguageModeling,
+    Trainer,
+    TrainingArguments,
 )
-from huggingface_hub import HfApi
-from dotenv import load_dotenv
-
-if "__file__" in globals():
-    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-else:
-    _PROJECT_ROOT = Path.cwd().parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(_PROJECT_ROOT))
-
 from omegaconf import OmegaConf
-from common import LossLoggingCallback  # reuse logging callback
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(PROJECT_ROOT))
+
+
+from src.common import LossLoggingCallback  # noqa: E402
 
 load_dotenv()
 
@@ -92,7 +89,12 @@ def tokenize_and_group(
 
     # Determine cache location keyed by model and block size
     safe_model = (model_name or "model").replace("/", "_").replace(":", "_")
-    base_cache = Path(cache_dir) if cache_dir else (_PROJECT_ROOT / ".hf_cache")
+    # Ensure cache directory is at project root
+    base_cache = (
+        Path(cache_dir)
+        if cache_dir and os.path.isabs(cache_dir)
+        else (PROJECT_ROOT / (cache_dir or ".hf_cache"))
+    )
     token_cache = base_cache / "typst_tokenized" / safe_model / f"bs{block_size}"
 
     # If cached tokenized+grouped datasets exist, load and return
@@ -271,12 +273,10 @@ def train_and_evaluate(
 
 def main() -> None:
     print("Loading config peft_lora...")
-    cfg = OmegaConf.load(
-        Path(__file__).resolve().parent.parent / "configs" / "peft_lora_typst.yaml"
-    )
+    cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "peft_lora_typst.yaml")
 
     model_name: str = str(cfg.model_name)
-    output_dir = str(Path(cfg.output_dir) / "typst_lora")
+    output_dir = str(PROJECT_ROOT / cfg.output_dir / "typst_lora")
     cache_dir: str | None = str(cfg.hf_cache_dir) if "hf_cache_dir" in cfg else None
     seed: int = int(getattr(cfg, "seed", 42))
     block_size: int = int(getattr(cfg, "block_size", 1024))
@@ -286,7 +286,13 @@ def main() -> None:
 
     os.makedirs(output_dir, exist_ok=True)
     if cache_dir:
-        os.makedirs(cache_dir, exist_ok=True)
+        # Ensure cache directory is at project root
+        cache_path = (
+            os.path.join(PROJECT_ROOT, cache_dir)
+            if not os.path.isabs(cache_dir)
+            else cache_dir
+        )
+        os.makedirs(cache_path, exist_ok=True)
 
     mlflow.set_experiment("peft_lora_typst_training")
 
@@ -328,16 +334,16 @@ def main() -> None:
         )
 
         # Tokenizer and Model
-        tokenizer = setup_tokenizer(model_name, cache_dir)
+        tokenizer = setup_tokenizer(model_name, cache_path)
         tokenized = tokenize_and_group(
             raw_data,
             tokenizer,
             block_size=block_size,
-            cache_dir=cache_dir,
+            cache_dir=cache_path,
             model_name=model_name,
             num_proc=num_proc,
         )
-        model = setup_lora_causal_lm(model_name, cfg, tokenizer, cache_dir)
+        model = setup_lora_causal_lm(model_name, cfg, tokenizer, cache_path)
 
         # Trainer
         training_args = setup_training_args(cfg, output_dir)
@@ -350,11 +356,11 @@ def main() -> None:
         mlflow.log_metrics(aux_metrics)
 
         # Optionally save adapter and tokenizer
-        adapter_dir = Path(output_dir) / "adapter"
+        adapter_dir = PROJECT_ROOT / output_dir / "adapter"
         try:
             adapter_dir.mkdir(parents=True, exist_ok=True)
             model.save_pretrained(adapter_dir)
-            tokenizer.save_pretrained(output_dir)
+            tokenizer.save_pretrained(PROJECT_ROOT / output_dir)
         except Exception as e:
             print(f"Warning: could not save adapter: {e}")
 
