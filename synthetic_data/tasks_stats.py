@@ -26,7 +26,7 @@ def main():
         print(f"Unified tasks CSV not found at: {csv_path}")
         return
 
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(csv_path, sep=";")
 
     total_tasks = len(df)
     print(f"Total tasks: {total_tasks}")

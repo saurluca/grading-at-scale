@@ -51,7 +51,7 @@ dspy.settings.configure(lm=lm)
 
 # read in data
 tasks_file_path = os.path.join(output_dir, cfg.tasks_filename)
-tasks = pd.read_csv(tasks_file_path)
+tasks = pd.read_csv(tasks_file_path, sep=";")
 
 
 # ------------------------------
@@ -127,7 +127,7 @@ def _build_kwargs_all(
 
 def _append_rows(rows, idx, task, answers, label: str):
     question = task["question"]
-    reference_answer = task["answer"]
+    reference_answer = task["reference_answer"]
     chunk_text = task["chunk_text"]
     topic = task["topic"]
     for ans in answers:
@@ -170,7 +170,7 @@ def generate_student_answers_df(
 
     for idx, task in tqdm(tasks_df.iterrows()):
         question = task["question"]
-        reference_answer = task["answer"]
+        reference_answer = task["reference_answer"]
         chunk_text = task["chunk_text"]
 
         for label, count in label_counts:
@@ -205,7 +205,7 @@ def generate_student_answers_df_per_question(
 
     for idx, task in tqdm(tasks_df.iterrows()):
         question = task["question"]
-        reference_answer = task["answer"]
+        reference_answer = task["reference_answer"]
         chunk_text = task["chunk_text"]
 
         label_counts = [
@@ -263,7 +263,7 @@ def generate_student_answers_df_all(
         return grouped
 
     questions_list = tasks_df["question"].astype(str).tolist()
-    reference_answers_list = tasks_df["answer"].astype(str).tolist()
+    reference_answers_list = tasks_df["reference_answer"].astype(str).tolist()
     reference_texts_list = tasks_df["chunk_text"].astype(str).tolist()
 
     correct_flat = []
@@ -468,7 +468,7 @@ print(f"Intended incorrect answers: {num_incorrect}")
 # Save the dataframe
 student_answers_filename = f"student_answers_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{cfg.create_mode}.csv"
 output_path = os.path.join(output_dir, student_answers_filename)
-student_answers_df.to_csv(output_path, index=False)
+student_answers_df.to_csv(output_path, index=False, sep=";")
 print(f"Saved student answers to: {output_path}")
 
 # %%

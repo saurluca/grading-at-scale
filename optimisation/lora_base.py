@@ -76,12 +76,21 @@ def main() -> None:
                 "weight_decay": float(cfg.training.weight_decay),
                 "eval_strategy": str(cfg.training.eval_strategy),
                 "seed": int(getattr(cfg, "seed", 42)),
+                "use_unseen_questions": bool(
+                    getattr(cfg.training, "use_unseen_questions", False)
+                ),
             }
         )
 
         # Load and preprocess data
         raw_data, label_order, label2id, id2label = load_and_preprocess_data(
-            dataset_csv, cache_dir, int(getattr(cfg, "seed", 42))
+            dataset_csv,
+            cache_dir,
+            int(getattr(cfg, "seed", 42)),
+            test_size=cfg.training.test_size,
+            use_unseen_questions=bool(
+                getattr(cfg.training, "use_unseen_questions", False)
+            ),
         )
 
         # Log dataset info
@@ -102,6 +111,10 @@ def main() -> None:
         model = setup_lora_model(base_model, cfg)
 
         model.print_trainable_parameters()
+
+        # dump the raw train and test datasets 1
+        raw_data["train"].to_csv(f"{output_dir}/train.csv", index=False, sep=";")
+        raw_data["test"].to_csv(f"{output_dir}/test.csv", index=False, sep=";")
 
         # Tokenize dataset
         tokenized_data = tokenize_dataset(raw_data, tokenizer)

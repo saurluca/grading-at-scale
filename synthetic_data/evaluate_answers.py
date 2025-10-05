@@ -327,7 +327,7 @@ generated_path = os.path.join(output_dir, generated_filename)
 if not os.path.exists(generated_path):
     raise FileNotFoundError(f"Generated answers CSV not found at: {generated_path}")
 
-student_answers_df = pd.read_csv(generated_path)
+student_answers_df = pd.read_csv(generated_path, sep=";")
 
 # Evaluate
 print("\n" + "=" * 50)
@@ -395,7 +395,7 @@ student_answers_df["predicted_label_name"] = student_answers_df["predicted_label
 )
 complete_output_filename = f"student_answers_with_predictions_c{cfg.num_correct_answers}_p{cfg.num_partial_answers}_i{cfg.num_incorrect_answers}_{cfg.model_name}_{mode_suffix}_{cfg.create_mode}.csv"
 complete_output_path = os.path.join(output_dir, complete_output_filename)
-student_answers_df.to_csv(complete_output_path, index=False)
+student_answers_df.to_csv(complete_output_path, index=False, sep=";")
 print(f"\nSaved complete results to: {complete_output_path}")
 
 # %%

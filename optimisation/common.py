@@ -2,7 +2,7 @@ import numpy as np
 import mlflow
 from typing import Dict, Any
 
-from datasets import load_dataset, ClassLabel
+from datasets import load_dataset, ClassLabel, DatasetDict
 from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,
@@ -129,12 +129,19 @@ def compute_metrics(eval_pred):
     return {"accuracy": accuracy}
 
 
-def load_and_preprocess_data(dataset_csv: str, cache_dir: str | None, seed: int = 42):
+def load_and_preprocess_data(
+    dataset_csv: str,
+    cache_dir: str | None,
+    seed: int = 42,
+    test_size: float = 0.5,
+    use_unseen_questions: bool = False,
+):
     print(f"Loading dataset from {dataset_csv}...")
     full_dataset = load_dataset(
         "csv",
         data_files={"data": dataset_csv},
         cache_dir=cache_dir,
+        sep=";",
     )["data"]
 
     # Labels mapping (order matters)
@@ -148,10 +155,45 @@ def load_and_preprocess_data(dataset_csv: str, cache_dir: str | None, seed: int 
     # Ensure 'labels' is a ClassLabel feature to support stratified splitting
     full_dataset = full_dataset.cast_column("labels", ClassLabel(names=label_order))
 
-    # use stratified split
-    raw = full_dataset.train_test_split(
-        test_size=0.5, seed=seed, stratify_by_column="labels"
-    )
+    if use_unseen_questions:
+        print("Splitting by questions (unseen questions in test set)...")
+        # Get unique questions
+        unique_questions = list(set(full_dataset["question"]))
+
+        # Randomly shuffle and split questions
+        rng = np.random.default_rng(seed)
+        rng.shuffle(unique_questions)
+
+        n_test_questions = int(len(unique_questions) * test_size)
+        test_questions = set(unique_questions[:n_test_questions])
+        train_questions = set(unique_questions[n_test_questions:])
+
+        print(
+            f"Number of unique questions: {len(unique_questions)} "
+            f"(train: {len(train_questions)}, test: {len(test_questions)})"
+        )
+
+        # Filter the full dataset based on question assignment
+        train_indices = [
+            i for i, q in enumerate(full_dataset["question"]) if q in train_questions
+        ]
+        test_indices = [
+            i for i, q in enumerate(full_dataset["question"]) if q in test_questions
+        ]
+
+        raw = DatasetDict(
+            {
+                "train": full_dataset.select(train_indices),
+                "test": full_dataset.select(test_indices),
+            }
+        )
+
+    else:
+        print("Splitting by samples (standard stratified split)...")
+        # use stratified split
+        raw = full_dataset.train_test_split(
+            test_size=test_size, seed=seed, stratify_by_column="labels"
+        )
 
     print(f"Number of training samples: {len(raw['train'])}")
     print(f"Number of test samples: {len(raw['test'])}")

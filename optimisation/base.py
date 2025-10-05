@@ -62,7 +62,10 @@ def main() -> None:
 
         # Load and preprocess data
         raw_data, label_order, label2id, id2label = load_and_preprocess_data(
-            dataset_csv, cache_dir, int(getattr(cfg, "seed", 42))
+            dataset_csv,
+            cache_dir,
+            int(getattr(cfg, "seed", 42)),
+            test_size=cfg.training.test_size,
         )
 
         # Log dataset info

@@ -81,7 +81,7 @@ os.makedirs(output_dir, exist_ok=True)
 
 # Save to CSV using config filename
 output_path = os.path.join(output_dir, cfg.tasks_filename)
-df.to_csv(output_path, index=False)
+df.to_csv(output_path, index=False, sep=";")
 
 print(f"Processed topics: {', '.join(os.path.splitext(f)[0] for f in common_files)}")
 print(f"Created CSV with {len(df)} rows")
