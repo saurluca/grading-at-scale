@@ -6,7 +6,7 @@ import pandas as pd
 import dspy
 from tqdm import tqdm
 from model_builder import build_lm
-from gen_signatures import (
+from signatures.gen_signatures import (
     CorrectAnswerGenerator,
     PartialAnswerGenerator,
     IncorrectAnswerGenerator,

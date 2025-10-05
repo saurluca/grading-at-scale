@@ -8,7 +8,7 @@ import dspy
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-from eval_signatures import GraderAll, GraderPerQuestion, GraderSingle
+from signatures.eval_signatures import GraderAll, GraderPerQuestion, GraderSingle
 from model_builder import build_lm
 from sklearn.metrics import (
     accuracy_score,
@@ -298,7 +298,7 @@ output_dir = os.path.normpath(
     os.path.join(Path(__file__).resolve().parent, "../", cfg.output_dir)
 )
 
-print(f"Using model {cfg.teacher_model_name} for evaluation")
+print(f"Using model {cfg.teacher_model_name} for evaluation on {cfg.data_path}")
 
 # Increase max_tokens
 max_tokens = 8192 if cfg.eval_mode == "all" else 512
