@@ -20,10 +20,10 @@ else:
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.append(str(_PROJECT_ROOT))
 
-from utils import load_config
+from omegaconf import OmegaConf
 
 # from synthetic_data.evaluate_answers import plot_confusion_matrix
-from optimisation.common import (
+from common import (
     setup_model_and_tokenizer,
     tokenize_dataset,
     detailed_evaluation,
@@ -33,7 +33,9 @@ from optimisation.common import (
 
 def main() -> None:
     print("Evaluating SciEntsBank classifier")
-    cfg = load_config("synthetic_data")
+    cfg = OmegaConf.load(
+        Path(__file__).resolve().parent.parent / "configs" / "synthetic_data.yaml"
+    )
 
     dataset_dir = os.path.normpath(
         os.path.join(_PROJECT_ROOT, cfg.scientsbank.dataset_dir)
@@ -143,29 +145,6 @@ def main() -> None:
     print(f"Evaluation metrics: {metrics}")
 
     detailed_evaluation(trainer, tokenized["test"], label_order)
-
-    # # Sample a few rows
-    # print("\n" + "=" * 50)
-    # print("SAMPLE RESULTS")
-    # print("=" * 50)
-    # sample_cols = [
-    #     c
-    #     for c in [
-    #         "question",
-    #         "student_answer",
-    #         "predicted_label_name",
-    #         "label",
-    #     ]
-    #     if c in df.columns
-    # ]
-    # print_df = df[sample_cols].sample(n=min(5, len(df)))
-    # for _, row in print_df.iterrows():
-    # print(
-    # f"Question: {row.get('question', '')}\n"
-    # f"Student Answer: {row.get('student_answer', '')}\n"
-    # f"Predicted Label: {row.get('predicted_label_name', '')}\n"
-    # f"True Label: {row.get('label', '')}\n" + ("-" * 40)
-    # )
 
 
 if __name__ == "__main__":

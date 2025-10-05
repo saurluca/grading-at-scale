@@ -25,8 +25,8 @@ else:
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.append(str(_PROJECT_ROOT))
 
-from utils import load_config
-from optimisation.common import LossLoggingCallback  # reuse logging callback
+from omegaconf import OmegaConf
+from common import LossLoggingCallback  # reuse logging callback
 
 load_dotenv()
 
@@ -271,7 +271,9 @@ def train_and_evaluate(
 
 def main() -> None:
     print("Loading config peft_lora...")
-    cfg = load_config("peft_lora_typst")
+    cfg = OmegaConf.load(
+        Path(__file__).resolve().parent.parent / "configs" / "peft_lora_typst.yaml"
+    )
 
     model_name: str = str(cfg.model_name)
     output_dir = str(Path(cfg.output_dir) / "typst_lora")

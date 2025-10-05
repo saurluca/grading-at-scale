@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-import sys
 
 import mlflow
 import torch
@@ -12,14 +11,7 @@ from transformers import (
 )
 from peft import LoraConfig, get_peft_model, TaskType, prepare_model_for_kbit_training
 
-if "__file__" in globals():
-    _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-else:
-    _PROJECT_ROOT = Path.cwd().parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(_PROJECT_ROOT))
-
-from utils import load_config
+from omegaconf import OmegaConf
 from common import (
     setup_training_args,
     setup_trainer,
@@ -68,7 +60,9 @@ def setup_quantized_lora_model(
 
 
 def main() -> None:
-    cfg = load_config("peft_lora")
+    cfg = OmegaConf.load(
+        Path(__file__).resolve().parent.parent / "configs" / "peft_lora.yaml"
+    )
 
     dataset_csv: str = str(cfg.dataset_csv)
     model_name: str = str(cfg.model_name)
