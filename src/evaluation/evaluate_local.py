@@ -116,7 +116,9 @@ def main() -> None:
             model = PeftModel.from_pretrained(base_model, adapter_path)
 
     # Tokenize
-    tokenized = tokenize_dataset(raw, tokenizer)
+    include_ref_ans = bool(getattr(cfg.tokenization, "include_reference_answer", False))
+    include_chunk = bool(getattr(cfg.tokenization, "include_chunk_text", False))
+    tokenized = tokenize_dataset(raw, tokenizer, include_ref_ans, include_chunk)
 
     # Trainer setup for evaluation only
     per_device_eval_batch_size = int(getattr(cfg.classifier_eval, "batch_size", 32))

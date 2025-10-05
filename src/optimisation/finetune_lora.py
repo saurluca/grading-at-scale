@@ -119,7 +119,13 @@ def main() -> None:
         raw_data["test"].to_csv(f"{output_dir}/test.csv", index=False, sep=";")
 
         # Tokenize dataset
-        tokenized_data = tokenize_dataset(raw_data, tokenizer)
+        include_ref_ans = bool(
+            getattr(cfg.tokenization, "include_reference_answer", False)
+        )
+        include_chunk = bool(getattr(cfg.tokenization, "include_chunk_text", False))
+        tokenized_data = tokenize_dataset(
+            raw_data, tokenizer, include_ref_ans, include_chunk
+        )
 
         # Setup training arguments and trainer
         training_args = setup_training_args(cfg, output_dir)

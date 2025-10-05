@@ -38,14 +38,19 @@ quantization:
 
 # Training hyperparameters
 training:
-  num_epochs: 1
+  num_epochs: 2
   batch_size:
-    train: 2
-    eval: 2
+    train: 1
+    eval: 1
   learning_rate: 0.0001
   weight_decay: 0.001
   eval_strategy: epoch
   logging_steps: 10
+
+# Tokenization settings
+tokenization:
+  include_reference_answer: true
+  include_chunk_text: false
 
 # MLflow tracking
 mlflow:

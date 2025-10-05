@@ -46,6 +46,11 @@ classifier_eval:
   batch_size: 8
   output_dir: ${paths.output_dir}/scientsbank_eval
 
+# Tokenization settings
+tokenization:
+  include_reference_answer: true
+  include_chunk_text: false
+
 # Output settings
 output:
   dir: ${paths.results_dir}
