@@ -26,7 +26,7 @@ def setup_lora_model(base_model, cfg):
         r=int(cfg.lora.r),
         lora_alpha=int(cfg.lora.alpha),
         lora_dropout=float(cfg.lora.dropout),
-        target_modules=list(cfg.lora.target_modules),
+        target_modules=cfg.lora.target_modules,
         # target_modules="all-linear",
         task_type=TaskType.SEQ_CLS,
         init_lora_weights=str(cfg.lora.init_weights),
