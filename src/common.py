@@ -340,12 +340,16 @@ def tokenize_dataset(
             batch, tokenizer, include_reference_answer, include_chunk_text
         )
 
+    # Get column names from any available split (e.g., "train" or "test")
+    first_split = next(iter(raw_data.keys()))
+    columns_to_remove = [
+        c for c in raw_data[first_split].column_names if c not in {"labels"}
+    ]
+
     return raw_data.map(
         tokenize_batch,
         batched=True,
-        remove_columns=[
-            c for c in raw_data["train"].column_names if c not in {"labels"}
-        ],
+        remove_columns=columns_to_remove,
     )
 
 
