@@ -9,10 +9,10 @@ model:
 
 # Dataset
 dataset:
-  # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
-  csv_path: data/synth/dataset_short.csv
+  csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
+  # csv_path: data/synth/dataset_short.csv
   # csv_path: data/SciEntsBank_3way/train.csv
-  test_size: 0.25
+  test_size: 0.5
   use_unseen_questions: true # Split by question ID, not random
   # dataset_name: SciEntsBank
   dataset_name: grading-at-scale
@@ -40,7 +40,7 @@ quantization:
 
 # Training hyperparameters
 training:
-  num_epochs: 1
+  num_epochs: 2
   batch_size:
     train: 4
     eval: 6

@@ -83,11 +83,7 @@ def main() -> None:
         )
     )
     # Ensure cache directory is at project root
-    cache_path = (
-        os.path.join(PROJECT_ROOT, cache_dir)
-        if not os.path.isabs(cache_dir)
-        else cache_dir
-    )
+    cache_path = os.path.join(PROJECT_ROOT, cache_dir)
     output_dir = os.path.normpath(
         os.path.join(
             PROJECT_ROOT,
@@ -100,20 +96,40 @@ def main() -> None:
         base_model_name, label2id, id2label, cache_path
     )
 
-    lora_adapter_dir = getattr(cfg.classifier_eval, "lora_adapter_dir", None)
+    # Load LoRA adapter (support both new and legacy config format)
     model = base_model
-    if lora_adapter_dir:
-        print(f"Loading LoRA adapter from: {lora_adapter_dir}")
+    adapter_config = getattr(cfg.classifier_eval, "adapter", None)
+
+    # New configuration format
+    adapter_source = getattr(adapter_config, "source", "local")
+    adapter_path_cfg = getattr(adapter_config, "path", None)
+
+    if adapter_source == "hub":
+        # Load from Hugging Face Hub
+        print(f"Loading LoRA adapter from Hugging Face Hub: {adapter_path_cfg}")
+        try:
+            model = PeftModel.from_pretrained(base_model, adapter_path_cfg)
+            print(f"Successfully loaded adapter from Hub: {adapter_path_cfg}")
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load adapter from Hugging Face Hub '{adapter_path_cfg}': {e}"
+            )
+    elif adapter_source == "local":
+        # Load from local path
         adapter_path = os.path.normpath(
-            os.path.join(PROJECT_ROOT, str(lora_adapter_dir))
+            os.path.join(PROJECT_ROOT, str(adapter_path_cfg))
         )
         if not os.path.exists(adapter_path):
             raise FileNotFoundError(
                 f"LoRA adapter directory not found at '{adapter_path}'. Exiting."
             )
-        else:
-            print(f"Loading LoRA adapter from: {adapter_path}")
-            model = PeftModel.from_pretrained(base_model, adapter_path)
+        print(f"Loading LoRA adapter from local path: {adapter_path}")
+        model = PeftModel.from_pretrained(base_model, adapter_path)
+        print("Successfully loaded adapter from local path")
+    else:
+        raise ValueError(
+            f"Invalid adapter source '{adapter_source}'. Must be 'local' or 'hub'."
+        )
 
     # Tokenize
     include_ref_ans = bool(getattr(cfg.tokenization, "include_reference_answer", False))

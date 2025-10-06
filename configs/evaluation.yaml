@@ -33,7 +33,14 @@ api_eval:
 # Local classifier evaluation (fine-tuned model on SciEntsBank)
 classifier_eval:
   base_model: meta-llama/Llama-3.2-1B-Instruct
-  lora_adapter_dir: ${paths.output_dir}/peft_output/adapter-meta-llama/Llama-3.2-1B-Instruct
+
+  # Adapter configuration
+  adapter:
+    source: hub # Options: 'local' or 'hub'
+    # For local: path to adapter directory
+    # path: ${paths.output_dir}/peft_output/adapter-meta-llama/Llama-3.2-1B-Instruct
+    # For hub: use Hugging Face Hub repo ID (e.g., 'username/model-name-lora-dataset')
+    path: saurluca/Llama-3.2-1B-Instruct-lora-grading-at-scale
 
   dataset:
     load_from_csv: true
@@ -54,6 +61,6 @@ tokenization:
 # Output settings
 output:
   dir: ${paths.results_dir}
-  save_predictions: true
-  save_confusion_matrix: true
-  save_classification_report: true
+  save_predictions: false
+  save_confusion_matrix: false
+  save_classification_report: false
