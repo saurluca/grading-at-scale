@@ -8,6 +8,7 @@ from omegaconf import OmegaConf
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
 
 from src.common import (  # noqa: E402
     setup_training_args,
@@ -25,8 +26,8 @@ def setup_lora_model(base_model, cfg):
         r=int(cfg.lora.r),
         lora_alpha=int(cfg.lora.alpha),
         lora_dropout=float(cfg.lora.dropout),
-        # target_modules=list(cfg.lora.target_modules),
-        target_modules="all-linear",
+        target_modules=list(cfg.lora.target_modules),
+        # target_modules="all-linear",
         task_type=TaskType.SEQ_CLS,
         init_lora_weights=str(cfg.lora.init_weights),
     )

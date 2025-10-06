@@ -8,6 +8,10 @@ from omegaconf import OmegaConf
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
+# Force the process to see only a single GPU (GPU 0) to avoid DataParallel
+# Must be set before importing any modules that might initialize CUDA/torch
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+
 from src.common import (  # noqa: E402
     load_and_preprocess_data,
     setup_model_and_tokenizer,

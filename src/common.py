@@ -1,6 +1,9 @@
 import numpy as np
 import mlflow
 from typing import Dict, Any
+import os
+
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
 
 from datasets import load_dataset, ClassLabel, DatasetDict
 from sklearn.metrics import (
@@ -23,6 +26,7 @@ from transformers import (
 
 # AutoConfig.register("new-model", NewModelConfig)
 # AutoModel.register(NewModelConfig, NewModel)
+
 
 
 class LossLoggingCallback(TrainerCallback):
@@ -298,7 +302,7 @@ def setup_training_args(cfg, output_dir: str):
         save_strategy=str(getattr(cfg.output, "save_strategy", "epoch")),
         logging_steps=int(getattr(cfg.training, "logging_steps", 10)),
         logging_strategy="steps",  # Log per step for training accuracy
-        load_best_model_at_end=True,
+        load_best_model_at_end=False,
         metric_for_best_model="accuracy",
         greater_is_better=True,
         report_to=[],
