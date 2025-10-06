@@ -66,7 +66,7 @@ def main() -> None:
     ds = ds.map(lambda x: map_labels(x, label2id))
 
     # Build a DatasetDict expected by downstream code; we evaluate on the provided CSV
-    raw: DatasetDict = DatasetDict({"train": ds, "test": ds})
+    raw: DatasetDict = DatasetDict({"test": ds})
 
     # Print a sample example
     print("An example from eval split:")
@@ -136,7 +136,6 @@ def main() -> None:
     trainer = Trainer(
         model=model,
         args=training_args,
-        # train_dataset=tokenized["train"],
         eval_dataset=tokenized["test"],
         processing_class=tokenizer,
         data_collator=data_collator,

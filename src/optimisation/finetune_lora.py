@@ -159,23 +159,38 @@ def main() -> None:
         # Log detailed evaluation metrics to MLflow
         mlflow.log_metrics(detailed_metrics)
 
-        # Save adapter and tokenizer
-        model.save_pretrained(
-            Path(output_dir) / f"adapter-{model_name}-{cfg.dataset.dataset_name}"
+        # Save adapter locally
+        adapter_path = (
+            Path(output_dir)
+            / f"adapter-{model_name.split('/')[-1]}-{cfg.dataset.dataset_name}"
         )
-        tokenizer.save_pretrained(
-            Path(output_dir) / f"tokenizer-{model_name}-{cfg.dataset.dataset_name}"
-        )
+        model.save_pretrained(adapter_path)
 
-        # Log model artifacts
+        # Push adapter to Hugging Face Hub
+        save_model = bool(getattr(cfg.output, "save_model", True))
+
+        if save_model:
+            print("\n Trying to save model to huggingface")
+
+            try:
+                repo_name = (
+                    f"{model_name.split('/')[-1]}-lora-{cfg.dataset.dataset_name}"
+                )
+                model.push_to_hub(repo_name)
+                print(f"Adapter successfully pushed to Hugging Face Hub: {repo_name}")
+                mlflow.log_param("hf_hub_repo", repo_name)
+            except Exception as e:
+                print(f"Warning: Could not push adapter to Hugging Face Hub: {e}")
+                mlflow.log_param("hf_hub_error", str(e))
+        # Log model artifacts (adapter only)
         mlflow.log_artifacts(
             Path(output_dir) / f"model_outputs-{model_name}", "model_outputs"
         )
-        mlflow.log_artifacts(Path(output_dir) / f"tokenizer-{model_name}", "tokenizer")
-        mlflow.log_artifacts(Path(output_dir) / f"adapter-{model_name}", "adapter")
+        mlflow.log_artifacts(str(adapter_path), "adapter")
 
-        # Log the trained model using MLflow transformers integration
+        # Log the LoRA adapter using MLflow transformers integration
         save_model = bool(getattr(cfg.output, "save_model", True))
+        print("")
         if save_model:
             try:
                 mlflow.transformers.log_model(
@@ -183,17 +198,19 @@ def main() -> None:
                         "model": model,
                         "tokenizer": tokenizer,
                     },
-                    name="model",
+                    name="lora_adapter",
                     task="text-classification",
                 )
-                print("Model logged to MLflow successfully")
+                print("LoRA adapter logged to MLflow successfully")
             except Exception as e:
-                print(f"Warning: Could not log model to MLflow: {e}")
+                print(f"Warning: Could not log LoRA adapter to MLflow: {e}")
         else:
-            print("Model saving to MLflow skipped (save_model=false in config)")
+            print("LoRA adapter saving to MLflow skipped (save_model=false in config)")
 
-        print("Training complete. Eval metrics:", metrics)
-        print(f"Adapter saved to: {Path(output_dir) / f'adapter-{model_name}'}")
+        print("\n\nTraining complete. Eval metrics:", metrics)
+        print(f"Adapter saved to: {adapter_path}")
+        if save_model:
+            print(f"Adapter pushed to HF Hub: {repo_name}")
         print(f"MLflow run ID: {mlflow.active_run().info.run_id}")
 
 

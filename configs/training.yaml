@@ -10,10 +10,12 @@ model:
 # Dataset
 dataset:
   # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
-  csv_path: data/SciEntsBank_3way/train.csv
-  test_size: 0.1
-  use_unseen_questions: false # Split by question ID, not random
-  dataset_name: SciEntsBank
+  csv_path: data/synth/dataset_short.csv
+  # csv_path: data/SciEntsBank_3way/train.csv
+  test_size: 0.25
+  use_unseen_questions: true # Split by question ID, not random
+  # dataset_name: SciEntsBank
+  dataset_name: grading-at-scale
 
 # Output
 output:
@@ -38,10 +40,10 @@ quantization:
 
 # Training hyperparameters
 training:
-  num_epochs: 2
+  num_epochs: 1
   batch_size:
-    train: 1
-    eval: 1
+    train: 4
+    eval: 6
   learning_rate: 0.0001
   weight_decay: 0.001
   eval_strategy: epoch
@@ -68,7 +70,7 @@ typst:
 
   # Hugging Face Hub settings
   hub:
-    push_to_hub: false
+    push_to_hub: true
     repo_id: null
     private: false
     token_env: HUGGING_FACE_HUB_TOKEN
