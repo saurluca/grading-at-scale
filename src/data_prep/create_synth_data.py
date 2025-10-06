@@ -36,7 +36,7 @@ tqdm.pandas(desc="Creating synthetic dataset")
 base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
 data_gen_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "data_generation.yaml")
 cfg = OmegaConf.merge(base_cfg, data_gen_cfg)
-output_dir = os.path.join(PROJECT_ROOT, cfg.output.dir)
+output_dir = os.path.join(PROJECT_ROOT, cfg.input.synth_dir)
 
 max_tokens = 4096 if cfg.generation.mode == "all" else 512
 

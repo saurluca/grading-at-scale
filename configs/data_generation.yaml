@@ -3,7 +3,7 @@
 # Note: This config is merged with base.yaml in the Python code
 
 # Model selection for generation and evaluation
-generation_model: gpt-4o-mini
+generation_model: gpt-4o
 teacher_model: gpt-4o-mini
 
 # Input/Output paths
@@ -11,6 +11,7 @@ input:
   tasks_filename: tasks_short.csv
   raw_tasks_dir: ${paths.raw_dir}/tasks
   raw_chunks_dir: ${paths.raw_dir}/chunks
+  synth_dir: ${paths.synth_dir}
 
 output:
   dir: ${paths.results_dir}
@@ -18,9 +19,9 @@ output:
 
 # Generation parameters
 generation:
-  num_correct_answers: 1
-  num_partial_answers: 1
-  num_incorrect_answers: 1
+  num_correct_answers: 2
+  num_partial_answers: 2
+  num_incorrect_answers: 2
   mode: per_question # single | per_question | all
   chain_of_thought: false
 
