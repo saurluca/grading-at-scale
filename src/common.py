@@ -151,7 +151,7 @@ def tokenize_fn(
             parts.append(f"Reference: {chunk}")
         texts.append("\n".join(parts))
 
-    return tokenizer(texts, truncation=True)
+    return tokenizer(texts, truncation=True, max_length=1024)
 
 
 def compute_metrics(eval_pred):
@@ -307,6 +307,7 @@ def setup_training_args(cfg, output_dir: str):
         greater_is_better=True,
         report_to=[],
         seed=int(getattr(cfg, "seed", 42)),
+        bf16=True,
         # Enable evaluation and logging
         save_total_limit=2,
     )
