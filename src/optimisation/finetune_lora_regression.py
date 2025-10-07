@@ -95,28 +95,40 @@ def setup_model_and_tokenizer_regression(
     return tokenizer, base_model
 
 
-def compute_metrics_regression(eval_pred):
-    """Compute regression metrics: MSE, MAE, RMSE."""
-    if hasattr(eval_pred, "predictions"):
-        predictions = eval_pred.predictions
-        labels = eval_pred.label_ids
-    else:
-        predictions, labels = eval_pred
+def compute_metrics_regression_with_weights(eval_dataset):
+    """Return a compute_metrics function that has access to weights for wRMSE calculation."""
+    
+    def compute_metrics(eval_pred):
+        """Compute regression metrics: RMSE and wRMSE."""
+        if hasattr(eval_pred, "predictions"):
+            predictions = eval_pred.predictions
+            labels = eval_pred.label_ids
+        else:
+            predictions, labels = eval_pred
 
-    # Predictions from regression head are shape (batch_size, 1), squeeze to (batch_size,)
-    if predictions.ndim > 1:
-        predictions = predictions.squeeze()
+        # Predictions from regression head are shape (batch_size, 1), squeeze to (batch_size,)
+        if predictions.ndim > 1:
+            predictions = predictions.squeeze()
 
-    # Compute metrics
-    mse = np.mean((predictions - labels) ** 2)
-    mae = np.mean(np.abs(predictions - labels))
-    rmse = np.sqrt(mse)
+        # Compute RMSE (used for training)
+        mse = np.mean((predictions - labels) ** 2)
+        rmse = np.sqrt(mse)
 
-    return {
-        "mse": float(mse),
-        "mae": float(mae),
-        "rmse": float(rmse),
-    }
+        # Compute wRMSE (weighted RMSE) for evaluation
+        # Get weights from the evaluation dataset
+        weights = np.array(eval_dataset["weight"])
+        
+        # Weighted squared errors
+        squared_errors = (predictions - labels) ** 2
+        weighted_mse = np.sum(weights * squared_errors) / np.sum(weights)
+        wrmse = np.sqrt(weighted_mse)
+
+        return {
+            "rmse": float(rmse),
+            "wrmse": float(wrmse),
+        }
+    
+    return compute_metrics
 
 
 def main() -> None:
@@ -209,26 +221,41 @@ def main() -> None:
             f"{output_dir}/test.csv", index=False, sep=";"
         )
 
-        # Tokenize dataset
+        # Tokenize dataset (keeping weight column for wRMSE calculation)
         include_ref_ans = bool(
             getattr(cfg.tokenization, "include_reference_answer", False)
         )
         include_chunk = bool(getattr(cfg.tokenization, "include_chunk_text", False))
-        tokenized_data = tokenize_dataset(
-            raw_data, tokenizer, include_ref_ans, include_chunk
+        
+        # Custom tokenization that preserves weight column
+        print("Tokenizing dataset...")
+        def tokenize_batch(batch):
+            from src.common import tokenize_fn
+            return tokenize_fn(batch, tokenizer, include_ref_ans, include_chunk)
+        
+        # Get column names from train split
+        columns_to_remove = [
+            c for c in raw_data["train"].column_names 
+            if c not in {"labels", "weight"}
+        ]
+        
+        tokenized_data = raw_data.map(
+            tokenize_batch,
+            batched=True,
+            remove_columns=columns_to_remove,
         )
 
         # Setup training arguments and trainer
         training_args = setup_training_args(cfg, output_dir)    
         # Override metric settings for regression
-        training_args.metric_for_best_model = "mse"
-        training_args.greater_is_better = False  # Lower MSE is better
+        training_args.metric_for_best_model = "rmse"
+        training_args.greater_is_better = False  # Lower RMSE is better
         
         trainer, loss_callback = setup_trainer(
             model, training_args, tokenized_data, tokenizer
         )
-        # Override compute_metrics for regression
-        trainer.compute_metrics = compute_metrics_regression
+        # Override compute_metrics for regression with weights for wRMSE
+        trainer.compute_metrics = compute_metrics_regression_with_weights(tokenized_data["test"])
 
         # Training
         print("Starting training...")
@@ -249,9 +276,8 @@ def main() -> None:
 
         # Print regression metrics
         print("\n\nRegression Evaluation Metrics:")
-        print(f"MSE: {metrics.get('eval_mse', 'N/A'):.4f}")
-        print(f"MAE: {metrics.get('eval_mae', 'N/A'):.4f}")
-        print(f"RMSE: {metrics.get('eval_rmse', 'N/A'):.4f}")
+        print(f"RMSE (training metric): {metrics.get('eval_rmse', 'N/A'):.4f}")
+        print(f"wRMSE (evaluation metric): {metrics.get('eval_wrmse', 'N/A'):.4f}")
 
         # Save adapter locally
         adapter_path = (

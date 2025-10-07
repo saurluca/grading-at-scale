@@ -11,17 +11,17 @@ model:
 # Dataset
 dataset:
   # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
-  csv_path: data/ASAG2024/train.csv
+  csv_path: data/ASAG2024/val.csv
   # csv_path: data/SciEntsBank_3way/train.csv
-  test_size: 0.1
-  use_unseen_questions: true # Split by question ID, not random
-  dataset_name: new
+  test_size: 0.2
+  use_unseen_questions: false # Split by question ID, not random
+  dataset_name: asag2024
   # dataset_name: grading-at-scale
 
 # Output
 output:
   dir: ${paths.output_dir}/peft_output
-  save_model: true
+  save_model: false
   save_strategy: epoch
 
 # LoRA configuration (used for lora, lora_quantized, lora_typst types)
@@ -32,28 +32,30 @@ lora:
   target_modules: "all-linear" # or ["q_proj", "v_proj"]
   init_weights: olora
 
-# Quantization (only used if model.type == lora_quantized)
+# Quantization settings for LoRA training
+# Set load_in_4bit to true to enable 4-bit quantization (QLoRA)
+# Set to false for full precision training
 quantization:
-  load_in_4bit: true
-  bnb_4bit_compute_dtype: float16
-  bnb_4bit_quant_type: nf4
-  bnb_4bit_use_double_quant: true
+  load_in_4bit: true  # Set to true to enable 4-bit quantization
+  bnb_4bit_compute_dtype: float16  # Options: float16, bfloat16
+  bnb_4bit_quant_type: nf4  # Options: nf4, fp4
+  bnb_4bit_use_double_quant: false  # Use double quantization for better accuracy
 
 # Training hyperparameters
 training:
-  num_epochs: 1
+  num_epochs: 10
   batch_size:
-    train: 1
-    eval: 1
-  gradient_accumulation_steps: 4
+    train: 16
+    eval: 16
+  # gradient_accumulation_steps: 4
   learning_rate: 0.0001
   weight_decay: 0.001
   eval_strategy: epoch
-  logging_steps: 10
+  logging_steps: 50
 
 # Tokenization settings
 tokenization:
-  include_reference_answer: false
+  include_reference_answer: true
   include_chunk_text: false
 
 # Regression-specific settings
@@ -65,6 +67,7 @@ regression:
 mlflow:
   experiment_name: peft_lora_training
   tracking_uri: null # Uses default (./mlruns)
+
 
 # Typst-specific settings (only used if model.type == lora_typst)
 typst:
