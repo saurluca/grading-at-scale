@@ -52,9 +52,13 @@ classifier_eval:
     # else load from dataset directory
     # dir: data/SciEntsBank_3way
     # split: test_ua
+    
+    # Data sampling for evaluation
+    sample_fraction: 0.25 # Use 100% of data by default (0.0-1.0)
+    sample_seed: 24       # Seed for reproducible sampling
 
-  batch_size: 128
-  output_dir: ${paths.output_dir}/gas_eval
+  batch_size: 32
+  output_dir: ${paths.output_dir}/asag2024_eval
 
 # Tokenization settings
 tokenization:

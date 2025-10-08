@@ -128,6 +128,46 @@ def map_labels(example: Dict[str, Any], label2id: Dict[str, int]) -> Dict[str, A
     return example
 
 
+def sample_dataset(dataset, sample_fraction: float, seed: int = 42):
+    """
+    Sample a fraction of the dataset using random sampling with a fixed seed.
+    
+    Args:
+        dataset: The dataset to sample from
+        sample_fraction: Fraction of data to use (0.0-1.0)
+        seed: Random seed for reproducibility
+    
+    Returns:
+        Sampled dataset if fraction < 1.0, otherwise original dataset
+    """
+    if sample_fraction < 0.0 or sample_fraction > 1.0:
+        raise ValueError(f"sample_fraction must be between 0.0 and 1.0, got {sample_fraction}")
+    
+    if sample_fraction == 1.0:
+        print(f"Using full dataset: {len(dataset)} samples")
+        return dataset
+    
+    # Calculate number of samples to select
+    total_samples = len(dataset)
+    n_samples = int(total_samples * sample_fraction)
+    
+    if n_samples == 0:
+        raise ValueError(f"sample_fraction {sample_fraction} results in 0 samples")
+    
+    # Use numpy random generator for reproducible sampling
+    rng = np.random.default_rng(seed)
+    indices = rng.choice(total_samples, size=n_samples, replace=False)
+    
+    # Sort indices to maintain some order
+    indices = sorted(indices)
+    
+    sampled_dataset = dataset.select(indices)
+    
+    print(f"Sampled dataset: {len(sampled_dataset)}/{total_samples} samples ({sample_fraction:.1%}) using seed {seed}")
+    
+    return sampled_dataset
+
+
 def tokenize_fn(
     batch: Dict[str, Any],
     tokenizer,

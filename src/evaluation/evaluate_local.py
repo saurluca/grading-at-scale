@@ -23,6 +23,7 @@ from src.common import (  # noqa: E402
     setup_model_and_tokenizer,
     tokenize_dataset,
     map_labels,
+    sample_dataset,
 )
 
 
@@ -64,6 +65,11 @@ def main() -> None:
 
     # Map labels to class indices
     ds = ds.map(lambda x: map_labels(x, label2id))
+
+    # Apply data sampling if configured
+    sample_fraction = float(getattr(cfg.classifier_eval.dataset, "sample_fraction", 1.0))
+    sample_seed = int(getattr(cfg.classifier_eval.dataset, "sample_seed", 42))
+    ds = sample_dataset(ds, sample_fraction, sample_seed)
 
     # Build a DatasetDict expected by downstream code; we evaluate on the provided CSV
     raw: DatasetDict = DatasetDict({"test": ds})
