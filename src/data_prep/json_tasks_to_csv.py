@@ -15,34 +15,26 @@ cfg = OmegaConf.merge(base_cfg, data_gen_cfg)
 # Resolve directories relative to project root
 output_dir = PROJECT_ROOT / cfg.output.dir
 raw_tasks_dir = PROJECT_ROOT / cfg.input.raw_tasks_dir
-raw_chunks_dir = PROJECT_ROOT / cfg.input.raw_chunks_dir
 
 """
-Unify all task/chunk JSON pairs under raw directories into a single CSV with columns:
-question, answer, chunk_text, topic (topic is the file stem, e.g., 'privacy').
+Process all task JSON files under raw tasks directory into a single CSV with columns:
+question, answer, chunk_text (empty), topic (topic is the file stem, e.g., 'language').
 """
 
-# Discover matching topic files present in both raw directories
+# Discover all task files in the raw tasks directory
 tasks_files = {f for f in os.listdir(raw_tasks_dir) if f.endswith(".json")}
-chunks_files = {f for f in os.listdir(raw_chunks_dir) if f.endswith(".json")}
-common_files = sorted(tasks_files.intersection(chunks_files))
+common_files = sorted(tasks_files)
 
 if not common_files:
-    print("No matching topic files found between tasks and chunks directories.")
+    print("No task files found in tasks directory.")
 
 data = []
 for filename in common_files:
     topic = os.path.splitext(filename)[0]
     tasks_json_path = os.path.join(raw_tasks_dir, filename)
-    chunks_json_path = os.path.join(raw_chunks_dir, filename)
 
     with open(tasks_json_path, "r") as f:
         tasks = json.load(f)
-    with open(chunks_json_path, "r") as f:
-        chunks = json.load(f)
-
-    # Map chunk_id to chunk_text
-    chunk_dict = {chunk["id"]: chunk.get("chunk_text", "") for chunk in chunks}
 
     # Extract rows
     for task in tasks:
@@ -54,8 +46,7 @@ for filename in common_files:
             correct = answer_options[0]
         answer = correct.get("answer", "") if correct else ""
 
-        chunk_id = task.get("chunk_id")
-        chunk_text = chunk_dict.get(chunk_id, "")
+        chunk_text = ""  # Empty chunk_text column
 
         data.append(
             {

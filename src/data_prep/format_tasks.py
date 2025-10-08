@@ -8,30 +8,28 @@ import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-df_neuro = pd.read_csv(
-    PROJECT_ROOT / "data" / "synth" / "neuro_tasks_with_explanation.csv", sep=";"
-)
+df_1 = pd.read_csv(PROJECT_ROOT / "data" / "synth" / "all_tasks.csv", sep=";")
 
-df_ai = pd.read_csv(
-    PROJECT_ROOT / "data" / "synth" / "ai_tasks_with_explanation.csv", sep=";"
-)
+df_2 = pd.read_csv(PROJECT_ROOT / "results" / "tasks_cnp.csv", sep=";")
 
 
 # %%
 
-print(f"len neuro: {len(df_neuro)}")
-print(f"len ai: {len(df_ai)}")
+print(f"len df 1: {len(df_1)}")
+print(f"len df 2 : {len(df_2)}")
+
+print(f"Columns df 1: {df_1.columns}")
+print(f"Columns df 2: {df_2.columns}")
 
 # merge both datasets
-df = pd.concat([df_neuro, df_ai])
-df.drop(columns=["answer"], inplace=True)
+df = pd.concat([df_1, df_2])
 print(f"len df: {len(df)}")
 
 df.head()
 
 
 # %%
-df.to_csv(PROJECT_ROOT / "data" / "synth" / "all_tasks.csv", index=False, sep=";")
+df.to_csv(PROJECT_ROOT / "data" / "synth" / "all_tasks_n.csv", index=False, sep=";")
 
 
 def preprocess_ai_tasks(df):

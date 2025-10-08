@@ -8,7 +8,7 @@ teacher_model: gpt-4o-mini
 
 # Input/Output paths
 input:
-  tasks_filename: tasks_short.csv
+  tasks_filename: all_tasks_n.csv
   raw_tasks_dir: ${paths.raw_dir}/tasks
   raw_chunks_dir: ${paths.raw_dir}/chunks
   synth_dir: ${paths.synth_dir}
@@ -19,9 +19,9 @@ output:
 
 # Generation parameters
 generation:
-  num_correct_answers: 2
-  num_partial_answers: 2
-  num_incorrect_answers: 2
+  num_correct_answers: 3
+  num_partial_answers: 3
+  num_incorrect_answers: 3
   mode: per_question # single | per_question | all
   chain_of_thought: false
 
