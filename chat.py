@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import dspy
-from synthetic_data.model_builder import build_lm, model_configs
+from src.model_builder import build_lm, model_configs
 
 load_dotenv()
 
