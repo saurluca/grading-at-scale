@@ -82,6 +82,7 @@ def main() -> None:
                 "per_device_eval_batch_size": int(cfg.training.batch_size.eval),
                 "learning_rate": float(cfg.training.learning_rate),
                 "weight_decay": float(cfg.training.weight_decay),
+                "gradient_accumulation_steps": int(getattr(cfg.training, "gradient_accumulation_steps", 1)),
                 "eval_strategy": str(cfg.training.eval_strategy),
                 "seed": int(getattr(cfg.project, "seed", 42)),
                 "use_unseen_questions": bool(

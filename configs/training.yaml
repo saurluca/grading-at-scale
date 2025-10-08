@@ -4,19 +4,19 @@
 
 # Model selection
 model:
-  base: meta-llama/Llama-3.2-1B-Instruct
+  base: meta-llama/Llama-3.2-3B-Instruct
   # base: swiss-ai/Apertus-8B-Instruct-2509
   type: lora # vanilla | lora | lora_quantized | lora_typst
 
 # Dataset
 dataset:
-  csv_path: data/synth/student_answers_c3_p3_i3_gpt-4o_per_question.csv
-  # csv_path: data/ASAG2024/val.csv
+  # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
+  csv_path: data/ASAG2024/train.csv
   # csv_path: data/SciEntsBank_3way/train.csv
-  test_size: 0.6
-  use_unseen_questions: true # Split by question ID, not random
-  # dataset_name: synth
-  dataset_name: grading-at-scale
+  test_size: 0.1
+  use_unseen_questions: false # Split by question ID, not random
+  dataset_name: asag2024
+  # dataset_name: grading-at-scale
 
 # Output
 output:
@@ -36,19 +36,20 @@ lora:
 # Set load_in_4bit to true to enable 4-bit quantization (QLoRA)
 # Set to false for full precision training
 quantization:
-  load_in_4bit: false # Set to true to enable 4-bit quantization
-  bnb_4bit_compute_dtype: float16 # Options: float16, bfloat16
-  bnb_4bit_quant_type: nf4 # Options: nf4, fp4
-  bnb_4bit_use_double_quant: false # Use double quantization for better accuracy
+  load_in_4bit: false  # Set to true to enable 4-bit quantization
+  bnb_4bit_compute_dtype: float16  # Options: float16, bfloat16
+  bnb_4bit_quant_type: nf4  # Options: nf4, fp4
+  bnb_4bit_use_double_quant: false  # Use double quantization for better accuracy
 
 # Training hyperparameters
 training:
   num_epochs: 3
+  num_epochs: 3
   batch_size:
     train: 4
     eval: 4
-  # gradient_accumulation_steps: 4
-  learning_rate: 0.0001
+  gradient_accumulation_steps: 1
+  learning_rate: 0.001
   weight_decay: 0.001
   eval_strategy: epoch
   logging_steps: 50

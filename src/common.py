@@ -362,6 +362,7 @@ def setup_training_args(cfg, output_dir: str):
         bf16=True,
         # Enable evaluation and logging
         save_total_limit=2,
+        gradient_accumulation_steps=int(cfg.training.gradient_accumulation_steps),
     )
 
 
