@@ -180,6 +180,7 @@ def load_and_preprocess_data(
     seed: int = 42,
     test_size: float = 0.5,
     use_unseen_questions: bool = False,
+    topics: list[str] | None = None,
 ):
     print(f"Loading dataset from {dataset_csv} ...")
     full_dataset = load_dataset(
@@ -188,6 +189,12 @@ def load_and_preprocess_data(
         cache_dir=cache_dir,
         sep=";",
     )["data"]
+
+    # Count samples per topic before any filtering
+    topic_counts = {}
+    for topic in full_dataset["topic"]:
+        topic_counts[topic] = topic_counts.get(topic, 0) + 1
+    print(f"\nOriginal dataset topic distribution: {topic_counts}")
 
     # Labels mapping (order matters)
     label_order = ["incorrect", "partial", "correct"]
@@ -200,45 +207,116 @@ def load_and_preprocess_data(
     # Ensure 'labels' is a ClassLabel feature to support stratified splitting
     full_dataset = full_dataset.cast_column("labels", ClassLabel(names=label_order))
 
-    if use_unseen_questions:
-        print("Splitting by questions (unseen questions in test set)...")
-        # Get unique questions
-        unique_questions = list(set(full_dataset["question"]))
+    # Handle topic filtering and train/test split
+    if topics is not None and len(topics) > 0:
+        print(f"Topic filtering enabled for topics: {topics}")
+        
+        # Separate data into in-topic and out-of-topic groups
+        def _is_in_topic(example):
+            return example["topic"] in topics
+        
+        in_topic_indices = [i for i, example in enumerate(full_dataset) if _is_in_topic(example)]
+        out_of_topic_indices = [i for i, example in enumerate(full_dataset) if not _is_in_topic(example)]
+        
+        in_topic_data = full_dataset.select(in_topic_indices)
+        out_of_topic_data = full_dataset.select(out_of_topic_indices)
+        
+        print(f"Topic separation: {len(in_topic_data)} in-topic samples, {len(out_of_topic_data)} out-of-topic samples")
+        print(f"Out-of-topic samples will be added to test set")
+        
+        # Apply split logic to in-topic data only
+        if use_unseen_questions:
+            print("Splitting in-topic data by questions (unseen questions in test set)...")
+            # Get unique questions from in-topic data
+            unique_questions = list(set(in_topic_data["question"]))
 
-        # Randomly shuffle and split questions
-        rng = np.random.default_rng(seed)
-        rng.shuffle(unique_questions)
+            # Randomly shuffle and split questions
+            rng = np.random.default_rng(seed)
+            rng.shuffle(unique_questions)
 
-        n_test_questions = int(len(unique_questions) * test_size)
-        test_questions = set(unique_questions[:n_test_questions])
-        train_questions = set(unique_questions[n_test_questions:])
+            n_test_questions = int(len(unique_questions) * test_size)
+            test_questions = set(unique_questions[:n_test_questions])
+            train_questions = set(unique_questions[n_test_questions:])
 
-        print(
-            f"Number of unique questions: {len(unique_questions)} "
-            f"(train: {len(train_questions)}, test: {len(test_questions)})"
-        )
+            print(
+                f"Number of unique questions in in-topic data: {len(unique_questions)} "
+                f"(train: {len(train_questions)}, test: {len(test_questions)})"
+            )
 
-        # Filter the full dataset based on question assignment
-        train_indices = [
-            i for i, q in enumerate(full_dataset["question"]) if q in train_questions
-        ]
-        test_indices = [
-            i for i, q in enumerate(full_dataset["question"]) if q in test_questions
-        ]
+            # Filter the in-topic dataset based on question assignment
+            train_indices = [
+                i for i, q in enumerate(in_topic_data["question"]) if q in train_questions
+            ]
+            test_indices = [
+                i for i, q in enumerate(in_topic_data["question"]) if q in test_questions
+            ]
 
+            in_topic_split = DatasetDict(
+                {
+                    "train": in_topic_data.select(train_indices),
+                    "test": in_topic_data.select(test_indices),
+                }
+            )
+
+        else:
+            print("Splitting in-topic data by samples (standard stratified split)...")
+            # use stratified split on in-topic data
+            in_topic_split = in_topic_data.train_test_split(
+                test_size=test_size, seed=seed, stratify_by_column="labels"
+            )
+        
+        # Combine test sets: out-of-topic data + test portion from in-topic split
+        from datasets import concatenate_datasets
+        combined_test = concatenate_datasets([out_of_topic_data, in_topic_split["test"]])
+        
         raw = DatasetDict(
             {
-                "train": full_dataset.select(train_indices),
-                "test": full_dataset.select(test_indices),
+                "train": in_topic_split["train"],
+                "test": combined_test,
             }
         )
-
+        
     else:
-        print("Splitting by samples (standard stratified split)...")
-        # use stratified split
-        raw = full_dataset.train_test_split(
-            test_size=test_size, seed=seed, stratify_by_column="labels"
-        )
+        # No topic filtering - apply split logic to full dataset
+        if use_unseen_questions:
+            print("Splitting by questions (unseen questions in test set)...")
+            # Get unique questions
+            unique_questions = list(set(full_dataset["question"]))
+
+            # Randomly shuffle and split questions
+            rng = np.random.default_rng(seed)
+            rng.shuffle(unique_questions)
+
+            n_test_questions = int(len(unique_questions) * test_size)
+            test_questions = set(unique_questions[:n_test_questions])
+            train_questions = set(unique_questions[n_test_questions:])
+
+            print(
+                f"Number of unique questions: {len(unique_questions)} "
+                f"(train: {len(train_questions)}, test: {len(test_questions)})"
+            )
+
+            # Filter the full dataset based on question assignment
+            train_indices = [
+                i for i, q in enumerate(full_dataset["question"]) if q in train_questions
+            ]
+            test_indices = [
+                i for i, q in enumerate(full_dataset["question"]) if q in test_questions
+            ]
+
+            raw = DatasetDict(
+                {
+                    "train": full_dataset.select(train_indices),
+                    "test": full_dataset.select(test_indices),
+                }
+            )
+
+        else:
+            print("Splitting by samples (standard stratified split)...")
+            # use stratified split
+            raw = full_dataset.train_test_split(
+                test_size=test_size, seed=seed, stratify_by_column="labels"
+            )
 
     print(f"Number of training samples: {len(raw['train'])}")
     print(f"Number of test samples: {len(raw['test'])}")
@@ -400,8 +478,9 @@ def tokenize_dataset(
 
     # Get column names from any available split (e.g., "train" or "test")
     first_split = next(iter(raw_data.keys()))
+    # Keep labels and topic columns, remove all others
     columns_to_remove = [
-        c for c in raw_data[first_split].column_names if c not in {"labels"}
+        c for c in raw_data[first_split].column_names if c not in {"labels", "topic"}
     ]
 
     return raw_data.map(
@@ -514,5 +593,42 @@ def detailed_evaluation(trainer, test_dataset, label_order):
                 f"{label}_support": int(support[i]),
             }
         )
+
+    # Add per-topic micro F1 scores for all topics in test set
+    print("\nPer-topic Micro F1 Scores:")
+    print("-" * 40)
+    
+    # Check if topic column exists in test dataset
+    if "topic" in test_dataset.column_names:
+        # Get topic information from the test dataset
+        test_topics = test_dataset["topic"]
+        
+        # Get all unique topics in the test set
+        unique_test_topics = list(set(test_topics))
+        
+        for topic in unique_test_topics:
+            # Find indices where the topic matches
+            topic_indices = [i for i, t in enumerate(test_topics) if t == topic]
+            
+            if len(topic_indices) == 0:
+                print(f"{topic}: No samples found")
+                evaluation_metrics[f"{topic}_micro_f1"] = 0.0
+                evaluation_metrics[f"{topic}_support"] = 0
+                continue
+            
+            # Get predictions and labels for this topic
+            topic_y_true = [y_true[i] for i in topic_indices]
+            topic_y_pred = [y_pred[i] for i in topic_indices]
+            
+            # Calculate micro F1 for this topic
+            topic_precision, topic_recall, topic_f1, topic_support = precision_recall_fscore_support(
+                topic_y_true, topic_y_pred, average="micro", zero_division=0
+            )
+            
+            print(f"{topic}: {topic_f1:.4f} (support: {len(topic_indices)})")
+            evaluation_metrics[f"{topic}_micro_f1"] = topic_f1
+            evaluation_metrics[f"{topic}_support"] = len(topic_indices)
+    else:
+        print("Warning: Topic column not found in test dataset. Skipping per-topic evaluation.")
 
     return evaluation_metrics

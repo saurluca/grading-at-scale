@@ -11,12 +11,15 @@ model:
 # Dataset
 dataset:
   # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
-  csv_path: data/ASAG2024/train.csv
+  csv_path: data/ASAG2024/val.csv
+  # csv_path: data/synth/full_gas.csv
   # csv_path: data/SciEntsBank_3way/train.csv
-  test_size: 0.1
+  test_size: 0.2
   use_unseen_questions: false # Split by question ID, not random
   dataset_name: asag2024
   # dataset_name: grading-at-scale
+  # topics: ["language", "ai", "neuro", "memory"] # null or empty list = all topics; otherwise ["neuro", "ai", "language", "memory"]
+  topics: null
 
 # Output
 output:
@@ -28,7 +31,7 @@ output:
 lora:
   r: 16
   alpha: 16
-  dropout: 0.05
+  dropout: 0.1
   target_modules: "all-linear" # or ["q_proj", "v_proj"]
   init_weights: olora
 
@@ -44,25 +47,19 @@ quantization:
 # Training hyperparameters
 training:
   num_epochs: 3
-  num_epochs: 3
   batch_size:
     train: 4
     eval: 4
-  gradient_accumulation_steps: 1
-  learning_rate: 0.001
+  gradient_accumulation_steps: 2
+  learning_rate: 0.0001
   weight_decay: 0.001
   eval_strategy: epoch
-  logging_steps: 50
+  logging_steps: 20
 
 # Tokenization settings
 tokenization:
-  include_reference_answer: false
+  include_reference_answer: true
   include_chunk_text: false
-
-# Regression-specific settings
-regression:
-  enabled: false # Set to true to use regression mode (num_labels=1)
-  target_column: normalized_grade # Column to use as regression target (values 0-1)
 
 # MLflow tracking
 mlflow:

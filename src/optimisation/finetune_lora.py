@@ -67,6 +67,9 @@ def main() -> None:
 
     run_name_suffix = "qlora" if ("quantization" in cfg and cfg.quantization.get("load_in_4bit", False)) else "lora"
     with mlflow.start_run(run_name=f"{run_name_suffix}_training_{model_name.split('/')[-1]}"):
+        # Extract topics from config
+        topics = getattr(cfg.dataset, "topics", None)
+        
         # Log parameters
         mlflow.log_params(
             {
@@ -89,6 +92,7 @@ def main() -> None:
                     getattr(cfg.dataset, "use_unseen_questions", False)
                 ),
                 "save_model": bool(getattr(cfg.output, "save_model", True)),
+                "topics": str(topics) if topics is not None else "all",
             }
         )
 
@@ -101,6 +105,7 @@ def main() -> None:
             use_unseen_questions=bool(
                 getattr(cfg.dataset, "use_unseen_questions", False)
             ),
+            topics=topics,
         )
 
         # Log dataset info
@@ -233,7 +238,7 @@ def main() -> None:
         else:
             print("LoRA adapter saving to MLflow skipped (save_model=false in config)")
 
-        print("\n\nTraining complete. Eval metrics:", metrics)
+        print("\n\nTraining completed")
         print(f"Adapter saved to: {adapter_path}")
         if save_model:
             print(f"Adapter pushed to HF Hub: {repo_name}")

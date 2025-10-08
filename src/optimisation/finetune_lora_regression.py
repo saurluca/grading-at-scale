@@ -305,7 +305,7 @@ def main() -> None:
         # Log model artifacts
         mlflow.log_artifacts(str(adapter_path), "adapter")
 
-        print("\n\nTraining complete. Eval metrics:", metrics)
+        print("\n\nTraining completed")
         print(f"Adapter saved to: {adapter_path}")
         print(f"MLflow run ID: {mlflow.active_run().info.run_id}")
 
