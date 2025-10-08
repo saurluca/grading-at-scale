@@ -24,6 +24,7 @@ generation:
   num_incorrect_answers: 3
   mode: per_question # single | per_question | all
   chain_of_thought: false
+  cache: true
 
   # Control what information is passed to generators
   pass_reference_for:

@@ -4,7 +4,7 @@
 
 # API-based evaluation (DSPy graders)
 api_eval:
-  model: gpt-4o-mini
+  model: llama3.2:1b
   temperature: 0.6
   cache: true
   max_tokens: 512
@@ -14,13 +14,13 @@ api_eval:
 
   # What to pass to grader
   pass_reference: false
-  pass_reference_answer: true
+  pass_reference_answer: false
 
   # Data source
   data:
     infer_path: false # Auto-infer from generation config
     # manual_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv # our dataset
-    manual_path: data/SciEntsBank_3way/test_u.csv # scientsbank dataset
+    manual_path: data/synth/full_gas.csv # scientsbank dataset
 
     # If infer_path=true, uses generation config to build filename
     # Format: student_answers_c{num_correct}_p{num_partial}_i{num_incorrect}_{model}_{mode}.csv
@@ -32,30 +32,31 @@ api_eval:
 
 # Local classifier evaluation (fine-tuned model on SciEntsBank)
 classifier_eval:
-  base_model: meta-llama/Llama-3.2-3B-Instruct
+  base_model: meta-llama/Llama-3.2-1B-Instruct
 
   # Adapter configuration
   adapter:
-    source: local # Options: 'local' or 'hub'
+    source: none # Options: 'local', 'hub', or 'none' (for base model only)
     # For local: path to adapter directory
     path: ${paths.output_dir}/peft_output/adapter-Llama-3.2-3B-Instruct-SciEntsBank
     # For hub: use Hugging Face Hub repo ID (e.g., 'username/model-name-lora-dataset')
     # path: saurluca/Llama-3.2-1B-Instruct-lora-grading-at-scale
+    # For none: no adapter will be loaded, base model will be used directly
 
   dataset:
     load_from_csv: true
     # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
-    csv_path: data/SciEntsBank_3way/test_ud.csv
+    csv_path: data/synth/full_gas.csv
     # else load from dataset directory
     # dir: data/SciEntsBank_3way
     # split: test_ua
 
-  batch_size: 32
-  output_dir: ${paths.output_dir}/scientsbank_eval
+  batch_size: 128
+  output_dir: ${paths.output_dir}/gas_eval
 
 # Tokenization settings
 tokenization:
-  include_reference_answer: true
+  include_reference_answer: false
   include_chunk_text: false
 
 # Output settings

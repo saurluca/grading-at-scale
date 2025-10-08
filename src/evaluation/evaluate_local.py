@@ -104,7 +104,11 @@ def main() -> None:
     adapter_source = getattr(adapter_config, "source", "local")
     adapter_path_cfg = getattr(adapter_config, "path", None)
 
-    if adapter_source == "hub":
+    if adapter_source == "none":
+        # Use base model without any adapter
+        print("Using base model without adapter")
+        model = base_model
+    elif adapter_source == "hub":
         # Load from Hugging Face Hub
         print(f"Loading LoRA adapter from Hugging Face Hub: {adapter_path_cfg}")
         try:
@@ -128,7 +132,7 @@ def main() -> None:
         print("Successfully loaded adapter from local path")
     else:
         raise ValueError(
-            f"Invalid adapter source '{adapter_source}'. Must be 'local' or 'hub'."
+            f"Invalid adapter source '{adapter_source}'. Must be 'local', 'hub', or 'none'."
         )
 
     # Tokenize

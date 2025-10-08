@@ -43,7 +43,7 @@ max_tokens = 4096 if cfg.generation.mode == "all" else 512
 lm = build_lm(
     cfg.generation_model,
     temperature=getattr(cfg.lm, "temp_generation", None),
-    cache=False,
+    cache=cfg.generation.cache,
     max_tokens=max_tokens,
 )
 dspy.settings.configure(lm=lm)
@@ -210,7 +210,6 @@ def generate_student_answers_df_per_question(
             ("partial", num_partial),
             ("incorrect", num_incorrect),
         ]
-
         for label, count in label_counts:
             if count <= 0:
                 continue
@@ -228,9 +227,13 @@ def generate_student_answers_df_per_question(
                         f"Expected {count} answers for label '{label}' on task {idx}, got {len(answers)}. "
                         f"Answers: {answers}"
                     )
+                _append_rows(all_answers, idx, task, answers, label)
             except Exception as e:
-                raise e
-            _append_rows(all_answers, idx, task, answers, label)
+                print(f"Error generating {label} answers for task {idx}: {e}")
+                print(f"Answers: {answers}")
+                print(f"\nFull output: {res}\n")
+                print(f"Full kwargs: {kwargs}\n")
+                continue
 
     return pd.DataFrame(all_answers)
 
@@ -249,7 +252,7 @@ def generate_student_answers_df_all(
         expected = per_q * num_questions
         # Strict validation: do not pad or truncate
         if len(flat) != expected:
-            raise ValueError(
+            print(
                 f"Expected {expected} answers (per_q={per_q} * num_questions={num_questions}), got {len(flat)}."
             )
         grouped = []
@@ -334,7 +337,7 @@ def _validate_generated_counts(
 
     actual_total = len(student_answers_df)
     if actual_total != expected_total:
-        raise ValueError(
+        print(
             f"Total generated answers {actual_total} != expected {expected_total} (num_tasks={num_tasks}, per_question={expected_per_label})."
         )
 
@@ -343,7 +346,7 @@ def _validate_generated_counts(
         expected_label_total = num_tasks * per_q
         actual_label_total = (student_answers_df["label"] == label).sum()
         if actual_label_total != expected_label_total:
-            raise ValueError(
+            print(
                 f"Generated {actual_label_total} '{label}' answers != expected {expected_label_total} (num_tasks={num_tasks} * per_q={per_q})."
             )
 

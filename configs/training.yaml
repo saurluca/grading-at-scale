@@ -10,18 +10,18 @@ model:
 
 # Dataset
 dataset:
-  # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
-  csv_path: data/ASAG2024/val.csv
+  csv_path: data/synth/student_answers_c3_p3_i3_gpt-4o_per_question.csv
+  # csv_path: data/ASAG2024/val.csv
   # csv_path: data/SciEntsBank_3way/train.csv
-  test_size: 0.2
-  use_unseen_questions: false # Split by question ID, not random
-  dataset_name: asag2024
-  # dataset_name: grading-at-scale
+  test_size: 0.6
+  use_unseen_questions: true # Split by question ID, not random
+  # dataset_name: synth
+  dataset_name: grading-at-scale
 
 # Output
 output:
   dir: ${paths.output_dir}/peft_output
-  save_model: false
+  save_model: true
   save_strategy: epoch
 
 # LoRA configuration (used for lora, lora_quantized, lora_typst types)
@@ -36,17 +36,17 @@ lora:
 # Set load_in_4bit to true to enable 4-bit quantization (QLoRA)
 # Set to false for full precision training
 quantization:
-  load_in_4bit: true  # Set to true to enable 4-bit quantization
-  bnb_4bit_compute_dtype: float16  # Options: float16, bfloat16
-  bnb_4bit_quant_type: nf4  # Options: nf4, fp4
-  bnb_4bit_use_double_quant: false  # Use double quantization for better accuracy
+  load_in_4bit: false # Set to true to enable 4-bit quantization
+  bnb_4bit_compute_dtype: float16 # Options: float16, bfloat16
+  bnb_4bit_quant_type: nf4 # Options: nf4, fp4
+  bnb_4bit_use_double_quant: false # Use double quantization for better accuracy
 
 # Training hyperparameters
 training:
-  num_epochs: 10
+  num_epochs: 3
   batch_size:
-    train: 16
-    eval: 16
+    train: 4
+    eval: 4
   # gradient_accumulation_steps: 4
   learning_rate: 0.0001
   weight_decay: 0.001
@@ -55,19 +55,18 @@ training:
 
 # Tokenization settings
 tokenization:
-  include_reference_answer: true
+  include_reference_answer: false
   include_chunk_text: false
 
 # Regression-specific settings
 regression:
-  enabled: true # Set to true to use regression mode (num_labels=1)
+  enabled: false # Set to true to use regression mode (num_labels=1)
   target_column: normalized_grade # Column to use as regression target (values 0-1)
 
 # MLflow tracking
 mlflow:
   experiment_name: peft_lora_training
   tracking_uri: null # Uses default (./mlruns)
-
 
 # Typst-specific settings (only used if model.type == lora_typst)
 typst:
