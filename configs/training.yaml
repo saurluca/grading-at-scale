@@ -61,7 +61,7 @@ training:
 
 # Tokenization settings
 tokenization:
-  include_reference_answer: true # true
+  include_reference_answer: false # true
   include_chunk_text: false # false
 
 # MLflow tracking
