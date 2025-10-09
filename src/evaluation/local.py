@@ -137,7 +137,7 @@ def main() -> None:
         per_device_eval_batch_size=per_device_eval_batch_size,
         do_train=False,
         do_eval=True,
-        report_to=[],
+        report_to="mlflow",
         logging_strategy="no",
     )
 

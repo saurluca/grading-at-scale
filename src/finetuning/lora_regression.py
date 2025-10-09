@@ -134,7 +134,11 @@ def compute_metrics_regression_with_weights(eval_dataset):
 def main() -> None:
     print("Loading config...")
     base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
-    training_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "training.yaml")
+    training_cfg_path = os.environ.get(
+        "TRAINING_CONFIG_PATH",
+        str(PROJECT_ROOT / "configs" / "training.yaml"),
+    )
+    training_cfg = OmegaConf.load(training_cfg_path)
     cfg = OmegaConf.merge(base_cfg, training_cfg)
 
     dataset_csv: str = str(PROJECT_ROOT / cfg.dataset.csv_path)
@@ -311,6 +315,9 @@ def main() -> None:
 
         # Log model artifacts
         mlflow.log_artifacts(str(adapter_path), "adapter")
+        
+        # Log the full training configuration as an artifact
+        mlflow.log_artifact(PROJECT_ROOT / "configs" / "training.yaml", "config")
 
         print("\n\nTraining completed")
         print(f"Adapter saved to: {adapter_path}")
