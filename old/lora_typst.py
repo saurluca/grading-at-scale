@@ -23,7 +23,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 
-
 load_dotenv()
 
 
@@ -236,7 +235,6 @@ def train_and_evaluate(
         eval_dataset=tokenized_data["test"],
         tokenizer=tokenizer,
         data_collator=data_collator,
-        callbacks=[loss_callback],
     )
 
     print("Starting training...")
@@ -259,14 +257,7 @@ def train_and_evaluate(
     if "eval_loss" in eval_metrics and math.isfinite(eval_metrics["eval_loss"]):
         eval_metrics["perplexity"] = math.exp(eval_metrics["eval_loss"])  # type: ignore[index]
 
-    # Collect final epoch losses from callback if available
-    aux_metrics: Dict[str, Any] = {}
-    if loss_callback.train_losses:
-        aux_metrics["final_train_loss"] = loss_callback.train_losses[-1]
-    if loss_callback.eval_losses:
-        aux_metrics["final_eval_loss"] = loss_callback.eval_losses[-1]
-
-    return eval_metrics, aux_metrics
+    return eval_metrics
 
 
 def main() -> None:

@@ -14,7 +14,6 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
 from datasets import load_dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from src.common import (
-    tokenize_dataset,
     setup_training_args,
     setup_trainer,
 )
@@ -55,7 +54,9 @@ def load_and_preprocess_data_regression(
     # Show statistics of labels
     train_labels = np.array(raw["train"]["labels"])
     test_labels = np.array(raw["test"]["labels"])
-    print(f"Train labels - mean: {train_labels.mean():.3f}, std: {train_labels.std():.3f}")
+    print(
+        f"Train labels - mean: {train_labels.mean():.3f}, std: {train_labels.std():.3f}"
+    )
     print(f"Test labels - mean: {test_labels.mean():.3f}, std: {test_labels.std():.3f}")
 
     return raw
@@ -97,7 +98,7 @@ def setup_model_and_tokenizer_regression(
 
 def compute_metrics_regression_with_weights(eval_dataset):
     """Return a compute_metrics function that has access to weights for wRMSE calculation."""
-    
+
     def compute_metrics(eval_pred):
         """Compute regression metrics: RMSE and wRMSE."""
         if hasattr(eval_pred, "predictions"):
@@ -117,7 +118,7 @@ def compute_metrics_regression_with_weights(eval_dataset):
         # Compute wRMSE (weighted RMSE) for evaluation
         # Get weights from the evaluation dataset
         weights = np.array(eval_dataset["weight"])
-        
+
         # Weighted squared errors
         squared_errors = (predictions - labels) ** 2
         weighted_mse = np.sum(weights * squared_errors) / np.sum(weights)
@@ -127,7 +128,7 @@ def compute_metrics_regression_with_weights(eval_dataset):
             "rmse": float(rmse),
             "wrmse": float(wrmse),
         }
-    
+
     return compute_metrics
 
 
@@ -179,15 +180,15 @@ def main() -> None:
                 "per_device_eval_batch_size": int(cfg.training.batch_size.eval),
                 "learning_rate": float(cfg.training.learning_rate),
                 "weight_decay": float(cfg.training.weight_decay),
-                "gradient_accumulation_steps": int(cfg.training.gradient_accumulation_steps),
+                "gradient_accumulation_steps": int(
+                    cfg.training.gradient_accumulation_steps
+                ),
                 "eval_strategy": str(cfg.training.eval_strategy),
                 "seed": int(getattr(cfg.project, "seed", 42)),
                 "include_reference_answer": bool(
                     getattr(cfg.tokenization, "include_reference_answer", False)
                 ),
-                "load_in_4bit": bool(
-                    getattr(cfg.quantization, "load_in_4bit", False)
-                ),
+                "load_in_4bit": bool(getattr(cfg.quantization, "load_in_4bit", False)),
             }
         )
 
@@ -238,19 +239,20 @@ def main() -> None:
             getattr(cfg.tokenization, "include_reference_answer", False)
         )
         include_chunk = bool(getattr(cfg.tokenization, "include_chunk_text", False))
-        
+
         # Custom tokenization that preserves weight column
         print("Tokenizing dataset...")
+
         def tokenize_batch(batch):
             from src.common import tokenize_fn
+
             return tokenize_fn(batch, tokenizer, include_ref_ans, include_chunk)
-        
+
         # Get column names from train split
         columns_to_remove = [
-            c for c in raw_data["train"].column_names 
-            if c not in {"labels", "weight"}
+            c for c in raw_data["train"].column_names if c not in {"labels", "weight"}
         ]
-        
+
         tokenized_data = raw_data.map(
             tokenize_batch,
             batched=True,
@@ -258,16 +260,18 @@ def main() -> None:
         )
 
         # Setup training arguments and trainer
-        training_args = setup_training_args(cfg, output_dir)    
+        training_args = setup_training_args(cfg, output_dir)
         # Override metric settings for regression
         training_args.metric_for_best_model = "rmse"
         training_args.greater_is_better = False  # Lower RMSE is better
-        
+
         trainer, loss_callback = setup_trainer(
             model, training_args, tokenized_data, tokenizer
         )
         # Override compute_metrics for regression with weights for wRMSE
-        trainer.compute_metrics = compute_metrics_regression_with_weights(tokenized_data["test"])
+        trainer.compute_metrics = compute_metrics_regression_with_weights(
+            tokenized_data["test"]
+        )
 
         # Training
         print("Starting training...")
@@ -303,9 +307,7 @@ def main() -> None:
         if save_model:
             print("\nTrying to save model to Hugging Face...")
             try:
-                repo_name = (
-                    f"{model_name.split('/')[-1]}-lora-{cfg.dataset.dataset_name}-regression"
-                )
+                repo_name = f"{model_name.split('/')[-1]}-lora-{cfg.dataset.dataset_name}-regression"
                 model.push_to_hub(repo_name)
                 print(f"Adapter successfully pushed to Hugging Face Hub: {repo_name}")
                 mlflow.log_param("hf_hub_repo", repo_name)
@@ -315,7 +317,7 @@ def main() -> None:
 
         # Log model artifacts
         mlflow.log_artifacts(str(adapter_path), "adapter")
-        
+
         # Log the full training configuration as an artifact
         mlflow.log_artifact(PROJECT_ROOT / "configs" / "training.yaml", "config")
 
@@ -327,4 +329,3 @@ def main() -> None:
 if __name__ == "__main__":
     print("Starting regression fine-tuning...")
     main()
-

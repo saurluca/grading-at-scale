@@ -69,9 +69,7 @@ def main() -> None:
                 "include_reference_answer": bool(
                     getattr(cfg.tokenization, "include_reference_answer", False)
                 ),
-                "load_in_4bit": bool(
-                    getattr(cfg.quantization, "load_in_4bit", False)
-                ),
+                "load_in_4bit": bool(getattr(cfg.quantization, "load_in_4bit", False)),
             }
         )
 
@@ -145,7 +143,7 @@ def main() -> None:
         # Log model artifacts
         mlflow.log_artifacts(Path(output_dir) / f"model-{model_name}", "model")
         mlflow.log_artifacts(output_dir, "tokenizer")
-        
+
         # Log the full training configuration as an artifact
         mlflow.log_artifact(PROJECT_ROOT / "configs" / "training.yaml", "config")
 

@@ -51,7 +51,7 @@ def main() -> None:
     # Ensure cache directory is at project root
     cache_dir = str(cfg.paths.hf_cache_dir)
     cache_path = os.path.join(PROJECT_ROOT, cache_dir)
-    
+
     ds = load_dataset(
         "csv",
         data_files={"test": csv_path},
@@ -63,7 +63,9 @@ def main() -> None:
     ds = ds.map(lambda x: map_labels(x, label2id))
 
     # Apply data sampling if configured
-    sample_fraction = float(getattr(cfg.classifier_eval.dataset, "sample_fraction", 1.0))
+    sample_fraction = float(
+        getattr(cfg.classifier_eval.dataset, "sample_fraction", 1.0)
+    )
     sample_seed = int(getattr(cfg.classifier_eval.dataset, "sample_seed", 42))
     ds = sample_dataset(ds, sample_fraction, sample_seed)
 
@@ -77,7 +79,7 @@ def main() -> None:
 
     # Load tokenizer and base model, then optionally attach LoRA adapter
     base_model_name = str(cfg.classifier_eval.base_model)
-    
+
     output_dir = os.path.normpath(
         os.path.join(
             PROJECT_ROOT,

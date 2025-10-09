@@ -1,5 +1,4 @@
 import numpy as np
-import mlflow
 from typing import Dict, Any
 import os
 
@@ -18,15 +17,11 @@ from transformers import (
     DataCollatorWithPadding,
     TrainingArguments,
     Trainer,
-    TrainerCallback,
-    TrainerState,
-    TrainerControl,
     ApertusForCausalLM,
     BitsAndBytesConfig,
 )
 from peft import prepare_model_for_kbit_training
 import torch
-
 
 
 def map_labels(example: Dict[str, Any], label2id: Dict[str, int]) -> Dict[str, Any]:
@@ -60,40 +55,44 @@ def map_labels(example: Dict[str, Any], label2id: Dict[str, int]) -> Dict[str, A
 def sample_dataset(dataset, sample_fraction: float, seed: int = 42):
     """
     Sample a fraction of the dataset using random sampling with a fixed seed.
-    
+
     Args:
         dataset: The dataset to sample from
         sample_fraction: Fraction of data to use (0.0-1.0)
         seed: Random seed for reproducibility
-    
+
     Returns:
         Sampled dataset if fraction < 1.0, otherwise original dataset
     """
     if sample_fraction < 0.0 or sample_fraction > 1.0:
-        raise ValueError(f"sample_fraction must be between 0.0 and 1.0, got {sample_fraction}")
-    
+        raise ValueError(
+            f"sample_fraction must be between 0.0 and 1.0, got {sample_fraction}"
+        )
+
     if sample_fraction == 1.0:
         print(f"Using full dataset: {len(dataset)} samples")
         return dataset
-    
+
     # Calculate number of samples to select
     total_samples = len(dataset)
     n_samples = int(total_samples * sample_fraction)
-    
+
     if n_samples == 0:
         raise ValueError(f"sample_fraction {sample_fraction} results in 0 samples")
-    
+
     # Use numpy random generator for reproducible sampling
     rng = np.random.default_rng(seed)
     indices = rng.choice(total_samples, size=n_samples, replace=False)
-    
+
     # Sort indices to maintain some order
     indices = sorted(indices)
-    
+
     sampled_dataset = dataset.select(indices)
-    
-    print(f"Sampled dataset: {len(sampled_dataset)}/{total_samples} samples ({sample_fraction:.1%}) using seed {seed}")
-    
+
+    print(
+        f"Sampled dataset: {len(sampled_dataset)}/{total_samples} samples ({sample_fraction:.1%}) using seed {seed}"
+    )
+
     return sampled_dataset
 
 
@@ -179,23 +178,31 @@ def load_and_preprocess_data(
     # Handle topic filtering and train/test split
     if topics is not None and len(topics) > 0:
         print(f"Topic filtering enabled for topics: {topics}")
-        
+
         # Separate data into in-topic and out-of-topic groups
         def _is_in_topic(example):
             return example["topic"] in topics
-        
-        in_topic_indices = [i for i, example in enumerate(full_dataset) if _is_in_topic(example)]
-        out_of_topic_indices = [i for i, example in enumerate(full_dataset) if not _is_in_topic(example)]
-        
+
+        in_topic_indices = [
+            i for i, example in enumerate(full_dataset) if _is_in_topic(example)
+        ]
+        out_of_topic_indices = [
+            i for i, example in enumerate(full_dataset) if not _is_in_topic(example)
+        ]
+
         in_topic_data = full_dataset.select(in_topic_indices)
         out_of_topic_data = full_dataset.select(out_of_topic_indices)
-        
-        print(f"Topic separation: {len(in_topic_data)} in-topic samples, {len(out_of_topic_data)} out-of-topic samples")
-        print(f"Out-of-topic samples will be added to test set")
-        
+
+        print(
+            f"Topic separation: {len(in_topic_data)} in-topic samples, {len(out_of_topic_data)} out-of-topic samples"
+        )
+        print("Out-of-topic samples will be added to test set")
+
         # Apply split logic to in-topic data only
         if use_unseen_questions:
-            print("Splitting in-topic data by questions (unseen questions in test set)...")
+            print(
+                "Splitting in-topic data by questions (unseen questions in test set)..."
+            )
             # Get unique questions from in-topic data
             unique_questions = list(set(in_topic_data["question"]))
 
@@ -214,10 +221,14 @@ def load_and_preprocess_data(
 
             # Filter the in-topic dataset based on question assignment
             train_indices = [
-                i for i, q in enumerate(in_topic_data["question"]) if q in train_questions
+                i
+                for i, q in enumerate(in_topic_data["question"])
+                if q in train_questions
             ]
             test_indices = [
-                i for i, q in enumerate(in_topic_data["question"]) if q in test_questions
+                i
+                for i, q in enumerate(in_topic_data["question"])
+                if q in test_questions
             ]
 
             in_topic_split = DatasetDict(
@@ -233,18 +244,21 @@ def load_and_preprocess_data(
             in_topic_split = in_topic_data.train_test_split(
                 test_size=test_size, seed=seed, stratify_by_column="labels"
             )
-        
+
         # Combine test sets: out-of-topic data + test portion from in-topic split
         from datasets import concatenate_datasets
-        combined_test = concatenate_datasets([out_of_topic_data, in_topic_split["test"]])
-        
+
+        combined_test = concatenate_datasets(
+            [out_of_topic_data, in_topic_split["test"]]
+        )
+
         raw = DatasetDict(
             {
                 "train": in_topic_split["train"],
                 "test": combined_test,
             }
         )
-        
+
     else:
         # No topic filtering - apply split logic to full dataset
         if use_unseen_questions:
@@ -267,7 +281,9 @@ def load_and_preprocess_data(
 
             # Filter the full dataset based on question assignment
             train_indices = [
-                i for i, q in enumerate(full_dataset["question"]) if q in train_questions
+                i
+                for i, q in enumerate(full_dataset["question"])
+                if q in train_questions
             ]
             test_indices = [
                 i for i, q in enumerate(full_dataset["question"]) if q in test_questions
@@ -310,7 +326,7 @@ def setup_model_and_tokenizer(
 ):
     """
     Setup tokenizer and model, with optional quantization.
-    
+
     Args:
         model_name: Name of the model to load
         label2id: Label to ID mapping
@@ -321,7 +337,7 @@ def setup_model_and_tokenizer(
             - bnb_4bit_compute_dtype: str (e.g., "float16", "bfloat16")
             - bnb_4bit_quant_type: str (e.g., "nf4")
             - bnb_4bit_use_double_quant: bool
-    
+
     Returns:
         tokenizer, base_model
     """
@@ -341,13 +357,17 @@ def setup_model_and_tokenizer(
         print("Setting up 4-bit quantization...")
         compute_dtype_str = quantization_config.get("bnb_4bit_compute_dtype", "float16")
         if compute_dtype_str == "bfloat16":
-            compute_dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float16
+            compute_dtype = (
+                torch.bfloat16 if torch.cuda.is_available() else torch.float16
+            )
         else:
             compute_dtype = torch.float16
-        
+
         quant_config = BitsAndBytesConfig(
             load_in_4bit=True,
-            bnb_4bit_use_double_quant=quantization_config.get("bnb_4bit_use_double_quant", True),
+            bnb_4bit_use_double_quant=quantization_config.get(
+                "bnb_4bit_use_double_quant", True
+            ),
             bnb_4bit_quant_type=quantization_config.get("bnb_4bit_quant_type", "nf4"),
             bnb_4bit_compute_dtype=compute_dtype,
         )
@@ -362,17 +382,16 @@ def setup_model_and_tokenizer(
             "label2id": label2id,
             "cache_dir": cache_dir,
         }
-        
+
         # Add quantization config if provided
         if quant_config is not None:
             model_kwargs["quantization_config"] = quant_config
             model_kwargs["device_map"] = "auto"
-        
+
         base_model = AutoModelForSequenceClassification.from_pretrained(
-            model_name,
-            **model_kwargs
+            model_name, **model_kwargs
         )
-        
+
         # Prepare model for k-bit training if quantized
         if quant_config is not None:
             print("Preparing model for k-bit training...")
@@ -400,7 +419,7 @@ def setup_training_args(cfg, output_dir: str):
         eval_strategy=str(getattr(cfg.training, "eval_strategy", "epoch")),
         save_strategy=str(getattr(cfg.output, "save_strategy", "epoch")),
         logging_steps=int(getattr(cfg.training, "logging_steps", 10)),
-        logging_strategy="steps",  
+        logging_strategy="steps",
         load_best_model_at_end=False,
         metric_for_best_model="accuracy",
         greater_is_better=True,
@@ -562,38 +581,42 @@ def detailed_evaluation(trainer, test_dataset, label_order):
     # Add per-topic micro F1 scores for all topics in test set
     print("\nPer-topic Micro F1 Scores:")
     print("-" * 40)
-    
+
     # Check if topic column exists in test dataset
     if "topic" in test_dataset.column_names:
         # Get topic information from the test dataset
         test_topics = test_dataset["topic"]
-        
+
         # Get all unique topics in the test set
         unique_test_topics = list(set(test_topics))
-        
+
         for topic in unique_test_topics:
             # Find indices where the topic matches
             topic_indices = [i for i, t in enumerate(test_topics) if t == topic]
-            
+
             if len(topic_indices) == 0:
                 print(f"{topic}: No samples found")
                 evaluation_metrics[f"{topic}_micro_f1"] = 0.0
                 evaluation_metrics[f"{topic}_support"] = 0
                 continue
-            
+
             # Get predictions and labels for this topic
             topic_y_true = [y_true[i] for i in topic_indices]
             topic_y_pred = [y_pred[i] for i in topic_indices]
-            
+
             # Calculate micro F1 for this topic
-            topic_precision, topic_recall, topic_f1, topic_support = precision_recall_fscore_support(
-                topic_y_true, topic_y_pred, average="micro", zero_division=0
+            topic_precision, topic_recall, topic_f1, topic_support = (
+                precision_recall_fscore_support(
+                    topic_y_true, topic_y_pred, average="micro", zero_division=0
+                )
             )
-            
+
             print(f"{topic}: {topic_f1:.4f} (support: {len(topic_indices)})")
             evaluation_metrics[f"{topic}_micro_f1"] = topic_f1
             evaluation_metrics[f"{topic}_support"] = len(topic_indices)
     else:
-        print("Warning: Topic column not found in test dataset. Skipping per-topic evaluation.")
+        print(
+            "Warning: Topic column not found in test dataset. Skipping per-topic evaluation."
+        )
 
     return evaluation_metrics

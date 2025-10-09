@@ -49,15 +49,23 @@ def main() -> None:
 
     # Start MLflow experiment
     experiment_name = getattr(cfg.mlflow, "experiment_name", "peft_lora_training")
-    
+
     # Add quantization info to experiment name if enabled
     if "quantization" in cfg and cfg.quantization.get("load_in_4bit", False):
-        experiment_name = experiment_name.replace("peft_lora_training", "peft_lora_training_4bit")
-    
+        experiment_name = experiment_name.replace(
+            "peft_lora_training", "peft_lora_training_4bit"
+        )
+
     mlflow.set_experiment(experiment_name)
 
-    run_name_suffix = "qlora" if ("quantization" in cfg and cfg.quantization.get("load_in_4bit", False)) else "lora"
-    with mlflow.start_run(run_name=f"{run_name_suffix}_training_{model_name.split('/')[-1]}"):
+    run_name_suffix = (
+        "qlora"
+        if ("quantization" in cfg and cfg.quantization.get("load_in_4bit", False))
+        else "lora"
+    )
+    with mlflow.start_run(
+        run_name=f"{run_name_suffix}_training_{model_name.split('/')[-1]}"
+    ):
         # Log the raw dataset as an MLflow Dataset
         try:
             raw_df = pd.read_csv(dataset_csv, delimiter=";")
@@ -73,9 +81,9 @@ def main() -> None:
 
         # Extract topics from config
         topics = getattr(cfg.dataset, "topics", None)
-        
+
         # Log parameters
-        # TODO simplify this 
+        # TODO simplify this
         mlflow.log_params(
             {
                 "model_name": model_name,
@@ -91,7 +99,9 @@ def main() -> None:
                 "per_device_eval_batch_size": int(cfg.training.batch_size.eval),
                 "learning_rate": float(cfg.training.learning_rate),
                 "weight_decay": float(cfg.training.weight_decay),
-                "gradient_accumulation_steps": int(getattr(cfg.training, "gradient_accumulation_steps", 1)),
+                "gradient_accumulation_steps": int(
+                    getattr(cfg.training, "gradient_accumulation_steps", 1)
+                ),
                 "eval_strategy": str(cfg.training.eval_strategy),
                 "seed": int(getattr(cfg.project, "seed", 42)),
                 "use_unseen_questions": bool(
@@ -102,9 +112,7 @@ def main() -> None:
                 "include_reference_answer": bool(
                     getattr(cfg.tokenization, "include_reference_answer", False)
                 ),
-                "load_in_4bit": bool(
-                    getattr(cfg.quantization, "load_in_4bit", False)
-                ),
+                "load_in_4bit": bool(getattr(cfg.quantization, "load_in_4bit", False)),
             }
         )
 
@@ -136,19 +144,27 @@ def main() -> None:
             print("Quantization enabled in config")
             quantization_config = {
                 "load_in_4bit": cfg.quantization.load_in_4bit,
-                "bnb_4bit_compute_dtype": cfg.quantization.get("bnb_4bit_compute_dtype", "float16"),
-                "bnb_4bit_quant_type": cfg.quantization.get("bnb_4bit_quant_type", "nf4"),
-                "bnb_4bit_use_double_quant": cfg.quantization.get("bnb_4bit_use_double_quant", True),
+                "bnb_4bit_compute_dtype": cfg.quantization.get(
+                    "bnb_4bit_compute_dtype", "float16"
+                ),
+                "bnb_4bit_quant_type": cfg.quantization.get(
+                    "bnb_4bit_quant_type", "nf4"
+                ),
+                "bnb_4bit_use_double_quant": cfg.quantization.get(
+                    "bnb_4bit_use_double_quant", True
+                ),
             }
-            mlflow.log_params({
-                "quant_bits": 4,
-                "quant_type": quantization_config["bnb_4bit_quant_type"],
-                "quant_enabled": True,
-            })
+            mlflow.log_params(
+                {
+                    "quant_bits": 4,
+                    "quant_type": quantization_config["bnb_4bit_quant_type"],
+                    "quant_enabled": True,
+                }
+            )
         else:
             print("Quantization disabled or not configured")
             mlflow.log_param("quant_enabled", False)
-        
+
         tokenizer, base_model = setup_model_and_tokenizer(
             model_name, label2id, id2label, cache_path, quantization_config
         )
@@ -164,7 +180,7 @@ def main() -> None:
             task_type=TaskType.SEQ_CLS,
             init_lora_weights=str(cfg.lora.init_weights),
         )
-        model= get_peft_model(base_model, lora_cfg)
+        model = get_peft_model(base_model, lora_cfg)
 
         model.print_trainable_parameters()
 
@@ -183,9 +199,7 @@ def main() -> None:
 
         # Setup training arguments and trainer
         training_args = setup_training_args(cfg, output_dir)
-        trainer = setup_trainer(
-            model, training_args, tokenized_data, tokenizer
-        )
+        trainer = setup_trainer(model, training_args, tokenized_data, tokenizer)
 
         # Training
         print("Starting training...")
@@ -203,7 +217,7 @@ def main() -> None:
 
         # Log detailed evaluation metrics to MLflow
         mlflow.log_metrics(detailed_metrics)
-        
+
         # Log the full training configuration as an artifact
         mlflow.log_artifact(PROJECT_ROOT / "configs" / "training.yaml", "config")
 
@@ -215,12 +229,14 @@ def main() -> None:
                 / f"adapter-{model_name.split('/')[-1]}-{cfg.dataset.dataset_name}"
             )
             model.save_pretrained(adapter_path)
-            
+
             mlflow.log_artifacts(
-                Path(output_dir) / f"model_outputs-{model_name}-{cfg.dataset.dataset_name}", "model_outputs"
+                Path(output_dir)
+                / f"model_outputs-{model_name}-{cfg.dataset.dataset_name}",
+                "model_outputs",
             )
             mlflow.log_artifacts(str(adapter_path), "adapter")
-            
+
             try:
                 mlflow.transformers.log_model(
                     transformers_model={
@@ -235,7 +251,7 @@ def main() -> None:
                 print(f"Warning: Could not log LoRA adapter to MLflow: {e}")
         else:
             print("LoRA adapter saving to MLflow skipped (save_model=false in config)")
-        
+
         # Push adapter to Hugging Face Hub
         if cfg.output.push_to_hub:
             print("\n Saving model to huggingface")

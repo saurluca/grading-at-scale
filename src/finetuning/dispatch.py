@@ -58,12 +58,10 @@ def main() -> None:
 
         os.environ["TRAINING_CONFIG_PATH"] = str(out_path)
         print(
-            f"[dispatcher] Run {i+1}/{len(seeds)}: seed={seed}, task={task_type}, cfg={out_path}"
+            f"[dispatcher] Run {i + 1}/{len(seeds)}: seed={seed}, task={task_type}, cfg={out_path}"
         )
         runner()
 
 
 if __name__ == "__main__":
     main()
-
-

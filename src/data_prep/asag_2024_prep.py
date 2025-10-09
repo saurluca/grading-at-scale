@@ -1,7 +1,6 @@
 # %%
 from datasets import load_dataset
 from pathlib import Path
-import pandas as pd
 from sklearn.model_selection import train_test_split
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -19,10 +18,7 @@ print(f"Columns: {df.columns.tolist()}")
 
 # Rename columns
 print("Renaming columns...")
-df = df.rename(columns={
-    "provided_answer": "student_answer",
-    "data_source": "topic"
-})
+df = df.rename(columns={"provided_answer": "student_answer", "data_source": "topic"})
 
 # Remove grade column
 print("Removing 'grade' column...")
@@ -30,6 +26,8 @@ df = df.drop(columns=["grade"])
 
 # Convert normalized_grade to 3-class labels
 print("Converting normalized_grade to labels (0, 1, 2)...")
+
+
 def normalized_grade_to_label(norm_grade):
     """
     Convert normalized grade (0-1) to class label:
@@ -43,6 +41,7 @@ def normalized_grade_to_label(norm_grade):
         return 1
     else:
         return 2
+
 
 df["labels"] = df["normalized_grade"].apply(normalized_grade_to_label)
 
@@ -64,23 +63,17 @@ df = df[expected_columns]
 print("\nSplitting dataset into train/val/test (60/20/20)...")
 # First split: 60% train, 40% temp (val+test)
 train_df, temp_df = train_test_split(
-    df, 
-    test_size=0.4, 
-    random_state=42, 
-    stratify=df["labels"]
+    df, test_size=0.4, random_state=42, stratify=df["labels"]
 )
 
 # Second split: split temp into 50/50 for val and test (each 20% of total)
 val_df, test_df = train_test_split(
-    temp_df, 
-    test_size=0.5, 
-    random_state=42, 
-    stratify=temp_df["labels"]
+    temp_df, test_size=0.5, random_state=42, stratify=temp_df["labels"]
 )
 
-print(f"Train size: {len(train_df)} ({len(train_df)/len(df)*100:.1f}%)")
-print(f"Val size: {len(val_df)} ({len(val_df)/len(df)*100:.1f}%)")
-print(f"Test size: {len(test_df)} ({len(test_df)/len(df)*100:.1f}%)")
+print(f"Train size: {len(train_df)} ({len(train_df) / len(df) * 100:.1f}%)")
+print(f"Val size: {len(val_df)} ({len(val_df) / len(df) * 100:.1f}%)")
+print(f"Test size: {len(test_df)} ({len(test_df) / len(df) * 100:.1f}%)")
 print(f"Total: {len(train_df) + len(val_df) + len(test_df)}")
 
 # Save to separate CSV files
@@ -101,9 +94,9 @@ print(f"✓ Saved val set to {val_file}")
 print(f"✓ Saved test set to {test_file}")
 
 # Print label distributions for each split
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("LABEL DISTRIBUTION BY SPLIT")
-print("="*60)
+print("=" * 60)
 
 for name, split_df in [("Train", train_df), ("Val", val_df), ("Test", test_df)]:
     print(f"\n{name} set:")
@@ -113,6 +106,5 @@ for name, split_df in [("Train", train_df), ("Val", val_df), ("Test", test_df)]:
         label_name = ["incorrect", "partial", "correct"][label]
         print(f"  {label} ({label_name}): {count:>6} ({percentage:>5.1f}%)")
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("Dataset preparation complete!")
-
