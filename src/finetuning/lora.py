@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import sys
 import mlflow
+import pandas as pd
 from peft import LoraConfig, get_peft_model, TaskType
 from omegaconf import OmegaConf
 
@@ -53,6 +54,19 @@ def main() -> None:
 
     run_name_suffix = "qlora" if ("quantization" in cfg and cfg.quantization.get("load_in_4bit", False)) else "lora"
     with mlflow.start_run(run_name=f"{run_name_suffix}_training_{model_name.split('/')[-1]}"):
+        # Log the raw dataset as an MLflow Dataset input so it appears in the Datasets UI
+        try:
+            raw_df = pd.read_csv(dataset_csv, delimiter=";")
+            ds_name = str(getattr(cfg.dataset, "dataset_name", Path(dataset_csv).stem))
+            ml_dataset = mlflow.data.from_pandas(
+                raw_df,
+                source=dataset_csv,
+                name=ds_name,
+            )
+            mlflow.log_input(ml_dataset, context="training")
+        except Exception as e:
+            print(f"Warning: Failed to log MLflow Dataset input: {e}")
+
         # Extract topics from config
         topics = getattr(cfg.dataset, "topics", None)
         
