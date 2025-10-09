@@ -11,13 +11,13 @@ model:
 dataset:
   # dataset_name: ASAG2024
   dataset_name: gas
-  csv_file: smoll.csv
+  csv_file: full.csv
   csv_path: data/${dataset.dataset_name}/${dataset.csv_file}
   # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
   # csv_path: data/synth/full_gas.csv
   # csv_path: data/SciEntsBank_3way/train.csv
   test_size: 0.5
-  use_unseen_questions: false # Split by question ID, not random
+  use_unseen_questions: true # Split by question ID, not random
   # topics: ["SciEntsBank", "Beetle", "Mohler", "DigiKlausur", "SAF", "Stita", "CU-NLP"]
   # dataset_name: grading-at-scale
   # topics: ["language", "ai", "neuro", "memory"] # null or empty list = all topics
@@ -26,7 +26,7 @@ dataset:
 # Output
 output:
   dir: ${paths.output_dir}/peft_output
-  save_model: false
+  save_model: true
   save_strategy: epoch
 
 # LoRA configuration (used for lora, lora_quantized, lora_typst types)
@@ -49,10 +49,10 @@ quantization:
 
 # Training hyperparameters
 training:
-  num_epochs: 1 # 3
+  num_epochs: 3 # 3
   batch_size: 
-    train: 4
-    eval: 4
+    train: 16
+    eval: 16
   gradient_accumulation_steps: 1  # batch_size * gradient_accumulation_steps = 16
   learning_rate: 0.0002 # 0.0002
   weight_decay: 0.01 # 0.01
@@ -61,7 +61,7 @@ training:
 
 # Tokenization settings
 tokenization:
-  include_reference_answer: false # true
+  include_reference_answer: true # true
   include_chunk_text: false # false
 
 # MLflow tracking

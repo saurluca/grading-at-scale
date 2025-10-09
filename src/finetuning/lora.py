@@ -94,6 +94,9 @@ def main() -> None:
                 ),
                 "save_model": bool(getattr(cfg.output, "save_model", True)),
                 "topics": str(topics) if topics is not None else "all",
+                "include_reference_answer": bool(
+                    getattr(cfg.tokenization, "include_reference_answer", False)
+                ),
             }
         )
 

@@ -62,6 +62,9 @@ def main() -> None:
                 "weight_decay": float(cfg.training.weight_decay),
                 "eval_strategy": str(cfg.training.eval_strategy),
                 "seed": int(getattr(cfg.project, "seed", 42)),
+                "include_reference_answer": bool(
+                    getattr(cfg.tokenization, "include_reference_answer", False)
+                ),
             }
         )
 
