@@ -119,7 +119,7 @@ def tokenize_fn(
         if include_reference_answer and isinstance(ref_ans, str) and ref_ans.strip():
             parts.append(f"Reference answer: {ref_ans}")
         if include_chunk_text and isinstance(chunk, str) and chunk.strip():
-            parts.append(f"Reference: {chunk}")
+            parts.append(f"Reference text: {chunk}")
         texts.append("\n".join(parts))
 
     return tokenizer(texts, truncation=True, max_length=1024)
