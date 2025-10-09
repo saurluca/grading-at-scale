@@ -16,7 +16,6 @@ from transformers import (
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-# from synthetic_data.evaluate_answers import plot_confusion_matrix
 from src.common import (  # noqa: E402
     compute_metrics,
     detailed_evaluation,
@@ -49,17 +48,14 @@ def main() -> None:
 
     print(f"Loading evaluation data from CSV: {csv_path}")
 
-    # Use semicolon as separator to match existing data generation unless changed later
+    # Ensure cache directory is at project root
+    cache_dir = str(cfg.paths.hf_cache_dir)
+    cache_path = os.path.join(PROJECT_ROOT, cache_dir)
+    
     ds = load_dataset(
         "csv",
         data_files={"test": csv_path},
-        cache_dir=str(
-            getattr(
-                cfg,
-                "hf_cache_dir",
-                getattr(cfg.paths, "hf_cache_dir", ".hf_cache"),
-            )
-        ),
+        cache_dir=cache_path,
         sep=";",
     )["test"]
 
@@ -81,15 +77,7 @@ def main() -> None:
 
     # Load tokenizer and base model, then optionally attach LoRA adapter
     base_model_name = str(cfg.classifier_eval.base_model)
-    cache_dir = str(
-        getattr(
-            cfg,
-            "hf_cache_dir",
-            getattr(cfg.paths, "hf_cache_dir", ".hf_cache"),
-        )
-    )
-    # Ensure cache directory is at project root
-    cache_path = os.path.join(PROJECT_ROOT, cache_dir)
+    
     output_dir = os.path.normpath(
         os.path.join(
             PROJECT_ROOT,
@@ -102,13 +90,9 @@ def main() -> None:
         base_model_name, label2id, id2label, cache_path
     )
 
-    # Load LoRA adapter (support both new and legacy config format)
-    model = base_model
-    adapter_config = getattr(cfg.classifier_eval, "adapter", None)
-
-    # New configuration format
-    adapter_source = getattr(adapter_config, "source", "local")
-    adapter_path_cfg = getattr(adapter_config, "path", None)
+    # Load LoRA adapter config
+    adapter_source = getattr(cfg.classifier_eval.adapter, "source", "local")
+    adapter_path_cfg = getattr(cfg.classifier_eval.adapter, "path", None)
 
     if adapter_source == "none":
         # Use base model without any adapter

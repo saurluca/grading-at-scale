@@ -20,20 +20,6 @@ from src.common import (  # noqa: E402
 )
 
 
-def setup_lora_model(base_model, cfg):
-    print("Setting up LoRA configuration and applying to base model...")
-    lora_cfg = LoraConfig(
-        r=int(cfg.lora.r),
-        lora_alpha=int(cfg.lora.alpha),
-        lora_dropout=float(cfg.lora.dropout),
-        target_modules=cfg.lora.target_modules,
-        # target_modules="all-linear",
-        task_type=TaskType.SEQ_CLS,
-        init_lora_weights=str(cfg.lora.init_weights),
-    )
-    return get_peft_model(base_model, lora_cfg)
-
-
 def main() -> None:
     print("Loading config...")
     base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
@@ -142,7 +128,17 @@ def main() -> None:
         )
 
         # Setup LoRA model
-        model = setup_lora_model(base_model, cfg)
+        print("Setting up LoRA configuration and applying to base model...")
+        lora_cfg = LoraConfig(
+            r=int(cfg.lora.r),
+            lora_alpha=int(cfg.lora.alpha),
+            lora_dropout=float(cfg.lora.dropout),
+            target_modules=cfg.lora.target_modules,
+            # target_modules="all-linear",
+            task_type=TaskType.SEQ_CLS,
+            init_lora_weights=str(cfg.lora.init_weights),
+        )
+        model= get_peft_model(base_model, lora_cfg)
 
         model.print_trainable_parameters()
 
