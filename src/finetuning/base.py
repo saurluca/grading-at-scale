@@ -106,7 +106,7 @@ def main() -> None:
 
         # Setup training arguments and trainer
         training_args = setup_training_args(cfg, output_dir)
-        trainer, loss_callback = setup_trainer(
+        trainer = setup_trainer(
             model, training_args, tokenized_data, tokenizer
         )
 
@@ -114,16 +114,7 @@ def main() -> None:
         print("Starting training...")
         trainer.train()
         metrics = trainer.evaluate()
-
-        # Log final loss information
-        if loss_callback.train_losses:
-            print(f"\nFinal Training Loss: {loss_callback.train_losses[-1]:.4f}")
-            mlflow.log_metric("final_train_loss", loss_callback.train_losses[-1])
-
-        if loss_callback.eval_losses:
-            print(f"Final Evaluation Loss: {loss_callback.eval_losses[-1]:.4f}")
-            mlflow.log_metric("final_eval_loss", loss_callback.eval_losses[-1])
-
+        
         # Log final metrics
         mlflow.log_metrics(metrics)
 

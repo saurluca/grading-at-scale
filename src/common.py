@@ -481,7 +481,13 @@ def detailed_evaluation(trainer, test_dataset, label_order):
 
     # Get predictions
     predictions = trainer.predict(test_dataset)
-    y_pred = np.argmax(predictions.predictions, axis=-1)
+    
+    # Handle case where predictions.predictions might be a tuple/list (like in compute_metrics)
+    logits = predictions.predictions
+    if isinstance(logits, (tuple, list)):
+        logits = logits[0]
+    
+    y_pred = np.argmax(logits, axis=-1)
     y_true = predictions.label_ids
 
     # Calculate comprehensive metrics

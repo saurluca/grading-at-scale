@@ -64,7 +64,7 @@ def main() -> None:
         else "lora"
     )
     with mlflow.start_run(
-        run_name=f"{run_name_suffix}_training_{model_name.split('/')[-1]}"
+        run_name=f"{run_name_suffix}_{model_name.split('/')[-1]}"
     ):
         # Log the raw dataset as an MLflow Dataset
         try:
