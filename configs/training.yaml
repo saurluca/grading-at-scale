@@ -1,7 +1,10 @@
 # Model selection
 model:
-  base: meta-llama/Llama-3.2-1B-Instruct
+  # base: meta-llama/Llama-3.2-1B-Instruct
+  # base: openai-community/gpt2
+  # base: google/flan-t5-base
   # base: swiss-ai/Apertus-8B-Instruct-2509
+  base: Qwen/Qwen3-0.6B
 
 # Task selection for dispatcher
 task_type: lora-classification  # lora-classification | lora-regression | vanilla-classification
@@ -19,15 +22,11 @@ dataset:
   # dataset_name: gras
   csv_file: val.csv
   csv_path: data/${dataset.dataset_name}/${dataset.csv_file}
-  # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
-  # csv_path: data/synth/full_gas.csv
-  # csv_path: data/SciEntsBank_3way/train.csv
-  test_size: 0.8
+  test_size: 0.3
   use_unseen_questions: false # Split by question ID, not random
   # topics: ["SciEntsBank", "Beetle", "Mohler", "DigiKlausur", "SAF", "Stita", "CU-NLP"]
-  # topics: ["language", "ai", "neuro", "memory"] # null or empty list = all topics
-  # topics: ["ai"]
-  topics: []
+  # topics: ["language", "ai", "neuro", "memory"] 
+  topics: [] # null or empty list = all topics
 
 # Output
 output:
@@ -42,6 +41,7 @@ lora:
   alpha: 16
   dropout: 0.1
   target_modules: "all-linear" # or ["q_proj", "v_proj"]
+  # target_modules: ["c_attn", "c_proj", "c_fc"]  # Include feed-forward layers too
   init_weights: olora
 
 # Quantization settings for LoRA training
@@ -56,11 +56,11 @@ quantization:
 
 # Training hyperparameters
 training:
-  num_epochs: 4 # 3
+  num_epochs: 3 # 3
   batch_size: 
-    train: 16
-    eval: 64
-  gradient_accumulation_steps: 1  # batch_size * gradient_accumulation_steps = 16
+    train: 8
+    eval: 8
+  gradient_accumulation_steps: 2  # batch_size * gradient_accumulation_steps = 16
   learning_rate: 0.0002 # 0.0002
   weight_decay: 0.01 # 0.01
   eval_strategy: epoch # epoch | steps
@@ -68,7 +68,7 @@ training:
 
 # Tokenization settings
 tokenization:
-  include_reference_answer: false # true
+  include_reference_answer: true # true
   include_chunk_text: false # false
 
 # MLflow tracking
