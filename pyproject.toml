@@ -11,6 +11,7 @@ dependencies = [
     "dspy>=3.0.2",
     "dvc>=3.63.0",
     "evaluate>=0.4.5",
+    "gpustat>=1.1.1",
     "huggingface-hub>=0.34.4",
     "iprogress>=0.4",
     "ipykernel>=6.30.1",
