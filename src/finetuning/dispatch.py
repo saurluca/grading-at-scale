@@ -1,0 +1,69 @@
+import os
+import time
+import random
+from importlib import import_module
+from pathlib import Path
+
+from omegaconf import OmegaConf
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def select_main(task_type: str):
+    mapping = {
+        "lora-classification": "lora",
+        "lora-regression": "lora_regression",
+        "vanilla-classification": "base",
+    }
+    if task_type not in mapping:
+        raise ValueError(f"Unknown task_type: {task_type}")
+    return import_module(mapping[task_type]).main
+
+
+def main() -> None:
+    base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
+    training_path = PROJECT_ROOT / "configs" / "training.yaml"
+    training_cfg = OmegaConf.load(training_path)
+    cfg = OmegaConf.merge(base_cfg, training_cfg)
+
+    task_type = str(getattr(cfg, "task_type", "lora-classification"))
+
+    dispatcher = getattr(cfg, "dispatcher", {})
+    seeds_list = dispatcher.get("seeds")
+
+    if seeds_list:
+        seeds = [int(s) for s in seeds_list]
+        num_runs = len(seeds)
+    else:
+        num_runs = int(dispatcher.get("num_runs", 1))
+        seed_strategy = str(dispatcher.get("seed_strategy", "same"))
+        base_seed = int(getattr(cfg.project, "seed", 42))
+
+        if seed_strategy == "random":
+            random.seed(int(time.time()))
+            seeds = [random.randint(0, 2**31 - 1) for _ in range(num_runs)]
+        else:
+            seeds = [base_seed for _ in range(num_runs)]
+
+    run_dir = PROJECT_ROOT / "configs" / ".runs"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    runner = select_main(task_type)
+
+    for i, seed in enumerate(seeds):
+        per_run_cfg = OmegaConf.merge(cfg, {"project": {"seed": int(seed)}})
+        out_path = run_dir / f"dispatcher_run_{int(time.time())}_{i}.yaml"
+        OmegaConf.save(config=per_run_cfg, f=str(out_path))
+
+        os.environ["TRAINING_CONFIG_PATH"] = str(out_path)
+        print(
+            f"[dispatcher] Run {i+1}/{len(seeds)}: seed={seed}, task={task_type}, cfg={out_path}"
+        )
+        runner()
+
+
+if __name__ == "__main__":
+    main()
+
+

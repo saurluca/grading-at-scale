@@ -23,7 +23,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 
-from src.common import LossLoggingCallback  # noqa: E402
 
 load_dotenv()
 
@@ -212,7 +211,7 @@ def setup_training_args(cfg, output_dir: str) -> TrainingArguments:
         load_best_model_at_end=not quick_run,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
-        report_to=[],
+        report_to="mlflow",
         remove_unused_columns=False,
         seed=int(getattr(cfg.project, "seed", 42)),
         save_total_limit=2,
@@ -229,7 +228,6 @@ def train_and_evaluate(
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     print("Setting up Trainer...")
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-    loss_callback = LossLoggingCallback()
 
     trainer = Trainer(
         model=model,

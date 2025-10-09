@@ -24,7 +24,11 @@ from src.common import (  # noqa: E402
 def main() -> None:
     print("Loading config...")
     base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
-    training_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "training.yaml")
+    training_cfg_path = os.environ.get(
+        "TRAINING_CONFIG_PATH",
+        str(PROJECT_ROOT / "configs" / "training.yaml"),
+    )
+    training_cfg = OmegaConf.load(training_cfg_path)
     cfg = OmegaConf.merge(base_cfg, training_cfg)
 
     dataset_csv: str = str(PROJECT_ROOT / cfg.dataset.csv_path)
@@ -54,7 +58,7 @@ def main() -> None:
 
     run_name_suffix = "qlora" if ("quantization" in cfg and cfg.quantization.get("load_in_4bit", False)) else "lora"
     with mlflow.start_run(run_name=f"{run_name_suffix}_training_{model_name.split('/')[-1]}"):
-        # Log the raw dataset as an MLflow Dataset input so it appears in the Datasets UI
+        # Log the raw dataset as an MLflow Dataset
         try:
             raw_df = pd.read_csv(dataset_csv, delimiter=";")
             ds_name = str(getattr(cfg.dataset, "dataset_name", Path(dataset_csv).stem))
@@ -71,6 +75,7 @@ def main() -> None:
         topics = getattr(cfg.dataset, "topics", None)
         
         # Log parameters
+        # TODO simplify this 
         mlflow.log_params(
             {
                 "model_name": model_name,
@@ -125,6 +130,7 @@ def main() -> None:
         )
 
         # Setup model and tokenizer (with optional quantization)
+        # TODO simplify this
         quantization_config = None
         if "quantization" in cfg and cfg.quantization.get("load_in_4bit", False):
             print("Quantization enabled in config")
@@ -177,7 +183,7 @@ def main() -> None:
 
         # Setup training arguments and trainer
         training_args = setup_training_args(cfg, output_dir)
-        trainer, loss_callback = setup_trainer(
+        trainer = setup_trainer(
             model, training_args, tokenized_data, tokenizer
         )
 
@@ -185,15 +191,6 @@ def main() -> None:
         print("Starting training...")
         trainer.train()
         metrics = trainer.evaluate()
-
-        # Log final loss information
-        if loss_callback.train_losses:
-            print(f"\nFinal Training Loss: {loss_callback.train_losses[-1]:.4f}")
-            mlflow.log_metric("final_train_loss", loss_callback.train_losses[-1])
-
-        if loss_callback.eval_losses:
-            print(f"Final Evaluation Loss: {loss_callback.eval_losses[-1]:.4f}")
-            mlflow.log_metric("final_eval_loss", loss_callback.eval_losses[-1])
 
         # Log final metrics
         mlflow.log_metrics(metrics)
@@ -206,20 +203,42 @@ def main() -> None:
 
         # Log detailed evaluation metrics to MLflow
         mlflow.log_metrics(detailed_metrics)
+        
+        # Log the full training configuration as an artifact
+        mlflow.log_artifact(PROJECT_ROOT / "configs" / "training.yaml", "config")
 
-        # Save adapter locally
-        adapter_path = (
-            Path(output_dir)
-            / f"adapter-{model_name.split('/')[-1]}-{cfg.dataset.dataset_name}"
-        )
-        model.save_pretrained(adapter_path)
-
+        # Log the LoRA adapter using MLflow transformers integration
+        if cfg.output.save_model_locally:
+            print("\nSaving LoRA adapter to local path")
+            adapter_path = (
+                Path(output_dir)
+                / f"adapter-{model_name.split('/')[-1]}-{cfg.dataset.dataset_name}"
+            )
+            model.save_pretrained(adapter_path)
+            
+            mlflow.log_artifacts(
+                Path(output_dir) / f"model_outputs-{model_name}-{cfg.dataset.dataset_name}", "model_outputs"
+            )
+            mlflow.log_artifacts(str(adapter_path), "adapter")
+            
+            try:
+                mlflow.transformers.log_model(
+                    transformers_model={
+                        "model": model,
+                        "tokenizer": tokenizer,
+                    },
+                    name="lora_adapter",
+                    task="text-classification",
+                )
+                print(f"Adapter saved to: {adapter_path}")
+            except Exception as e:
+                print(f"Warning: Could not log LoRA adapter to MLflow: {e}")
+        else:
+            print("LoRA adapter saving to MLflow skipped (save_model=false in config)")
+        
         # Push adapter to Hugging Face Hub
-        save_model = bool(getattr(cfg.output, "save_model", True))
-
-        if save_model:
-            print("\n Trying to save model to huggingface")
-
+        if cfg.output.push_to_hub:
+            print("\n Saving model to huggingface")
             try:
                 repo_name = (
                     f"{model_name.split('/')[-1]}-lora-{cfg.dataset.dataset_name}"
@@ -230,35 +249,8 @@ def main() -> None:
             except Exception as e:
                 print(f"Warning: Could not push adapter to Hugging Face Hub: {e}")
                 mlflow.log_param("hf_hub_error", str(e))
-        # Log model artifacts (adapter only)
-        mlflow.log_artifacts(
-            Path(output_dir) / f"model_outputs-{model_name}", "model_outputs"
-        )
-        mlflow.log_artifacts(str(adapter_path), "adapter")
-
-        # Log the LoRA adapter using MLflow transformers integration
-        save_model = bool(getattr(cfg.output, "save_model", True))
-        print("")
-        if save_model:
-            try:
-                mlflow.transformers.log_model(
-                    transformers_model={
-                        "model": model,
-                        "tokenizer": tokenizer,
-                    },
-                    name="lora_adapter",
-                    task="text-classification",
-                )
-                print("LoRA adapter logged to MLflow successfully")
-            except Exception as e:
-                print(f"Warning: Could not log LoRA adapter to MLflow: {e}")
-        else:
-            print("LoRA adapter saving to MLflow skipped (save_model=false in config)")
 
         print("\n\nTraining completed")
-        print(f"Adapter saved to: {adapter_path}")
-        if save_model:
-            print(f"Adapter pushed to HF Hub: {repo_name}")
         print(f"MLflow run ID: {mlflow.active_run().info.run_id}")
 
 

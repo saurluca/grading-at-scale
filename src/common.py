@@ -28,73 +28,6 @@ from peft import prepare_model_for_kbit_training
 import torch
 
 
-class LossLoggingCallback(TrainerCallback):
-    """Log training and evaluation metrics per epoch only."""
-
-    def __init__(self):
-        self.train_losses = []  # historical epoch means
-        self.eval_losses = []  # historical epoch eval losses
-        self._current_epoch_train_losses = []
-
-    def on_epoch_begin(
-        self, args, state: TrainerState, control: TrainerControl, **kwargs
-    ):
-        # Reset per-epoch accumulators
-        self._current_epoch_train_losses = []
-
-    def on_log(self, args, state: TrainerState, control: TrainerControl, **kwargs):
-        """Collect training loss during the epoch; do not log per-step."""
-        if not state.log_history:
-            return
-        latest_log = state.log_history[-1]
-
-        # HF Trainer emits per-step training loss under key 'loss'
-        if "loss" in latest_log:
-            loss_value = latest_log["loss"]
-            try:
-                # Some logs include NaNs during warmup; filter them out
-                if loss_value is not None and np.isfinite(float(loss_value)):
-                    self._current_epoch_train_losses.append(float(loss_value))
-            except Exception:
-                pass
-
-    def on_epoch_end(
-        self, args, state: TrainerState, control: TrainerControl, **kwargs
-    ):
-        """Aggregate and log metrics at the end of each epoch."""
-        epoch_index = int(state.epoch) if state.epoch is not None else 0
-
-        # 1) Training loss (epoch average of step losses)
-        if self._current_epoch_train_losses:
-            train_loss_epoch = float(np.mean(self._current_epoch_train_losses))
-            self.train_losses.append(train_loss_epoch)
-            print(f"Epoch {epoch_index}: Training Loss = {train_loss_epoch:.4f}")
-            mlflow.log_metric("train_loss", train_loss_epoch, step=epoch_index)
-
-        # 2) Evaluation metrics from the most recent eval of this epoch
-        eval_log = None
-        if state.log_history:
-            # Iterate in reverse to find the last eval for this epoch
-            for log_entry in reversed(state.log_history):
-                if "eval_loss" in log_entry:
-                    # If 'epoch' is present, prefer entries matching this epoch
-                    entry_epoch = log_entry.get("epoch")
-                    if entry_epoch is None or int(entry_epoch) == epoch_index:
-                        eval_log = log_entry
-                        break
-
-        if eval_log is not None:
-            if "eval_loss" in eval_log:
-                eval_loss = float(eval_log["eval_loss"])  # type: ignore[arg-type]
-                self.eval_losses.append(eval_loss)
-                print(f"Epoch {epoch_index}: Evaluation Loss = {eval_loss:.4f}")
-                mlflow.log_metric("eval_loss", eval_loss, step=epoch_index)
-
-            if "eval_accuracy" in eval_log:
-                eval_acc = float(eval_log["eval_accuracy"])  # type: ignore[arg-type]
-                print(f"Epoch {epoch_index}: Evaluation Accuracy = {eval_acc:.4f}")
-                mlflow.log_metric("eval_accuracy", eval_acc, step=epoch_index)
-
 
 def map_labels(example: Dict[str, Any], label2id: Dict[str, int]) -> Dict[str, Any]:
     """Map string labels to integer IDs."""
@@ -467,11 +400,11 @@ def setup_training_args(cfg, output_dir: str):
         eval_strategy=str(getattr(cfg.training, "eval_strategy", "epoch")),
         save_strategy=str(getattr(cfg.output, "save_strategy", "epoch")),
         logging_steps=int(getattr(cfg.training, "logging_steps", 10)),
-        logging_strategy="steps",  # Log per step for training accuracy
+        logging_strategy="steps",  
         load_best_model_at_end=False,
         metric_for_best_model="accuracy",
         greater_is_better=True,
-        report_to=[],
+        report_to="mlflow",
         seed=int(getattr(cfg, "seed", 42)),
         bf16=True,
         # Enable evaluation and logging
@@ -484,9 +417,6 @@ def setup_trainer(model, training_args, tokenized_data, tokenizer):
     print("Setting up trainer...")
     data_collator = DataCollatorWithPadding(tokenizer)
 
-    # Create the loss logging callback
-    loss_callback = LossLoggingCallback()
-
     return Trainer(
         model=model,
         args=training_args,
@@ -495,8 +425,7 @@ def setup_trainer(model, training_args, tokenized_data, tokenizer):
         processing_class=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
-        callbacks=[loss_callback],
-    ), loss_callback
+    )
 
 
 def tokenize_dataset(
