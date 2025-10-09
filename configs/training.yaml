@@ -10,15 +10,17 @@ model:
 
 # Dataset
 dataset:
+  dataset_name: ASAG2024
+  csv_file: val.csv
+  csv_path: data/${dataset.dataset_name}/${dataset.csv_file}
   # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
-  csv_path: data/ASAG2024/val.csv
   # csv_path: data/synth/full_gas.csv
   # csv_path: data/SciEntsBank_3way/train.csv
   test_size: 0.2
   use_unseen_questions: false # Split by question ID, not random
-  dataset_name: asag2024
+  # topics: ["SciEntsBank", "Beetle", "Mohler", "DigiKlausur", "SAF", "Stita", "CU-NLP"]
   # dataset_name: grading-at-scale
-  # topics: ["language", "ai", "neuro", "memory"] # null or empty list = all topics; otherwise ["neuro", "ai", "language", "memory"]
+  # topics: ["language", "ai", "neuro", "memory"] # null or empty list = all topics
   topics: null
 
 # Output
@@ -40,31 +42,31 @@ lora:
 # Set to false for full precision training
 quantization:
   load_in_4bit: false  # Set to true to enable 4-bit quantization
+  bnb_4bit_use_double_quant: false  # Use double quantization for better accuracy
   bnb_4bit_compute_dtype: float16  # Options: float16, bfloat16
   bnb_4bit_quant_type: nf4  # Options: nf4, fp4
-  bnb_4bit_use_double_quant: false  # Use double quantization for better accuracy
+
 
 # Training hyperparameters
 training:
-  num_epochs: 3
-  batch_size:
+  num_epochs: 3 # 3
+  batch_size: 
     train: 4
     eval: 4
-  gradient_accumulation_steps: 2
-  learning_rate: 0.0001
-  weight_decay: 0.001
-  eval_strategy: epoch
-  logging_steps: 20
+  gradient_accumulation_steps: 1  # batch_size * gradient_accumulation_steps = 16
+  learning_rate: 0.0002 # 0.0002
+  weight_decay: 0.01 # 0.01
+  eval_strategy: epoch # epoch | steps
+  logging_steps: 20 # 20
 
 # Tokenization settings
 tokenization:
-  include_reference_answer: true
-  include_chunk_text: false
+  include_reference_answer: true # true
+  include_chunk_text: false # false
 
 # MLflow tracking
 mlflow:
   experiment_name: peft_lora_training
-  tracking_uri: null # Uses default (./mlruns)
 
 # Typst-specific settings (only used if model.type == lora_typst)
 typst:

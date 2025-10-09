@@ -27,10 +27,6 @@ from transformers import (
 from peft import prepare_model_for_kbit_training
 import torch
 
-# AutoConfig.register("new-model", NewModelConfig)
-# AutoModel.register(NewModelConfig, NewModel)
-
-
 
 class LossLoggingCallback(TrainerCallback):
     """Log training and evaluation metrics per epoch only."""

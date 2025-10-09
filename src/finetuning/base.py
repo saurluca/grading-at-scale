@@ -52,6 +52,7 @@ def main() -> None:
         mlflow.log_params(
             {
                 "model_name": model_name,
+                "dataset_name": str(cfg.dataset.dataset_name),
                 "dataset_csv": dataset_csv,
                 "output_dir": output_dir,
                 "num_train_epochs": float(cfg.training.num_epochs),
