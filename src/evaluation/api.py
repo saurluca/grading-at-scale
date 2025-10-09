@@ -137,11 +137,11 @@ def evaluate_grader_performance(
             else:
                 label = 0
 
-            return {"predicted": predicted, "label": label}
+            return {"predicted": predicted, "labels": label}
 
         results = answers_df.progress_apply(grade_row, axis=1)
         predicted_labels = results.map(lambda d: d["predicted"]).tolist()
-        labels = results.map(lambda d: d["label"]).tolist()
+        labels = results.map(lambda d: d["labels"]).tolist()
 
     elif mode == "per_question":
         # Group by task_id if available, else by question text
@@ -404,7 +404,7 @@ plot_confusion_matrix(
 # print("SAMPLE RESULTS")
 # print("=" * 50)
 # print_df = student_answers_df[
-#     ["question", "student_answer", "predicted_label_name", "label"]
+#     ["question", "student_answer", "predicted_label_name", "labels"]
 # ]
 # print_df = print_df.sample(n=5)
 # for idx, row in print_df.iterrows():

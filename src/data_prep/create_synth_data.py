@@ -136,7 +136,7 @@ def _append_rows(rows, idx, task, answers, label: str):
                 "chunk_text": chunk_text,
                 "topic": topic,
                 "student_answer": ans,
-                "label": label,
+                "labels": label,
             }
         )
 
@@ -344,7 +344,7 @@ def _validate_generated_counts(
     # Overall counts per label
     for label, per_q in expected_per_label.items():
         expected_label_total = num_tasks * per_q
-        actual_label_total = (student_answers_df["label"] == label).sum()
+        actual_label_total = (student_answers_df["labels"] == label).sum()
         if actual_label_total != expected_label_total:
             print(
                 f"Generated {actual_label_total} '{label}' answers != expected {expected_label_total} (num_tasks={num_tasks} * per_q={per_q})."
@@ -352,7 +352,7 @@ def _validate_generated_counts(
 
     # Per-question counts per label
     counts = (
-        student_answers_df.groupby(["task_id", "label"]).size().unstack(fill_value=0)
+        student_answers_df.groupby(["task_id", "labels"]).size().unstack(fill_value=0)
     )
     for task_id in tasks_df.index:
         row = (
@@ -455,9 +455,9 @@ else:
 _validate_generated_counts(student_answers_df, tasks, cfg)
 
 print(f"Generated {len(student_answers_df)} total student answers")
-num_correct = (student_answers_df["label"] == "correct").sum()
-num_partial = (student_answers_df["label"] == "partial").sum()
-num_incorrect = (student_answers_df["label"] == "incorrect").sum()
+num_correct = (student_answers_df["labels"] == "correct").sum()
+num_partial = (student_answers_df["labels"] == "partial").sum()
+num_incorrect = (student_answers_df["labels"] == "incorrect").sum()
 print(f"Intended correct answers: {num_correct}")
 print(f"Intended partial answers: {num_partial}")
 print(f"Intended incorrect answers: {num_incorrect}")
@@ -471,7 +471,7 @@ print(f"Saved student answers to: {output_path}")
 # """
 # Sample a few random incorrect student answers to display
 # """
-# incorrect_df = student_answers_df[student_answers_df["label"] == "incorrect"]
+# incorrect_df = student_answers_df[student_answers_df["labels"] == "incorrect"]
 # sample_n = min(5, len(incorrect_df))
 # if sample_n > 0:
 #     incorrect_examples = incorrect_df.sample(n=sample_n, random_state=42)

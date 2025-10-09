@@ -31,9 +31,9 @@ dataset = dataset.align_labels_with_mapping(
         "irrelevant": 1,
         "non_domain": 1,
     },
-    "label",
+    "labels",
 )
-dataset = dataset.cast_column("label", ClassLabel(names=["correct", "incorrect"]))
+dataset = dataset.cast_column("labels", ClassLabel(names=["correct", "incorrect"]))
 
 # shuffle ds for reproducibility
 dataset = dataset.shuffle(seed=42)
@@ -49,7 +49,7 @@ def convert_to_dspy_format(dataset_split):
             question=item["question"],
             reference_answer=item["reference_answer"],
             student_answer=item["student_answer"],
-            label=item["label"],
+            label=item["labels"],
         ).with_inputs("question", "reference_answer", "student_answer")
         examples.append(example)
     return examples
