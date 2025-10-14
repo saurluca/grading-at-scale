@@ -30,6 +30,7 @@ def main() -> None:
     task_type = str(getattr(cfg, "task_type", "lora-classification"))
 
     dispatcher = getattr(cfg, "dispatcher", {})
+    models_list = dispatcher.get("models")
     seeds_list = dispatcher.get("seeds")
 
     if seeds_list:
@@ -51,16 +52,31 @@ def main() -> None:
 
     runner = select_main(task_type)
 
-    for i, seed in enumerate(seeds):
-        per_run_cfg = OmegaConf.merge(cfg, {"project": {"seed": int(seed)}})
-        out_path = run_dir / f"dispatcher_run_{int(time.time())}_{i}.yaml"
-        OmegaConf.save(config=per_run_cfg, f=str(out_path))
+    # Determine which model names to run: either an explicit list from dispatcher.models
+    # or fall back to the single base model in cfg.model.base
+    if models_list:
+        model_names = [str(m) for m in models_list]
+    else:
+        model_names = [str(cfg.model.base)]
 
-        os.environ["TRAINING_CONFIG_PATH"] = str(out_path)
-        print(
-            f"[dispatcher] Run {i + 1}/{len(seeds)}: seed={seed}, task={task_type}, cfg={out_path}"
-        )
-        runner()
+    for model_name in model_names:
+        safe_model = model_name.replace("/", "_").replace(":", "_")
+        for i, seed in enumerate(seeds):
+            per_run_cfg = OmegaConf.merge(
+                cfg,
+                {
+                    "project": {"seed": int(seed)},
+                    "model": {"base": model_name},
+                },
+            )
+            out_path = run_dir / f"dispatcher_run_{safe_model}_{int(time.time())}_{i}.yaml"
+            OmegaConf.save(config=per_run_cfg, f=str(out_path))
+
+            os.environ["TRAINING_CONFIG_PATH"] = str(out_path)
+            print(
+                f"[dispatcher] Model={model_name} | Run {i + 1}/{len(seeds)}: seed={seed}, task={task_type}, cfg={out_path}"
+            )
+            runner()
 
 
 if __name__ == "__main__":
