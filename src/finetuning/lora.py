@@ -173,13 +173,18 @@ def main() -> None:
 
         # Setup LoRA model
         print("Setting up LoRA configuration and applying to base model...")
+
+        # Set fan_in_fan_out True only for openai-community/gpt2, else False
+        fan_in_fan_out = True if model_name == "openai-community/gpt2" else False
+
         lora_kwargs = dict(
             r=int(cfg.lora.r),
             lora_alpha=int(cfg.lora.alpha),
             lora_dropout=float(cfg.lora.dropout),
             target_modules=cfg.lora.target_modules,
-            # target_modules="all-linear",
             task_type=TaskType.SEQ_CLS,
+            use_rslora=cfg.lora.get("use_rslora", False),
+            fan_in_fan_out=fan_in_fan_out,
         )
         # Only set init_lora_weights if not explicitly False
         if getattr(cfg.lora, "init_weights", True) is not False:
