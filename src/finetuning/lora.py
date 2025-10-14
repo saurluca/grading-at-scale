@@ -214,10 +214,6 @@ def main() -> None:
         # Training
         print("Starting training...")
         trainer.train()
-        metrics = trainer.evaluate()
-
-        # Log final metrics
-        mlflow.log_metrics(metrics)
 
         # Perform detailed evaluation
         print("\nPerforming detailed evaluation on test dataset...")

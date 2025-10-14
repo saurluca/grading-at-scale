@@ -287,9 +287,6 @@ def main() -> None:
             print(f"Final Evaluation Loss: {loss_callback.eval_losses[-1]:.4f}")
             mlflow.log_metric("final_eval_loss", loss_callback.eval_losses[-1])
 
-        # Log final metrics
-        mlflow.log_metrics(metrics)
-
         # Print regression metrics
         print("\n\nRegression Evaluation Metrics:")
         print(f"RMSE (training metric): {metrics.get('eval_rmse', 'N/A'):.4f}")
