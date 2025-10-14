@@ -424,7 +424,7 @@ def setup_training_args(cfg, output_dir: str):
         metric_for_best_model="accuracy",
         greater_is_better=True,
         report_to="mlflow",
-        seed=int(getattr(cfg, "seed", 42)),
+        seed=int(getattr(cfg.project, "seed", 42)),
         bf16=True,
         # Enable evaluation and logging
         save_total_limit=2,
