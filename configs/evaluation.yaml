@@ -32,13 +32,14 @@ api_eval:
 
 # Local classifier evaluation (fine-tuned model on SciEntsBank)
 classifier_eval:
-  base_model: meta-llama/Llama-3.2-3B-Instruct
+  # base_model: meta-llama/Llama-3.2-3B-Instruct
+  base_model: google/flan-t5-base
 
   # Adapter configuration
   adapter:
     source: local # Options: 'local', 'hub', or 'none' (for base model only)
     # For local: path to adapter directory
-    path: ${paths.output_dir}/peft_output/adapter-Llama-3.2-3B-Instruct-asag2024
+    path: ${paths.output_dir}/peft_output/adapter-flan-t5-base-ASAG2024
     # For hub: use Hugging Face Hub repo ID (e.g., 'username/model-name-lora-dataset')
     # path: saurluca/Llama-3.2-1B-Instruct-lora-grading-at-scale
     # For none: no adapter will be loaded, base model will be used directly
@@ -48,16 +49,16 @@ classifier_eval:
     # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
     # csv_path: data/synth/full_gas.csv
     # csv_path: data/SciEntsBank_3way/test_ua.csv
-    csv_path: data/ASAG2024/test.csv
+    csv_path: data/ASAG2024/val.csv
     # else load from dataset directory
     # dir: data/SciEntsBank_3way
     # split: test_ua
     
     # Data sampling for evaluation
-    sample_fraction: 0.25 # Use 100% of data by default (0.0-1.0)
+    sample_fraction: 1.0 # Use 100% of data by default (0.0-1.0)
     sample_seed: 24       # Seed for reproducible sampling
 
-  batch_size: 32
+  batch_size: 64
   output_dir: ${paths.output_dir}/asag2024_eval
 
 # Tokenization settings
