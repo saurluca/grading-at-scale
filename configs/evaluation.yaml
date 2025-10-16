@@ -4,7 +4,8 @@
 
 # API-based evaluation (DSPy graders)
 api_eval:
-  model: llama3.2:1b
+  # model: llama3.2:1b
+  model: gpt-4o-mini
   temperature: 0.6
   cache: true
   max_tokens: 512

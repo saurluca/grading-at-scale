@@ -175,7 +175,7 @@ def main() -> None:
         print("Setting up LoRA configuration and applying to base model...")
 
         # Set fan_in_fan_out True only for openai-community/gpt2, else False
-        fan_in_fan_out = True if model_name == "openai-community/gpt2" else False
+        fan_in_fan_out = "openai-community/gpt2" in model_name
 
         lora_kwargs = dict(
             r=int(cfg.lora.r),
@@ -213,6 +213,10 @@ def main() -> None:
 
         # Training
         print("Starting training...")
+        metrics = trainer.evaluate()
+        print(f"Metrics before training: {metrics}")
+        mlflow.log_metrics(metrics)
+        
         trainer.train()
 
         # Perform detailed evaluation

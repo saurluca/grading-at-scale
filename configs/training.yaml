@@ -16,7 +16,15 @@ dispatcher:
   num_runs: 3
   seed_strategy: random  # same | random
   seeds: [42,43,44]          # optional list; if provided, overrides both above
-  # models: [openai-community/gpt2, openai-community/gpt2-large, google/flan-t5-base, Qwen/Qwen3-0.6B, meta-llama/Llama-3.2-1B-Instruct]              # optional list of model base names to run; if empty uses model.base
+  # optional list of model base names to run; if empty uses model.base
+  models: [
+    openai-community/gpt2-large,
+    openai-community/gpt2,
+    google/flan-t5-base,
+    Qwen/Qwen3-0.6B,
+    meta-llama/Llama-3.2-1B-Instruct
+  ]             
+
 
 # Dataset
 dataset:
@@ -33,7 +41,7 @@ dataset:
 # Output
 output:
   dir: ${paths.output_dir}/peft_output
-  save_model_locally: true
+  save_model_locally: false
   push_to_hub: false
   save_strategy: epoch
 
@@ -59,7 +67,7 @@ quantization:
 
 # Training hyperparameters
 training:
-  num_epochs: 2 # 3
+  num_epochs: 3 # 3
   batch_size: 
     train: 8
     eval: 16
@@ -76,7 +84,7 @@ tokenization:
 
 # MLflow tracking
 mlflow:
-  experiment_name: lora_training_testing
+  experiment_name: lora_training_comparison_v1
 
 
 # torch_empty_cache_steps to reduce vram
