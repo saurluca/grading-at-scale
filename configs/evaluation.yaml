@@ -21,7 +21,7 @@ api_eval:
   data:
     infer_path: false # Auto-infer from generation config
     # manual_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv # our dataset
-    manual_path: data/gras/test.csv 
+    manual_path: data/gras/test.csv
 
     # If infer_path=true, uses generation config to build filename
     # Format: student_answers_c{num_correct}_p{num_partial}_i{num_incorrect}_{model}_{mode}.csv
@@ -42,9 +42,9 @@ classifier_eval:
     source: local # Options: 'local', 'hub', or 'none' (for base model only)
     # For local: path to adapter directory
     # path: ${paths.output_dir}/peft_output/adapter-flan-t5-base-ASAG2024
-    path: ${paths.output_dir}/peft_output/adapter-Qwen3-0.6B-gras
+    # path: ${paths.output_dir}/peft_output/adapter-Qwen3-0.6B-gras
     # For hub: use Hugging Face Hub repo ID (e.g., 'username/model-name-lora-dataset')
-    # path: saurluca/Llama-3.2-1B-Instruct-lora-grading-at-scale
+    path: saurluca/Qwen3-0.6B-lora-gras
     # For none: no adapter will be loaded, base model will be used directly
 
   dataset:
@@ -57,12 +57,12 @@ classifier_eval:
     # else load from dataset directory
     # dir: data/SciEntsBank_3way
     # split: test_ua
-    
+
     # Data sampling for evaluation
     sample_fraction: 1.0 # Use 100% of data by default (0.0-1.0)
-    sample_seed: 24       # Seed for reproducible sampling
+    sample_seed: 24 # Seed for reproducible sampling
 
-  batch_size: 4
+  batch_size: 1
   output_dir: ${paths.output_dir}/gras_eval
 
 # Tokenization settings
