@@ -10,7 +10,7 @@ api_eval:
   cache: true
   max_tokens: 512
 
-  mode: per_question # single | per_question | all
+  mode: single # single | per_question | all
   chain_of_thought: false
 
   # What to pass to grader
@@ -21,7 +21,7 @@ api_eval:
   data:
     infer_path: false # Auto-infer from generation config
     # manual_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv # our dataset
-    manual_path: data/synth/full_gas.csv # scientsbank dataset
+    manual_path: data/gras/test.csv 
 
     # If infer_path=true, uses generation config to build filename
     # Format: student_answers_c{num_correct}_p{num_partial}_i{num_incorrect}_{model}_{mode}.csv
@@ -34,13 +34,15 @@ api_eval:
 # Local classifier evaluation (fine-tuned model on SciEntsBank)
 classifier_eval:
   # base_model: meta-llama/Llama-3.2-3B-Instruct
-  base_model: google/flan-t5-base
+  # base_model: google/flan-t5-base
+  base_model: Qwen/Qwen3-0.6B
 
   # Adapter configuration
   adapter:
     source: local # Options: 'local', 'hub', or 'none' (for base model only)
     # For local: path to adapter directory
-    path: ${paths.output_dir}/peft_output/adapter-flan-t5-base-ASAG2024
+    # path: ${paths.output_dir}/peft_output/adapter-flan-t5-base-ASAG2024
+    path: ${paths.output_dir}/peft_output/adapter-Qwen3-0.6B-gras
     # For hub: use Hugging Face Hub repo ID (e.g., 'username/model-name-lora-dataset')
     # path: saurluca/Llama-3.2-1B-Instruct-lora-grading-at-scale
     # For none: no adapter will be loaded, base model will be used directly
@@ -50,7 +52,8 @@ classifier_eval:
     # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
     # csv_path: data/synth/full_gas.csv
     # csv_path: data/SciEntsBank_3way/test_ua.csv
-    csv_path: data/ASAG2024/val.csv
+    # csv_path: data/ASAG2024/val.csv
+    csv_path: data/gras/test.csv
     # else load from dataset directory
     # dir: data/SciEntsBank_3way
     # split: test_ua
@@ -59,12 +62,12 @@ classifier_eval:
     sample_fraction: 1.0 # Use 100% of data by default (0.0-1.0)
     sample_seed: 24       # Seed for reproducible sampling
 
-  batch_size: 64
-  output_dir: ${paths.output_dir}/asag2024_eval
+  batch_size: 4
+  output_dir: ${paths.output_dir}/gras_eval
 
 # Tokenization settings
 tokenization:
-  include_reference_answer: true
+  include_reference_answer: false
   include_chunk_text: false
 
 # Output settings

@@ -32,7 +32,23 @@ def main() -> None:
     training_cfg = OmegaConf.load(training_cfg_path)
     cfg = OmegaConf.merge(base_cfg, training_cfg)
 
-    dataset_csv: str = str(PROJECT_ROOT / cfg.dataset.csv_path)
+    # Determine if using split files or single file
+    use_split_files = bool(getattr(cfg.dataset, "use_split_files", False))
+    
+    if use_split_files:
+        # Use separate train/val files
+        dataset_base_path = PROJECT_ROOT / "data" / cfg.dataset.dataset_name
+        train_csv = str(dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv"))
+        val_csv = str(dataset_base_path / getattr(cfg.dataset, "val_file", "val.csv"))
+        dataset_csv = train_csv  # For logging purposes
+        print(f"Using split files - train: {train_csv}, val: {val_csv}")
+    else:
+        # Use single file to split at runtime
+        dataset_csv = str(PROJECT_ROOT / cfg.dataset.csv_path)
+        train_csv = None
+        val_csv = None
+        print(f"Using single file to split at runtime: {dataset_csv}")
+    
     model_name: str = str(cfg.model.base)
     output_dir: str = str(PROJECT_ROOT / cfg.output.dir)
     cache_dir: str | None = str(cfg.paths.hf_cache_dir) if "paths" in cfg else None
@@ -58,6 +74,7 @@ def main() -> None:
                 "model_name": model_name,
                 "dataset_name": str(cfg.dataset.dataset_name),
                 "dataset_csv": dataset_csv,
+                "use_split_files": use_split_files,
                 "output_dir": output_dir,
                 "num_train_epochs": float(cfg.training.num_epochs),
                 "per_device_train_batch_size": int(cfg.training.batch_size.train),
@@ -80,6 +97,9 @@ def main() -> None:
             cache_dir,
             int(getattr(cfg.project, "seed", 42)),
             test_size=cfg.dataset.test_size,
+            use_split_files=use_split_files,
+            train_csv=train_csv,
+            val_csv=val_csv,
         )
 
         # Log dataset info

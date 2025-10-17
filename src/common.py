@@ -20,6 +20,7 @@ from transformers import (
     ApertusForCausalLM,
     BitsAndBytesConfig,
 )
+from datasets import concatenate_datasets
 from peft import prepare_model_for_kbit_training
 import torch
 
@@ -149,14 +150,66 @@ def load_and_preprocess_data(
     test_size: float = 0.5,
     use_unseen_questions: bool = False,
     topics: list[str] | None = None,
+    use_split_files: bool = False,
+    train_csv: str | None = None,
+    val_csv: str | None = None,
 ):
-    print(f"Loading dataset from {dataset_csv} ...")
-    full_dataset = load_dataset(
-        "csv",
-        data_files={"data": dataset_csv},
-        cache_dir=cache_dir,
-        sep=";",
-    )["data"]
+    """
+    Load and preprocess dataset.
+    
+    Args:
+        dataset_csv: Path to single CSV file (used when use_split_files=False)
+        cache_dir: Cache directory for datasets
+        seed: Random seed for reproducibility
+        test_size: Fraction of data for test set (only used when use_split_files=False)
+        use_unseen_questions: Whether to split by questions (only used when use_split_files=False)
+        topics: List of topics to filter (applies to both modes)
+        use_split_files: If True, use separate train/val files instead of splitting
+        train_csv: Path to train.csv (used when use_split_files=True)
+        val_csv: Path to val.csv (used when use_split_files=True)
+    
+    Returns:
+        raw_data: DatasetDict with 'train' and 'test' splits
+        label_order: List of label names in order
+        label2id: Dict mapping label names to IDs
+        id2label: Dict mapping IDs to label names
+    """
+    
+    if use_split_files:
+        print(f"Loading pre-split datasets from {train_csv} and {val_csv} ...")
+        if train_csv is None or val_csv is None:
+            raise ValueError("train_csv and val_csv must be provided when use_split_files=True")
+        
+        # Load separate train and validation files
+        train_dataset = load_dataset(
+            "csv",
+            data_files={"data": train_csv},
+            cache_dir=cache_dir,
+            sep=";",
+        )["data"]
+        
+        val_dataset = load_dataset(
+            "csv",
+            data_files={"data": val_csv},
+            cache_dir=cache_dir,
+            sep=";",
+        )["data"]
+        
+        print(f"Loaded train dataset: {len(train_dataset)} samples")
+        print(f"Loaded validation dataset: {len(val_dataset)} samples")
+        
+        # Combine for topic counting and filtering if needed
+        full_dataset = concatenate_datasets([train_dataset, val_dataset])
+    else:
+        print(f"Loading dataset from {dataset_csv} ...")
+        full_dataset = load_dataset(
+            "csv",
+            data_files={"data": dataset_csv},
+            cache_dir=cache_dir,
+            sep=";",
+        )["data"]
+        train_dataset = None
+        val_dataset = None
 
     # Count samples per topic before any filtering
     topic_counts = {}
@@ -169,14 +222,42 @@ def load_and_preprocess_data(
     label2id: Dict[str, int] = {name: i for i, name in enumerate(label_order)}
     id2label: Dict[int, str] = {i: name for name, i in label2id.items()}
 
-    # Map labels on the full dataset (before splitting)
-    full_dataset = full_dataset.map(lambda x: map_labels(x, label2id))
-
-    # Ensure 'labels' is a ClassLabel feature to support stratified splitting
-    full_dataset = full_dataset.cast_column("labels", ClassLabel(names=label_order))
+    # Map labels on datasets
+    if use_split_files:
+        train_dataset = train_dataset.map(lambda x: map_labels(x, label2id))
+        val_dataset = val_dataset.map(lambda x: map_labels(x, label2id))
+        # Ensure 'labels' is a ClassLabel feature
+        train_dataset = train_dataset.cast_column("labels", ClassLabel(names=label_order))
+        val_dataset = val_dataset.cast_column("labels", ClassLabel(names=label_order))
+    else:
+        # Map labels on the full dataset (before splitting)
+        full_dataset = full_dataset.map(lambda x: map_labels(x, label2id))
+        # Ensure 'labels' is a ClassLabel feature to support stratified splitting
+        full_dataset = full_dataset.cast_column("labels", ClassLabel(names=label_order))
 
     # Handle topic filtering and train/test split
-    if topics is not None and len(topics) > 0:
+    if use_split_files:
+        # When using pre-split files, apply topic filtering to each split separately
+        if topics is not None and len(topics) > 0:
+            print(f"Applying topic filter to pre-split datasets: {topics}")
+            
+            # Filter train dataset
+            train_indices = [i for i, ex in enumerate(train_dataset) if ex["topic"] in topics]
+            train_dataset = train_dataset.select(train_indices)
+            
+            # Filter validation dataset
+            val_indices = [i for i, ex in enumerate(val_dataset) if ex["topic"] in topics]
+            val_dataset = val_dataset.select(val_indices)
+            
+            print(f"After topic filtering: train={len(train_dataset)}, val={len(val_dataset)} samples")
+        
+        # Use pre-split data directly
+        raw = DatasetDict({
+            "train": train_dataset,
+            "test": val_dataset,  # Using val.csv as test set
+        })
+        
+    elif topics is not None and len(topics) > 0:
         print(f"Topic filtering enabled for topics: {topics}")
 
         # Separate data into in-topic and out-of-topic groups
@@ -246,8 +327,6 @@ def load_and_preprocess_data(
             )
 
         # Combine test sets: out-of-topic data + test portion from in-topic split
-        from datasets import concatenate_datasets
-
         combined_test = concatenate_datasets(
             [out_of_topic_data, in_topic_split["test"]]
         )
