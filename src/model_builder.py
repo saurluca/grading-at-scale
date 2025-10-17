@@ -62,6 +62,16 @@ model_configs = {
         "api_key": "",
         "api_base": os.getenv("OLLAMA_API_BASE"),
     },
+    # "qwen3:0.6b": {
+    #     "model": "ollama_chat/qwen3.0:6b",
+    #     "api_key": "",
+    #     "api_base": os.getenv("OLLAMA_API_BASE"),
+    # },
+    "qwen3:0.6b": {
+        "model": "hosted_vllm/Qwen/Qwen3-0.6B",
+        "api_key": "",
+        "api_base": os.getenv("VLLM_API_BASE"),
+    },
     "llama3.1:8b": {
         "model": "ollama_chat/llama3.1:8b",
         "api_key": "",

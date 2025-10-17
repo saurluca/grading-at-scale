@@ -1,0 +1,18 @@
+model:
+  base: qwen3:0.6b
+  cache: true
+  temperature: 0.6
+  max_tokens: 512
+
+dataset:
+  csv_train: data/gras/train.csv
+  csv_test: data/gras/test.csv
+
+output:
+  dir: ${paths.output_dir}/few_shot
+
+hyperparameters:
+  num_candidate_programs: 4
+  num_threads: 4
+  num_bootstrapped_demos: 4
+  num_labeled_demos: 4

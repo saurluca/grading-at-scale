@@ -39,7 +39,7 @@ classifier_eval:
 
   # Adapter configuration
   adapter:
-    source: local # Options: 'local', 'hub', or 'none' (for base model only)
+    source: hub # Options: 'local', 'hub', or 'none' (for base model only)
     # For local: path to adapter directory
     # path: ${paths.output_dir}/peft_output/adapter-flan-t5-base-ASAG2024
     # path: ${paths.output_dir}/peft_output/adapter-Qwen3-0.6B-gras
