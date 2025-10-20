@@ -17,9 +17,12 @@ SciEntsBank_2way/
 .hf_cache/
 
 .venv/
-/data
+data/
 
+
+
+# artifacts
 output.txt
 output_file.txt
-
 configs/.runs/*
+optimized_grader_single.json

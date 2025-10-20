@@ -2,11 +2,23 @@ model:
   base: qwen3:0.6b
   cache: true
   temperature: 0.6
-  max_tokens: 512
+  max_tokens: 1024
+
+  with_prompt: false
+  pass_reference: false
+  pass_reference_answer: true
+
 
 dataset:
   csv_train: data/gras/train.csv
   csv_test: data/gras/test.csv
+
+  n_train_examples: 10 # if none use all
+  n_test_examples: 10 # if none use all
+
+evaluation:
+  manual: false
+
 
 output:
   dir: ${paths.output_dir}/few_shot

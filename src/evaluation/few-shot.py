@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 from omegaconf import OmegaConf
-from signatures import GraderSingle
+from signatures import GraderSingle, GraderSingle_without_prompt
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
@@ -70,14 +70,14 @@ def plot_confusion_matrix(y_true, y_pred, save_path=None):
 
 def evaluate_grader_performance(
     answers_df,
-    grader_single=None,
+    grader=None,
 ):
     """
     Evaluate the grader's performance on the generated answers.
 
     Args:
         answers_df: DataFrame with student answers and labels
-        grader_single: The Grader instance for single evaluations
+        grader: The Grader instance for single evaluations
 
     Returns:
         Dictionary with evaluation metrics
@@ -104,7 +104,7 @@ def evaluate_grader_performance(
                 kwargs["reference"] = row["chunk_text"]
             if getattr(cfg, "pass_reference_answer", True):
                 kwargs["reference_answer"] = row["reference_answer"]
-            result = grader_single(**kwargs)
+            result = grader(**kwargs)
             predicted = int(result.label)
         except Exception as e:
             tqdm.write(f"Error grading answer: {e}")
@@ -163,29 +163,36 @@ def evaluate_grader_performance(
     }
 
 
-def convert_df_to_dspy_format(dataframe):
+def convert_df_to_dspy_format(dataframe, include_reference: bool = False, include_reference_answer: bool = False):
     """Convert DataFrame rows to DSPy Example objects."""
     examples = []
     for _, row in dataframe.iterrows():
         # Create DSPy Example with inputs and targets
-        example = dspy.Example(
-            question=row["question"],
-            reference_answer=row["reference_answer"],
-            reference=row["chunk_text"],
-            answer=row["student_answer"],
-            labels=row["labels"],
-        ).with_inputs("question", "reference_answer", "reference", "answer")
+        target = {
+            "label": row["labels"],
+        }
+        inputs = {
+            "question": row["question"],
+            "answer": row["student_answer"],
+        }
+        
+        # conditionally include reference and reference answer
+        if include_reference:
+            inputs["reference"] = row["chunk_text"]
+        if include_reference_answer:
+            inputs["reference_answer"] = row["reference_answer"]
+            
+        # create example with inputs and targets
+        example = dspy.Example(**inputs, **target).with_inputs(**inputs.keys())
         examples.append(example)
     return examples
 
 
 def metric(gold, pred, trace=None):
     # gold is a DSPy Example with targets, pred is the model output
-    print(f"pred: {pred.label}")
-    print(f"gold: {gold.labels}")
     
     generated_answer = int(pred.label)  # Changed from pred.labels to pred.label
-    correct_answer = int(gold.labels)
+    correct_answer = int(gold.label)
     
     # raise Exception(f"generated_answer: {generated_answer}, correct_answer: {correct_answer}")
 
@@ -211,7 +218,6 @@ output_dir = os.path.join(PROJECT_ROOT, cfg.output.dir)
 
 print(f"Using model {cfg.model.base} for evaluation")
 
-
 # Build LM and Grader program(s)
 grader_lm = build_lm(
     cfg.model.base,
@@ -220,59 +226,50 @@ grader_lm = build_lm(
     temperature=cfg.model.temperature,
 )
 
-grader_single = dspy.Predict(GraderSingle)
-grader_single.set_lm(grader_lm)
+print(f"Using LM {cfg.model.base}")
+
+if cfg.evaluation.with_prompt:
+    grader = dspy.Predict(GraderSingle)
+else:
+    grader = dspy.Predict(GraderSingle_without_prompt)
+
+dspy.configure(lm=grader_lm)
+grader.set_lm(grader_lm)
+
 
 train_csv_path = os.path.join(PROJECT_ROOT, cfg.dataset.csv_train)
 test_csv_path = os.path.join(PROJECT_ROOT, cfg.dataset.csv_test)
 
 print(f"Loading train set from {train_csv_path}")
+train_df = pd.read_csv(train_csv_path, sep=";")
+print(f"Loading test set from {test_csv_path}")
+test_df = pd.read_csv(test_csv_path, sep=";")
 
-train_df = pd.read_csv(cfg.dataset.csv_train, sep=";")
-test_df = pd.read_csv(cfg.dataset.csv_test, sep=";")
+if cfg.dataset.n_train_examples is not None:
+    train_df = train_df.sample(n=cfg.dataset.n_train_examples, random_state=42)
+if cfg.dataset.n_test_examples is not None:
+    test_df = test_df.sample(n=cfg.dataset.n_test_examples, random_state=42)
 
-# columns: question;reference_answer;chunk_text;student_answer;labels
+print(f"Train set size: {len(train_df)}")
+print(f"Test set size: {len(test_df)}")
 
 # Convert DataFrame to DSPy format
-trainset = convert_df_to_dspy_format(train_df)
-testset = convert_df_to_dspy_format(test_df)
-
-# %%
-
-# "manual grading" by looping through dataset first
-
-total_correct = 0
-total_partial = 0
-total_incorrect = 0
-for example in tqdm(testset):
-    pred = grader_single(question=example.question, answer=example.answer)
-    if pred.label == example.labels:
-        total_correct += 1
-    elif pred.label == 1:
-        total_partial += 1
-    else:
-        total_incorrect += 1
-    # print(f"pred: {pred.label}, gold: {example.labels}")
-    
-print(f"total_correct: {total_correct}, total_partial: {total_partial}, total_incorrect: {total_incorrect}")
-print(f"accuracy: {total_correct / (total_correct + total_partial + total_incorrect)}")
-print(f"precision: {total_correct / (total_correct + total_partial)}")
-print(f"recall: {total_correct / (total_correct + total_incorrect)}")
-
+trainset = convert_df_to_dspy_format(train_df, include_reference=cfg.pass_reference, include_reference_answer=cfg.pass_reference_answer)
+testset = convert_df_to_dspy_format(test_df, include_reference=cfg.pass_reference, include_reference_answer=cfg.pass_reference_answer)
 
 
 # %%
 evaluator = Evaluate(
-    devset=testset, num_threads=0, display_progress=True, display_table=False
+    devset=testset, num_threads=16, display_progress=True, display_table=False
 )
 
-# Launch evaluation.
-evaluator(grader_single, metric=metric)
+# Launch evaluation with DSPy
+evaluator(grader, metric=metric)
 
 
 # %%
 
-# improve the grader_single with few-shot optimization
+# improve the grader with few-shot optimization
 
 # Set up the optimizer: we want to "bootstrap" (i.e., self-generate) examples of your program's steps.
 # The optimizer will repeat this multiple times before selecting its best attempt on the devset.
@@ -283,81 +280,78 @@ evaluator(grader_single, metric=metric)
 #     num_threads=8,
 # )
 
-# teleprompter = BootstrapFewShotWithRandomSearch(metric=metric, **config)
-# optimized_grader_single = teleprompter.compile(grader_single, trainset=trainset)
+# teleprompter = dspy.BootstrapFewShotWithRandomSearch(metric=metric, **config)
+
+# simba = dspy.teleprompt.SIMBA(metric=metric, max_steps=12, max_demos=10)
+# labeled_few_shot = dspy.teleprompt.LabeledFewShot(k=8)
+
+# grader = labeled_few_shot.compile(grader, trainset=trainset)
 
 
-optimizer_b = dspy.BootstrapFewShot(
-    metric=metric,
-    max_bootstrapped_demos=4,
-    max_labeled_demos=2,
-)
-optimized_grader_single = optimizer_b.compile(grader_single, trainset=trainset)
-
-
-# # %%
-
-# optimized_teacher.save("optimized_teacher.json")
-
-evaluator(optimized_grader_single, metric=metric)
-
-
-
-
-
-# # Evaluate
-# print("\n" + "=" * 50)
-# print("EVALUATING GRADER PERFORMANCE")
-# print("=" * 50)
-# metrics = evaluate_grader_performance(
-#     test_df,
-#     grader_single=grader_single,
+# optimizer_b = dspy.BootstrapFewShot(
+#     metric=metric,
+#     max_bootstrapped_demos=4,
+#     max_labeled_demos=3,
 # )
+# grader = optimizer_b.compile(grader, trainset=trainset)
+# grader.save("optimized_grader.json")
 
-# # Display results
-# print("\n" + "=" * 50)
-# print("GRADER PERFORMANCE METRICS")
-# print("=" * 50)
-# print(f"Accuracy: {metrics['accuracy']:.3f}")
-# print(f"Precision (macro): {metrics['precision']:.3f}")
-# print(f"Recall (macro): {metrics['recall']:.3f}")
-# print(f"F1 Score (macro): {metrics['f1_score']:.3f}")
-
-# # Classification summary: expected vs predicted counts and failures
-# label_names = {0: "incorrect", 1: "partial", 2: "correct"}
-# labels = metrics["labels"]
-# predicted = metrics["predicted_labels"]
-
-# total = len(labels)
-# misclassified_total = sum(1 for i, p in zip(labels, predicted) if p != i)
-# invalid_predictions = sum(1 for p in predicted if p not in [0, 1, 2])
-
-# print("\nClassification details")
-# print(f"Total examples: {total}")
-# print(f"Misclassified (predicted != labels): {misclassified_total}")
-# if invalid_predictions > 0:
-#     print(f"Invalid predictions (not in [0, 1, 2]): {invalid_predictions}")
-
-# for c in [0, 1, 2]:
-#     expected_c = sum(1 for i in labels if i == c)
-#     predicted_c = sum(1 for p in predicted if p == c)
-#     misclassified_c = sum(1 for i, p in zip(labels, predicted) if i == c and p != c)
-#     print(
-#         f"Class '{label_names[c]}' ({c}) -> expected: {expected_c}, predicted: {predicted_c}, misclassified: {misclassified_c}"
-#     )
-
-# # Plot confusion matrix
-# mode_suffix = {"per_question": "perq"}.get(
-#     eval_mode, eval_mode
-# )
-# plot_filename = f"confusion_matrix_c{cfg.api_eval.data.num_correct_answers}_p{cfg.api_eval.data.num_partial_answers}_i{cfg.api_eval.data.num_incorrect_answers}_{cfg.api_eval.data.generation_model}_{mode_suffix}_{cfg.api_eval.data.generation_mode}.png"
-# plot_path = os.path.join(output_dir, plot_filename)
-# plot_confusion_matrix(
-#     metrics["labels"],
-#     metrics["predicted_labels"],
-#     save_path=plot_path,
-# )
+# Evaluate optimized grader with DSPy
+# evaluator(grader, metric=metric)
 
 # %%
 
-# # %%
+
+if cfg.evaluation.manual:
+    # Evaluate
+    print("\n" + "=" * 50)
+    print("EVALUATING GRADER PERFORMANCE")
+    print("=" * 50)
+    metrics = evaluate_grader_performance(
+        test_df,
+        grader=grader,
+    )
+
+    # Display results
+    print("\n" + "=" * 50)
+    print("GRADER PERFORMANCE METRICS")
+    print("=" * 50)
+    print(f"Accuracy: {metrics['accuracy']:.3f}")
+    print(f"Precision (macro): {metrics['precision']:.3f}")
+    print(f"Recall (macro): {metrics['recall']:.3f}")
+    print(f"F1 Score (macro): {metrics['f1_score']:.3f}")
+
+    # Classification summary: expected vs predicted counts and failures
+    label_names = {0: "incorrect", 1: "partial", 2: "correct"}
+    labels = metrics["labels"]
+    predicted = metrics["predicted_labels"]
+
+    total = len(labels)
+    misclassified_total = sum(1 for i, p in zip(labels, predicted) if p != i)
+    invalid_predictions = sum(1 for p in predicted if p not in [0, 1, 2])
+
+    print("\nClassification details")
+    print(f"Total examples: {total}")
+    print(f"Misclassified (predicted != labels): {misclassified_total}")
+    if invalid_predictions > 0:
+        print(f"Invalid predictions (not in [0, 1, 2]): {invalid_predictions}")
+
+    for c in [0, 1, 2]:
+        expected_c = sum(1 for i in labels if i == c)
+        predicted_c = sum(1 for p in predicted if p == c)
+        misclassified_c = sum(1 for i, p in zip(labels, predicted) if i == c and p != c)
+        print(
+            f"Class '{label_names[c]}' ({c}) -> expected: {expected_c}, predicted: {predicted_c}, misclassified: {misclassified_c}"
+        )
+
+    # Plot confusion matrix
+    mode_suffix = {"per_question": "perq"}.get(
+        "per_question", "per_question"
+    )
+    plot_filename = f"confusion_matrix_per_question_{cfg.model.base}.png"
+    plot_path = os.path.join(output_dir, plot_filename)
+    plot_confusion_matrix(
+        metrics["labels"],
+        metrics["predicted_labels"],
+        save_path=plot_path,
+    )
