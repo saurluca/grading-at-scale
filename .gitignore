@@ -26,3 +26,6 @@ output.txt
 output_file.txt
 configs/.runs/*
 optimized_grader_single.json
+
+
+*.sqlite
