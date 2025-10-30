@@ -11,6 +11,9 @@ df_tasks = pd.read_csv(PROJECT_ROOT / "data" / "logic" / "quiz_1_tasks.csv", sep
 
 df_points = pd.read_csv(PROJECT_ROOT / "data" / "logic" / "quiz_1_points.csv", sep=";")
 
+df_remarks = pd.read_csv(
+    PROJECT_ROOT / "data" / "logic" / "quiz_1_remarks.csv", sep=";"
+)
 
 # remove column Teilnehmer
 # df = df[["1. Sentences", "3. Validity and Soundness (II)"]]
@@ -30,7 +33,12 @@ df_points = df_points.rename(
     }
 )
 
+max_points_sentences = df_points["sentences_points"].max()
+max_points_validity_and_soundness = df_points["validity_and_soundness_points"].max()
+
 df = pd.concat([df, df_points], axis=1)
+
+df_remarks = df_remarks.drop(columns=["username"])
 
 
 df
@@ -87,12 +95,45 @@ df
 #     "<br /><br />", "<br />"
 # )
 
-# df.to_csv(PROJECT_ROOT / "data" / "logic" / "quiz_1_parsed.csv", index=False, sep=";")
+# df.to_csv(PROJECT_ROOT / "data" / "logic" /rue/False, because ...rue/False, because ...<br />true becaus...	5	<br />true becaus...	5	 "quiz_1_parsed.csv", index=False, sep=";")
+
 
 # %%
 
-df_sentences = df["sentences"].copy()
-df_validity_and_soundness = df["validity_and_soundness"].copy()
+df_sentences = df[["sentences"]].copy()
+df_validity_and_soundness = df[["validity_and_soundness"]].copy()
+
+# # select remarks for sentences and validity and soundness tasks
+# df_sentence_remarks = df_remarks[df_remarks["task_id"] == 0]
+# df_validity_and_soundness_remarks = df_remarks[df_remarks["task_id"] == 2]
+
+# # drop task_id column from df_sentence_remarks and df_validity_and_soundness_remarks
+# df_sentence_remarks = df_sentence_remarks.drop(columns=["task_id"])
+# df_validity_and_soundness_remarks = df_validity_and_soundness_remarks.drop(
+#     columns=["task_id"]
+# )
+
+# # concatenate remarks with sentences and validity and soundness dataframes
+# df_sentences = pd.concat([df_sentences, df_sentence_remarks], axis=1)
+# df_validity_and_soundness = pd.concat(
+#     [df_validity_and_soundness, df_validity_and_soundness_remarks], axis=1
+# )
+
+# # save dataframes to csv
+# df_sentences.to_csv(
+#     PROJECT_ROOT / "data" / "logic" / "quiz_1_sentences.csv", index=False, sep=";"
+# )
+# df_validity_and_soundness.to_csv(
+#     PROJECT_ROOT / "data" / "logic" / "quiz_1_validity_and_soundness.csv",
+#     index=False,
+#     sep=";",
+# )
+
+
+# %%
+
+# Split subtasks into separate rows ....
+
 
 # replace <br /> with ;
 df_sentences = df_sentences.str.replace("<br />", ";")
@@ -151,6 +192,10 @@ for student_idx, row in df.iterrows():
 df_sentences = pd.DataFrame(sentences_data)
 df_validity = pd.DataFrame(validity_data)
 
+df_sentences.head()
+
+# %%
+
 # Get questions for each task type from df_tasks
 sentences_questions = df_tasks[df_tasks["task"] == "sentences"].reset_index(drop=True)
 # Handle both 'validity_and_soundness' and ' validity_and_soundness' (with leading space)
@@ -177,8 +222,31 @@ df_validity["reference_answer"] = df_validity["question_idx"].map(
 # Combine both dataframes
 df_unified = pd.concat([df_sentences, df_validity], ignore_index=True)
 
+# remove all <p> and </p> tags from student_answer
+df_unified["student_answer"] = (
+    df_unified["student_answer"].str.replace("<p>", "").str.replace("</p>", "")
+)
+
+# add colum points, filled with 1 for every row
+df_unified["points"] = 1
+
+# if colum student_answer is empty set to 0
+df_unified["points"] = df_unified["points"].apply(lambda x: 0 if x == "" else x)
+
+# if column student answer contains Yes/No, because ... and has the lenght of Yes/No, because ... plus 3, exaclty set to 0
+df_unified["points"] = df_unified["points"].apply(
+    lambda x: 0
+    if "Yes/No, because ..." in x and len(x) == len("Yes/No, because ...") + 3
+    else x
+)
+
+# prin out number of 0
+print(f"Number of 0 points: {df_unified['points'].value_counts()[0]}")
+
 # Select final columns and reorder
-df_final = df_unified[["question", "reference_answer", "student_answer", "task"]].copy()
+df_final = df_unified[
+    ["question", "reference_answer", "student_answer", "task", "points"]
+].copy()
 
 # # Save the unified dataframe
 output_path = PROJECT_ROOT / "data" / "logic" / "quiz_1_unified.csv"
