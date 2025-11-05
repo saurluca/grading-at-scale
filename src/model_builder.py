@@ -18,40 +18,6 @@ model_configs = {
         "api_base": os.getenv("AZURE_API_BASE"),
         "api_version": "2024-12-01-preview",
     },
-    "apertus-8b": {
-        "model": "openrouter/swiss-ai/apertus-8b-instruct",
-        "api_key": os.getenv("SWISS_API_KEY"),
-        "api_base": "https://api.publicai.co/v1",
-    },
-    "apertus-70b": {
-        "model": "openrouter/swiss-ai/apertus-70b-instruct",
-        "api_key": os.getenv("SWISS_API_KEY"),
-        "api_base": "https://api.publicai.co/v1",
-    },
-    "DeepSeek-V3.1": {
-        "model": "huggingface/fireworks-ai/deepseek-ai/DeepSeek-V3.1",
-        "api_key": os.getenv("HF_TOKEN"),
-    },
-    "gpt-oss-120b": {
-        "model": "huggingface/cerebras/openai/gpt-oss-120b",
-        "api_key": os.getenv("HF_TOKEN"),
-    },
-    "llama-4": {
-        "model": "openrouter/meta-llama/llama-4-scout:free",
-        "api_key": os.getenv("OPENROUTER_API_KEY"),
-    },
-    "gpt-5-mini": {
-        "model": "openrouter/openai/gpt-5-mini",
-        "api_key": os.getenv("OPENROUTER_API_KEY"),
-    },
-    "gpt-oss-20b": {
-        "model": "openrouter/openai/gpt-oss-20b:free",
-        "api_key": os.getenv("OPENROUTER_API_KEY"),
-    },
-    "aion-llama": {
-        "model": "openrouter/aion-labs/aion-rp-llama-3.1-8b",
-        "api_key": os.getenv("OPENROUTER_API_KEY"),
-    },
     "llama3.2:3b": {
         "model": "ollama_chat/llama3.2:3b",
         "api_key": "",
@@ -71,21 +37,6 @@ model_configs = {
         "model": "hosted_vllm/Qwen/Qwen3-0.6B",
         "api_key": "",
         "api_base": os.getenv("VLLM_API_BASE"),
-    },
-    "llama3.1:8b": {
-        "model": "ollama_chat/llama3.1:8b",
-        "api_key": "",
-        "api_base": os.getenv("OLLAMA_API_BASE"),
-    },
-    "deepseek-r1": {
-        "model": "ollama_chat/deepseek-r1:8b",
-        "api_key": "",
-        "api_base": os.getenv("OLLAMA_API_BASE"),
-    },
-    "deepseek-r1:1.5b": {
-        "model": "ollama_chat/deepseek-r1:1.5b",
-        "api_key": "",
-        "api_base": os.getenv("OLLAMA_API_BASE"),
     },
 }
 
