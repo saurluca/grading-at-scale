@@ -1,7 +1,3 @@
-"""
-Process grading results from JSON and convert back to CSV with subtask points
-"""
-
 from pathlib import Path
 import pandas as pd
 import json

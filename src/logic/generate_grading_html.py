@@ -1,7 +1,3 @@
-"""
-Generate HTML grading interface for Logic quiz subtasks
-"""
-
 from pathlib import Path
 import pandas as pd
 

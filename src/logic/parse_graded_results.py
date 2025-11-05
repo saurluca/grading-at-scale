@@ -1,9 +1,4 @@
 # %%
-"""
-Transform graded quiz results from wide format to long format.
-Converts one row per participant to one row per participant-question combination.
-"""
-
 from pathlib import Path
 import pandas as pd
 import re
