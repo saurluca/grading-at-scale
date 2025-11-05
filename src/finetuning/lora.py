@@ -33,11 +33,13 @@ def main() -> None:
 
     # Determine if using split files or single file
     use_split_files = bool(getattr(cfg.dataset, "use_split_files", False))
-    
+
     if use_split_files:
         # Use separate train/val files
         dataset_base_path = PROJECT_ROOT / "data" / cfg.dataset.dataset_name
-        train_csv = str(dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv"))
+        train_csv = str(
+            dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv")
+        )
         val_csv = str(dataset_base_path / getattr(cfg.dataset, "val_file", "val.csv"))
         dataset_csv = train_csv  # For logging purposes
         print(f"Using split files - train: {train_csv}, val: {val_csv}")
@@ -47,7 +49,7 @@ def main() -> None:
         train_csv = None
         val_csv = None
         print(f"Using single file to split at runtime: {dataset_csv}")
-    
+
     model_name: str = str(cfg.model.base)
     output_dir: str = str(PROJECT_ROOT / cfg.output.dir)
     cache_dir: str | None = str(cfg.paths.hf_cache_dir) if "paths" in cfg else None
@@ -78,9 +80,7 @@ def main() -> None:
         if ("quantization" in cfg and cfg.quantization.get("load_in_4bit", False))
         else "lora"
     )
-    with mlflow.start_run(
-        run_name=f"{run_name_suffix}_{model_name.split('/')[-1]}"
-    ):
+    with mlflow.start_run(run_name=f"{run_name_suffix}_{model_name.split('/')[-1]}"):
         # Log the raw dataset as an MLflow Dataset
         try:
             raw_df = pd.read_csv(dataset_csv, delimiter=";")
@@ -191,7 +191,6 @@ def main() -> None:
         tokenizer, base_model = setup_model_and_tokenizer(
             model_name, label2id, id2label, cache_path, quantization_config
         )
-        
 
         # Setup LoRA model
         print("Setting up LoRA configuration and applying to base model...")
@@ -238,7 +237,7 @@ def main() -> None:
         metrics = trainer.evaluate()
         print(f"Metrics before training: {metrics}")
         mlflow.log_metrics(metrics)
-        
+
         trainer.train()
 
         # Perform detailed evaluation

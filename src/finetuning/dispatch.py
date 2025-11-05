@@ -69,7 +69,9 @@ def main() -> None:
                     "model": {"base": model_name},
                 },
             )
-            out_path = run_dir / f"dispatcher_run_{safe_model}_{int(time.time())}_{i}.yaml"
+            out_path = (
+                run_dir / f"dispatcher_run_{safe_model}_{int(time.time())}_{i}.yaml"
+            )
             OmegaConf.save(config=per_run_cfg, f=str(out_path))
 
             os.environ["TRAINING_CONFIG_PATH"] = str(out_path)

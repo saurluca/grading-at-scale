@@ -2,14 +2,13 @@ import dspy
 from typing import List, Optional
 
 
-
 class GraderSingle(dspy.Signature):
     """
     You are a university professor for a introductory class.
     Your job is to grade exercises and decide if the student answers are correct(2), partially correct(1), or incorrect(0).
     Return the corrsponding integer label for the grading, 0 for incorrect, 1 for partially correct, 2 for correct.
     """
-        
+
     question: str = dspy.InputField(description="The question text")
     reference: Optional[str] = dspy.InputField(
         description="The ground truth reference text", optional=True
@@ -24,7 +23,7 @@ class GraderSingle(dspy.Signature):
     )
 
 
-class GraderSingle_without_prompt(dspy.Signature):        
+class GraderSingle_without_prompt(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
     reference: Optional[str] = dspy.InputField(
         description="The ground truth reference text", optional=True
@@ -37,7 +36,6 @@ class GraderSingle_without_prompt(dspy.Signature):
     label: int = dspy.OutputField(
         description="2 if the student answer is correct, 1 if the student answer is partially correct, 0 if the student answer is incorrect"
     )
-
 
 
 class GraderPerQuestion(dspy.Signature):

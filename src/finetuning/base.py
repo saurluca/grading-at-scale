@@ -34,11 +34,13 @@ def main() -> None:
 
     # Determine if using split files or single file
     use_split_files = bool(getattr(cfg.dataset, "use_split_files", False))
-    
+
     if use_split_files:
         # Use separate train/val files
         dataset_base_path = PROJECT_ROOT / "data" / cfg.dataset.dataset_name
-        train_csv = str(dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv"))
+        train_csv = str(
+            dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv")
+        )
         val_csv = str(dataset_base_path / getattr(cfg.dataset, "val_file", "val.csv"))
         dataset_csv = train_csv  # For logging purposes
         print(f"Using split files - train: {train_csv}, val: {val_csv}")
@@ -48,7 +50,7 @@ def main() -> None:
         train_csv = None
         val_csv = None
         print(f"Using single file to split at runtime: {dataset_csv}")
-    
+
     model_name: str = str(cfg.model.base)
     output_dir: str = str(PROJECT_ROOT / cfg.output.dir)
     cache_dir: str | None = str(cfg.paths.hf_cache_dir) if "paths" in cfg else None
@@ -87,7 +89,6 @@ def main() -> None:
                     getattr(cfg.tokenization, "include_reference_answer", False)
                 ),
                 "load_in_4bit": bool(getattr(cfg.quantization, "load_in_4bit", False)),
-                
             }
         )
 
@@ -127,9 +128,7 @@ def main() -> None:
 
         # Setup training arguments and trainer
         training_args = setup_training_args(cfg, output_dir)
-        trainer = setup_trainer(
-            model, training_args, tokenized_data, tokenizer
-        )
+        trainer = setup_trainer(model, training_args, tokenized_data, tokenizer)
 
         # Training
         print("Starting training...")

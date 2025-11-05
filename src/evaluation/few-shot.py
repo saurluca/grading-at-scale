@@ -39,26 +39,28 @@ def log_config_params_to_mlflow(cfg):
     """Log configuration parameters to MLflow, excluding paths and evaluation.manual."""
     # Parameters to exclude
     exclude_keys = {
-        'csv_train', 'csv_test', 'dir',  # file paths and directories
-        'manual'  # evaluation.manual
+        "csv_train",
+        "csv_test",
+        "dir",  # file paths and directories
+        "manual",  # evaluation.manual
     }
-    
+
     # Flatten the config and log parameters
-    def flatten_dict(d, parent_key='', sep='.'):
+    def flatten_dict(d, parent_key="", sep="."):
         items = []
         for k, v in d.items():
             new_key = f"{parent_key}{sep}{k}" if parent_key else k
             # Handle OmegaConf objects and regular dicts
-            if hasattr(v, 'items'):  # OmegaConf or dict-like object
+            if hasattr(v, "items"):  # OmegaConf or dict-like object
                 items.extend(flatten_dict(v, new_key, sep=sep).items())
             else:
                 items.append((new_key, v))
         return dict(items)
-    
+
     # Convert OmegaConf to regular dict first, then flatten
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     flattened_cfg = flatten_dict(cfg_dict)
-    
+
     # Filter out excluded parameters
     params_to_log = {}
     for key, value in flattened_cfg.items():
@@ -67,7 +69,7 @@ def log_config_params_to_mlflow(cfg):
         if not should_exclude:
             # Convert value to string for MLflow logging
             params_to_log[key] = str(value)
-    
+
     # Log parameters to MLflow
     mlflow.log_params(params_to_log)
     print(f"Logged {len(params_to_log)} parameters to MLflow")
@@ -206,7 +208,9 @@ def evaluate_grader_performance(
     }
 
 
-def convert_df_to_dspy_format(dataframe, include_reference: bool = False, include_reference_answer: bool = False):
+def convert_df_to_dspy_format(
+    dataframe, include_reference: bool = False, include_reference_answer: bool = False
+):
     """Convert DataFrame rows to DSPy Example objects."""
     examples = []
     for _, row in dataframe.iterrows():
@@ -216,20 +220,20 @@ def convert_df_to_dspy_format(dataframe, include_reference: bool = False, includ
             "answer": row["student_answer"],
             "label": row["labels"],
         }
-        
+
         # conditionally include reference and reference answer
         if include_reference:
             example_data["reference"] = row["chunk_text"]
         if include_reference_answer:
             example_data["reference_answer"] = row["reference_answer"]
-        
+
         # Define input keys (everything except the target)
         input_keys = ["question", "answer"]
         if include_reference:
             input_keys.append("reference")
         if include_reference_answer:
             input_keys.append("reference_answer")
-            
+
         # create example with combined data and specify input keys
         example = dspy.Example(**example_data).with_inputs(*input_keys)
         examples.append(example)
@@ -238,10 +242,10 @@ def convert_df_to_dspy_format(dataframe, include_reference: bool = False, includ
 
 def metric(gold, pred, trace=None):
     # gold is a DSPy Example with targets, pred is the model output
-    
+
     generated_answer = int(pred.label)  # Changed from pred.labels to pred.label
     correct_answer = int(gold.label)
-    
+
     # raise Exception(f"generated_answer: {generated_answer}, correct_answer: {correct_answer}")
 
     # Check for NaN values first
@@ -254,6 +258,7 @@ def metric(gold, pred, trace=None):
     else:
         return 0.0
 
+
 """
 Main evaluation pipeline
 """
@@ -263,8 +268,7 @@ base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
 
 # Support loading custom config via environment variable (for sweeps)
 few_shot_config_path = os.environ.get(
-    "FEW_SHOT_CONFIG",
-    str(PROJECT_ROOT / "configs" / "few_shot.yaml")
+    "FEW_SHOT_CONFIG", str(PROJECT_ROOT / "configs" / "few_shot.yaml")
 )
 few_shot_cfg = OmegaConf.load(few_shot_config_path)
 cfg = OmegaConf.merge(base_cfg, few_shot_cfg)
@@ -274,7 +278,7 @@ print(f"Using model {cfg.model.base} for evaluation")
 
 # Create run name based on model and configuration
 model_name = cfg.model.base
-model_short = model_name.split('/')[-1]
+model_short = model_name.split("/")[-1]
 prompt_str = "prompt" if cfg.model.with_prompt else "noprompt"
 ref_str = "ref" if cfg.model.pass_reference else "noref"
 refans_str = "refans" if cfg.model.pass_reference_answer else "norefans"
@@ -288,10 +292,10 @@ with mlflow.start_run(run_name=run_name) as run:
     #     log_evals=True,
     #     log_traces_from_compile=True
     # )
-    
+
     # Log configuration parameters early
     log_config_params_to_mlflow(cfg)
-    
+
     # Build LM and Grader program(s)
     grader_lm = build_lm(
         cfg.model.base,
@@ -310,7 +314,6 @@ with mlflow.start_run(run_name=run_name) as run:
     dspy.configure(lm=grader_lm)
     grader.set_lm(grader_lm)
 
-
     train_csv_path = os.path.join(PROJECT_ROOT, cfg.dataset.csv_train)
     test_csv_path = os.path.join(PROJECT_ROOT, cfg.dataset.csv_test)
 
@@ -328,27 +331,30 @@ with mlflow.start_run(run_name=run_name) as run:
 
     print(f"Train set size: {len(train_df)}")
     print(f"Test set size: {len(test_df)}")
-    
+
     # Log datasets as MLflow Datasets
     train_ml_dataset = mlflow.data.from_pandas(
-        train_df,
-        source=train_csv_path,
-        name="train_dataset"
+        train_df, source=train_csv_path, name="train_dataset"
     )
     mlflow.log_input(train_ml_dataset, context="training")
-    
+
     test_ml_dataset = mlflow.data.from_pandas(
-        test_df,
-        source=test_csv_path,
-        name="test_dataset"
+        test_df, source=test_csv_path, name="test_dataset"
     )
     mlflow.log_input(test_ml_dataset, context="evaluation")
     print("Successfully logged datasets as MLflow Datasets")
 
     # Convert DataFrame to DSPy format
-    trainset = convert_df_to_dspy_format(train_df, include_reference=cfg.model.pass_reference, include_reference_answer=cfg.model.pass_reference_answer)
-    testset = convert_df_to_dspy_format(test_df, include_reference=cfg.model.pass_reference, include_reference_answer=cfg.model.pass_reference_answer)
-
+    trainset = convert_df_to_dspy_format(
+        train_df,
+        include_reference=cfg.model.pass_reference,
+        include_reference_answer=cfg.model.pass_reference_answer,
+    )
+    testset = convert_df_to_dspy_format(
+        test_df,
+        include_reference=cfg.model.pass_reference,
+        include_reference_answer=cfg.model.pass_reference_answer,
+    )
 
     # %%
     evaluator = Evaluate(
@@ -357,11 +363,11 @@ with mlflow.start_run(run_name=run_name) as run:
 
     # Launch evaluation with DSPy - autologging will track this within parent run
     result = evaluator(grader, metric=metric)
-    
+
     # print(f"Evaluation result: {result}")
-    
+
     mlflow.log_metric("evaluation_accuracy", result.score)
-    
+
     print(f"Evaluation complete. MLflow run ID: {run.info.run_id}")
 
     # %%
@@ -384,7 +390,6 @@ with mlflow.start_run(run_name=run_name) as run:
 
     # grader = labeled_few_shot.compile(grader, trainset=trainset)
 
-
     # optimizer_b = dspy.BootstrapFewShot(
     #     metric=metric,
     #     max_bootstrapped_demos=4,
@@ -397,7 +402,6 @@ with mlflow.start_run(run_name=run_name) as run:
     # evaluator(grader, metric=metric)
 
     # %%
-
 
     if cfg.evaluation.manual:
         # Evaluate
@@ -436,15 +440,15 @@ with mlflow.start_run(run_name=run_name) as run:
         for c in [0, 1, 2]:
             expected_c = sum(1 for i in labels if i == c)
             predicted_c = sum(1 for p in predicted if p == c)
-            misclassified_c = sum(1 for i, p in zip(labels, predicted) if i == c and p != c)
+            misclassified_c = sum(
+                1 for i, p in zip(labels, predicted) if i == c and p != c
+            )
             print(
                 f"Class '{label_names[c]}' ({c}) -> expected: {expected_c}, predicted: {predicted_c}, misclassified: {misclassified_c}"
             )
 
         # Plot confusion matrix
-        mode_suffix = {"per_question": "perq"}.get(
-            "per_question", "per_question"
-        )
+        mode_suffix = {"per_question": "perq"}.get("per_question", "per_question")
         plot_filename = f"confusion_matrix_per_question_{cfg.model.base}.png"
         plot_path = os.path.join(output_dir, plot_filename)
         plot_confusion_matrix(

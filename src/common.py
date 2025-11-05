@@ -157,7 +157,7 @@ def load_and_preprocess_data(
 ):
     """
     Load and preprocess dataset.
-    
+
     Args:
         dataset_csv: Path to single CSV file (used when use_split_files=False)
         cache_dir: Cache directory for datasets
@@ -168,19 +168,21 @@ def load_and_preprocess_data(
         use_split_files: If True, use separate train/val files instead of splitting
         train_csv: Path to train.csv (used when use_split_files=True)
         val_csv: Path to val.csv (used when use_split_files=True)
-    
+
     Returns:
         raw_data: DatasetDict with 'train' and 'test' splits
         label_order: List of label names in order
         label2id: Dict mapping label names to IDs
         id2label: Dict mapping IDs to label names
     """
-    
+
     if use_split_files:
         print(f"Loading pre-split datasets from {train_csv} and {val_csv} ...")
         if train_csv is None or val_csv is None:
-            raise ValueError("train_csv and val_csv must be provided when use_split_files=True")
-        
+            raise ValueError(
+                "train_csv and val_csv must be provided when use_split_files=True"
+            )
+
         # Load separate train and validation files
         train_dataset = load_dataset(
             "csv",
@@ -188,17 +190,17 @@ def load_and_preprocess_data(
             cache_dir=cache_dir,
             sep=";",
         )["data"]
-        
+
         val_dataset = load_dataset(
             "csv",
             data_files={"data": val_csv},
             cache_dir=cache_dir,
             sep=";",
         )["data"]
-        
+
         print(f"Loaded train dataset: {len(train_dataset)} samples")
         print(f"Loaded validation dataset: {len(val_dataset)} samples")
-        
+
         # Combine for topic counting and filtering if needed
         full_dataset = concatenate_datasets([train_dataset, val_dataset])
     else:
@@ -228,7 +230,9 @@ def load_and_preprocess_data(
         train_dataset = train_dataset.map(lambda x: map_labels(x, label2id))
         val_dataset = val_dataset.map(lambda x: map_labels(x, label2id))
         # Ensure 'labels' is a ClassLabel feature
-        train_dataset = train_dataset.cast_column("labels", ClassLabel(names=label_order))
+        train_dataset = train_dataset.cast_column(
+            "labels", ClassLabel(names=label_order)
+        )
         val_dataset = val_dataset.cast_column("labels", ClassLabel(names=label_order))
     else:
         # Map labels on the full dataset (before splitting)
@@ -241,23 +245,31 @@ def load_and_preprocess_data(
         # When using pre-split files, apply topic filtering to each split separately
         if topics is not None and len(topics) > 0:
             print(f"Applying topic filter to pre-split datasets: {topics}")
-            
+
             # Filter train dataset
-            train_indices = [i for i, ex in enumerate(train_dataset) if ex["topic"] in topics]
+            train_indices = [
+                i for i, ex in enumerate(train_dataset) if ex["topic"] in topics
+            ]
             train_dataset = train_dataset.select(train_indices)
-            
+
             # Filter validation dataset
-            val_indices = [i for i, ex in enumerate(val_dataset) if ex["topic"] in topics]
+            val_indices = [
+                i for i, ex in enumerate(val_dataset) if ex["topic"] in topics
+            ]
             val_dataset = val_dataset.select(val_indices)
-            
-            print(f"After topic filtering: train={len(train_dataset)}, val={len(val_dataset)} samples")
-        
+
+            print(
+                f"After topic filtering: train={len(train_dataset)}, val={len(val_dataset)} samples"
+            )
+
         # Use pre-split data directly
-        raw = DatasetDict({
-            "train": train_dataset,
-            "test": val_dataset,  # Using val.csv as test set
-        })
-        
+        raw = DatasetDict(
+            {
+                "train": train_dataset,
+                "test": val_dataset,  # Using val.csv as test set
+            }
+        )
+
     elif topics is not None and len(topics) > 0:
         print(f"Topic filtering enabled for topics: {topics}")
 
@@ -561,12 +573,12 @@ def detailed_evaluation(trainer, test_dataset, label_order):
 
     # Get predictions
     predictions = trainer.predict(test_dataset)
-    
+
     # Handle case where predictions.predictions might be a tuple/list (like in compute_metrics)
     logits = predictions.predictions
     if isinstance(logits, (tuple, list)):
         logits = logits[0]
-    
+
     y_pred = np.argmax(logits, axis=-1)
     y_true = predictions.label_ids
 
@@ -577,7 +589,7 @@ def detailed_evaluation(trainer, test_dataset, label_order):
     )
 
     # Calculate quadratic weighted kappa (for ordinal classification)
-    qwk = cohen_kappa_score(y_true, y_pred, weights='quadratic')
+    qwk = cohen_kappa_score(y_true, y_pred, weights="quadratic")
 
     # Calculate macro averages
     macro_precision = np.mean(precision)

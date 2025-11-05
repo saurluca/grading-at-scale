@@ -15,10 +15,10 @@ from common import load_and_preprocess_data
 config_path = PROJECT_ROOT / "configs" / "data_generation.yaml"
 base_config_path = PROJECT_ROOT / "configs" / "base.yaml"
 
-with open(base_config_path, 'r') as f:
+with open(base_config_path, "r") as f:
     base_config = yaml.safe_load(f)
 
-with open(config_path, 'r') as f:
+with open(config_path, "r") as f:
     data_config = yaml.safe_load(f)
 
 # Merge configurations (data_config takes precedence)
@@ -29,7 +29,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 data_dir = PROJECT_ROOT / config["paths"]["data_dir"]
 synth_dir = PROJECT_ROOT / "data" / "gras"
 # Parameters
-use_unseen_questions = True  # Set to True to split by questions, False for standard split
+use_unseen_questions = (
+    True  # Set to True to split by questions, False for standard split
+)
 seed = config["project"]["seed"]
 
 # Load the full dataset
@@ -50,7 +52,7 @@ raw_data, label_order, label2id, id2label = load_and_preprocess_data(
     cache_dir=None,
     seed=seed,
     test_size=0.2,  # 20% for test
-    use_unseen_questions=use_unseen_questions
+    use_unseen_questions=use_unseen_questions,
 )
 
 # Second split: split the 80% into 75% train, 25% val (which gives us 60% train, 20% val of original)
@@ -58,21 +60,25 @@ train_val_data = raw_data["train"]
 train_val_split = train_val_data.train_test_split(
     test_size=0.25,  # 25% of 80% = 20% of original
     seed=seed,
-    stratify_by_column="labels"
+    stratify_by_column="labels",
 )
 
 # Create final dataset with 6/2/2 split
-final_dataset = DatasetDict({
-    "train": train_val_split["train"],      # 60% of original
-    "val": train_val_split["test"],         # 20% of original  
-    "test": raw_data["test"]                # 20% of original
-})
+final_dataset = DatasetDict(
+    {
+        "train": train_val_split["train"],  # 60% of original
+        "val": train_val_split["test"],  # 20% of original
+        "test": raw_data["test"],  # 20% of original
+    }
+)
 
 print(f"Final split sizes:")
 print(f"Train: {len(final_dataset['train'])} samples")
-print(f"Validation: {len(final_dataset['val'])} samples") 
+print(f"Validation: {len(final_dataset['val'])} samples")
 print(f"Test: {len(final_dataset['test'])} samples")
-print(f"Total: {len(final_dataset['train']) + len(final_dataset['val']) + len(final_dataset['test'])} samples")
+print(
+    f"Total: {len(final_dataset['train']) + len(final_dataset['val']) + len(final_dataset['test'])} samples"
+)
 
 # %%
 # Save the split datasets
@@ -82,7 +88,7 @@ print("Saving split datasets...")
 for split_name, dataset in final_dataset.items():
     # Convert to pandas DataFrame
     df_split = dataset.to_pandas()
-    
+
     # Save to CSV
     output_path = synth_dir / f"{split_name}.csv"
     df_split.to_csv(output_path, index=False, sep=";")
