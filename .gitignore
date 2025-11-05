@@ -19,7 +19,8 @@ SciEntsBank_2way/
 .venv/
 data/
 
-
+.ruff_cache/
+.cursor/
 
 # artifacts
 output.txt
