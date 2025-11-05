@@ -13,7 +13,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 def select_main(task_type: str):
     mapping = {
         "lora-classification": "lora",
-        "lora-regression": "lora_regression",
         "vanilla-classification": "base",
     }
     if task_type not in mapping:
