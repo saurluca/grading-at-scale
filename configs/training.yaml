@@ -59,10 +59,7 @@ lora:
   r: 16
   alpha: 16
   dropout: 0.1
-  target_modules: "all-linear" # or ["q_proj", "v_proj"]
-  # target_modules: ["c_attn", "c_proj", "c_fc"]  # Include feed-forward layers too
-  init_weights: False # False disables init_lora_weights
-  use_rslora: False # False disables use_rslora
+  target_modules: "all-linear"
 
 # Training hyperparameters
 training:
@@ -83,6 +80,4 @@ tokenization:
 
 # MLflow tracking
 mlflow:
-  experiment_name: lora_training_comparison_v1
-
-# torch_empty_cache_steps to reduce vram
+  experiment_name: lora_training_comparison_v2

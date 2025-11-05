@@ -6,7 +6,7 @@ model:
   max_tokens: 4096
 
   with_prompt: false
-  pass_reference: false
+  pass_reference: false 
   pass_reference_answer: false
 
 

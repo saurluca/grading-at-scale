@@ -119,7 +119,6 @@ def main() -> None:
                 "include_chunk_text": bool(
                     getattr(cfg.tokenization, "include_chunk_text", False)
                 ),
-                "init_lora_weights": cfg.lora.get("init_weights"),
             }
         )
 
@@ -154,23 +153,13 @@ def main() -> None:
 
         # Setup LoRA model
         print("Setting up LoRA configuration and applying to base model...")
-
-        # Set fan_in_fan_out True only for openai-community/gpt2, else False
-        fan_in_fan_out = "openai-community/gpt2" in model_name
-
-        lora_kwargs = dict(
+        lora_cfg = LoraConfig(
             r=int(cfg.lora.r),
             lora_alpha=int(cfg.lora.alpha),
             lora_dropout=float(cfg.lora.dropout),
             target_modules=cfg.lora.target_modules,
             task_type=TaskType.SEQ_CLS,
-            use_rslora=cfg.lora.get("use_rslora", False),
-            fan_in_fan_out=fan_in_fan_out,
         )
-        # Only set init_lora_weights if not explicitly False
-        if getattr(cfg.lora, "init_weights", True) is not False:
-            lora_kwargs["init_lora_weights"] = str(cfg.lora.init_weights)
-        lora_cfg = LoraConfig(**lora_kwargs)
         model = get_peft_model(base_model, lora_cfg)
 
         model.print_trainable_parameters()

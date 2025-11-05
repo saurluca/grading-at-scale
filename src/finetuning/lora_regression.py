@@ -184,7 +184,6 @@ def main() -> None:
                 "include_reference_answer": bool(
                     getattr(cfg.tokenization, "include_reference_answer", False)
                 ),
-                "init_lora_weights": cfg.lora.get("init_weights"),
             }
         )
 
@@ -211,17 +210,13 @@ def main() -> None:
         )
 
         # Setup LoRA model
-        lora_kwargs = dict(
+        lora_cfg = LoraConfig(
             r=int(cfg.lora.r),
             lora_alpha=int(cfg.lora.alpha),
             lora_dropout=float(cfg.lora.dropout),
             target_modules=cfg.lora.target_modules,
             task_type=TaskType.SEQ_CLS,
         )
-        # Only set init_lora_weights if not explicitly False
-        if getattr(cfg.lora, "init_weights", True) is not False:
-            lora_kwargs["init_lora_weights"] = str(cfg.lora.init_weights)
-        lora_cfg = LoraConfig(**lora_kwargs)
         model = get_peft_model(base_model, lora_cfg)
         model.print_trainable_parameters()
 
