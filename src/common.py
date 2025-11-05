@@ -18,6 +18,7 @@ from transformers import (
     DataCollatorWithPadding,
     TrainingArguments,
     Trainer,
+    EarlyStoppingCallback,
 )
 from datasets import concatenate_datasets
 
@@ -150,6 +151,7 @@ def load_and_preprocess_data(
     use_split_files: bool = False,
     train_csv: str | None = None,
     val_csv: str | None = None,
+    test_csv: str | None = None,
 ):
     """
     Load and preprocess dataset.
@@ -161,25 +163,28 @@ def load_and_preprocess_data(
         test_size: Fraction of data for test set (only used when use_split_files=False)
         use_unseen_questions: Whether to split by questions (only used when use_split_files=False)
         topics: List of topics to filter (applies to both modes)
-        use_split_files: If True, use separate train/val files instead of splitting
+        use_split_files: If True, use separate train/val/test files instead of splitting
         train_csv: Path to train.csv (used when use_split_files=True)
         val_csv: Path to val.csv (used when use_split_files=True)
+        test_csv: Path to test.csv (used when use_split_files=True)
 
     Returns:
-        raw_data: DatasetDict with 'train' and 'test' splits
+        raw_data: DatasetDict with 'train', 'val', and 'test' splits when use_split_files=True,
+                  or 'train' and 'test' splits when use_split_files=False
         label_order: List of label names in order
         label2id: Dict mapping label names to IDs
         id2label: Dict mapping IDs to label names
     """
 
     if use_split_files:
-        print(f"Loading pre-split datasets from {train_csv} and {val_csv} ...")
-        if train_csv is None or val_csv is None:
+        if train_csv is None or val_csv is None or test_csv is None:
             raise ValueError(
-                "train_csv and val_csv must be provided when use_split_files=True"
+                "train_csv, val_csv, and test_csv must all be provided when use_split_files=True"
             )
 
-        # Load separate train and validation files
+        print(f"Loading pre-split datasets from {train_csv}, {val_csv}, and {test_csv} ...")
+
+        # Load separate train, validation, and test files
         train_dataset = load_dataset(
             "csv",
             data_files={"data": train_csv},
@@ -194,11 +199,19 @@ def load_and_preprocess_data(
             sep=";",
         )["data"]
 
+        test_dataset = load_dataset(
+            "csv",
+            data_files={"data": test_csv},
+            cache_dir=cache_dir,
+            sep=";",
+        )["data"]
+
         print(f"Loaded train dataset: {len(train_dataset)} samples")
         print(f"Loaded validation dataset: {len(val_dataset)} samples")
+        print(f"Loaded test dataset: {len(test_dataset)} samples")
 
         # Combine for topic counting and filtering if needed
-        full_dataset = concatenate_datasets([train_dataset, val_dataset])
+        full_dataset = concatenate_datasets([train_dataset, val_dataset, test_dataset])
     else:
         print(f"Loading dataset from {dataset_csv} ...")
         full_dataset = load_dataset(
@@ -225,11 +238,13 @@ def load_and_preprocess_data(
     if use_split_files:
         train_dataset = train_dataset.map(lambda x: map_labels(x, label2id))
         val_dataset = val_dataset.map(lambda x: map_labels(x, label2id))
+        test_dataset = test_dataset.map(lambda x: map_labels(x, label2id))
         # Ensure 'labels' is a ClassLabel feature
         train_dataset = train_dataset.cast_column(
             "labels", ClassLabel(names=label_order)
         )
         val_dataset = val_dataset.cast_column("labels", ClassLabel(names=label_order))
+        test_dataset = test_dataset.cast_column("labels", ClassLabel(names=label_order))
     else:
         # Map labels on the full dataset (before splitting)
         full_dataset = full_dataset.map(lambda x: map_labels(x, label2id))
@@ -254,15 +269,21 @@ def load_and_preprocess_data(
             ]
             val_dataset = val_dataset.select(val_indices)
 
+            # Filter test dataset
+            test_indices = [
+                i for i, ex in enumerate(test_dataset) if ex["topic"] in topics
+            ]
+            test_dataset = test_dataset.select(test_indices)
             print(
-                f"After topic filtering: train={len(train_dataset)}, val={len(val_dataset)} samples"
+                f"After topic filtering: train={len(train_dataset)}, val={len(val_dataset)}, test={len(test_dataset)} samples"
             )
 
-        # Use pre-split data directly
+        # Use pre-split data directly - always have train, val, and test
         raw = DatasetDict(
             {
                 "train": train_dataset,
-                "test": val_dataset,  # Using val.csv as test set
+                "val": val_dataset,
+                "test": test_dataset,
             }
         )
 
@@ -392,15 +413,20 @@ def load_and_preprocess_data(
             )
 
     print(f"Number of training samples: {len(raw['train'])}")
+    if "val" in raw:
+        print(f"Number of validation samples: {len(raw['val'])}")
     print(f"Number of test samples: {len(raw['test'])}")
-    print(f"Total samples: {len(raw['train']) + len(raw['test'])}")
+    total_samples = len(raw['train']) + len(raw['test'])
+    if "val" in raw:
+        total_samples += len(raw['val'])
+    print(f"Total samples: {total_samples}")
 
     # Show per-class counts in test set for verification
     test_labels = raw["test"]["labels"]
     counts = {name: 0 for name in label_order}
     for v in test_labels:
         counts[id2label[int(v)]] += 1
-    print("Test set per-class counts (stratified):", counts)
+    print("Test set per-class counts:", counts)
 
     return raw, label_order, label2id, id2label
 
@@ -458,41 +484,70 @@ def setup_model_and_tokenizer(
 def setup_training_args(cfg, output_dir: str):
     """Setup training arguments."""
     # IT IS EVAL_STRATEGY, NOT EVALUATION_STRATEGY
-    return TrainingArguments(
-        output_dir=output_dir,
-        num_train_epochs=float(cfg.training.num_epochs),
-        per_device_train_batch_size=int(cfg.training.batch_size.train),
-        per_device_eval_batch_size=int(cfg.training.batch_size.eval),
-        learning_rate=float(cfg.training.learning_rate),
-        weight_decay=float(cfg.training.weight_decay),
-        eval_strategy=str(getattr(cfg.training, "eval_strategy", "epoch")),
-        save_strategy=str(getattr(cfg.output, "save_strategy", "epoch")),
-        logging_steps=int(getattr(cfg.training, "logging_steps", 10)),
-        logging_strategy="steps",
-        load_best_model_at_end=False,
-        metric_for_best_model="accuracy",
-        greater_is_better=True,
-        report_to="mlflow",
-        seed=int(getattr(cfg.project, "seed", 42)),
-        bf16=True,
-        # Enable evaluation and logging
-        save_total_limit=2,
-        gradient_accumulation_steps=int(cfg.training.gradient_accumulation_steps),
-    )
+    
+    # Check if eval_steps is configured for step-based evaluation
+    eval_steps = getattr(cfg.training, "eval_steps", None)
+    if eval_steps is not None:
+        eval_strategy = "steps"
+        eval_steps = int(eval_steps)
+        save_strategy = "steps"  # Match eval_strategy when using steps
+    else:
+        eval_strategy = str(getattr(cfg.training, "eval_strategy", "epoch"))
+        save_strategy = str(getattr(cfg.output, "save_strategy", "epoch"))
+    
+    training_args_dict = {
+        "output_dir": output_dir,
+        "num_train_epochs": float(cfg.training.num_epochs),
+        "per_device_train_batch_size": int(cfg.training.batch_size.train),
+        "per_device_eval_batch_size": int(cfg.training.batch_size.eval),
+        "learning_rate": float(cfg.training.learning_rate),
+        "weight_decay": float(cfg.training.weight_decay),
+        "eval_strategy": eval_strategy,
+        "save_strategy": save_strategy,
+        "logging_steps": int(getattr(cfg.training, "logging_steps", 10)),
+        "logging_strategy": "steps",
+        "load_best_model_at_end": True,
+        "metric_for_best_model": "eval_loss",
+        "greater_is_better": False,  # Loss is lower is better
+        "report_to": "mlflow",
+        "seed": int(getattr(cfg.project, "seed", 42)),
+        "bf16": True,
+        "save_total_limit": 1,  # Only keep best checkpoint
+        "gradient_accumulation_steps": int(cfg.training.gradient_accumulation_steps),
+    }
+    
+    # Add eval_steps if using step-based evaluation
+    if eval_steps is not None:
+        training_args_dict["eval_steps"] = eval_steps
+    
+    return TrainingArguments(**training_args_dict)
 
 
-def setup_trainer(model, training_args, tokenized_data, tokenizer):
+def setup_trainer(model, training_args, tokenized_data, tokenizer, cfg=None):
     print("Setting up trainer...")
     data_collator = DataCollatorWithPadding(tokenizer)
-
+    
+    # Use validation set if available, otherwise fallback to test set
+    eval_dataset = tokenized_data.get("val", tokenized_data.get("test"))
+    
+    # Setup early stopping callback if patience is configured
+    callbacks = []
+    if cfg is not None:
+        early_stopping_patience = getattr(cfg.training, "early_stopping_patience", None)
+        if early_stopping_patience is not None:
+            early_stopping_patience = int(early_stopping_patience)
+            callbacks.append(EarlyStoppingCallback(early_stopping_patience=early_stopping_patience))
+            print(f"Early stopping enabled with patience={early_stopping_patience}")
+    
     return Trainer(
         model=model,
         args=training_args,
         train_dataset=tokenized_data["train"],
-        eval_dataset=tokenized_data["test"],
+        eval_dataset=eval_dataset,
         processing_class=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
+        callbacks=callbacks if callbacks else None,
     )
 
 

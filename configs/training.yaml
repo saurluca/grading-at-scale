@@ -31,10 +31,10 @@ dataset:
   dataset_name: gras
   
   # Option 1: Separate train/val/test files - set use_split_files: true
-  use_split_files: true  # If true, uses train.csv and val.csv from dataset folder
+  use_split_files: true  # If true, uses train.csv, val.csv, and test.csv from dataset folder
   train_file: train.csv
   val_file: val.csv
-  test_file: test.csv  # Currently ignored, val.csv used for testing'
+  test_file: test.csv  # Required when use_split_files: true
 
   # Option 2: Single CSV file - will be split at runtime
   csv_file: train.csv  # Single file to split at runtime
@@ -63,7 +63,7 @@ lora:
 
 # Training hyperparameters
 training:
-  num_epochs: 3 # 3
+  num_epochs: 4 # 3
   batch_size: 
     train: 8 # 8
     eval: 16 # 16
@@ -71,6 +71,8 @@ training:
   learning_rate: 0.0002 # 0.0002
   weight_decay: 0.01 # 0.01
   eval_strategy: epoch # epoch | steps
+  eval_steps: 100  # Evaluation frequency in steps (only used when eval_strategy is overridden to steps)
+  early_stopping_patience: 3  # Number of evaluations to wait before early stopping
   logging_steps: 20 # 20
 
 # Tokenization settings

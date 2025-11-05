@@ -36,19 +36,23 @@ def main() -> None:
     use_split_files = bool(getattr(cfg.dataset, "use_split_files", False))
 
     if use_split_files:
-        # Use separate train/val files
+        # Use separate train/val/test files
         dataset_base_path = PROJECT_ROOT / "data" / cfg.dataset.dataset_name
         train_csv = str(
             dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv")
         )
         val_csv = str(dataset_base_path / getattr(cfg.dataset, "val_file", "val.csv"))
+        test_csv = str(
+            dataset_base_path / getattr(cfg.dataset, "test_file", "test.csv")
+        )
         dataset_csv = train_csv  # For logging purposes
-        print(f"Using split files - train: {train_csv}, val: {val_csv}")
+        print(f"Using split files - train: {train_csv}, val: {val_csv}, test: {test_csv}")
     else:
         # Use single file to split at runtime
         dataset_csv = str(PROJECT_ROOT / cfg.dataset.csv_path)
         train_csv = None
         val_csv = None
+        test_csv = None
         print(f"Using single file to split at runtime: {dataset_csv}")
 
     model_name: str = str(cfg.model.base)
@@ -83,7 +87,6 @@ def main() -> None:
                 "per_device_eval_batch_size": int(cfg.training.batch_size.eval),
                 "learning_rate": float(cfg.training.learning_rate),
                 "weight_decay": float(cfg.training.weight_decay),
-                "eval_strategy": str(cfg.training.eval_strategy),
                 "seed": int(getattr(cfg.project, "seed", 42)),
                 "include_reference_answer": bool(
                     getattr(cfg.tokenization, "include_reference_answer", False)
@@ -97,19 +100,26 @@ def main() -> None:
             cache_dir,
             int(getattr(cfg.project, "seed", 42)),
             test_size=cfg.dataset.test_size,
+            use_unseen_questions=bool(
+                getattr(cfg.dataset, "use_unseen_questions", False)
+            ),
+            topics=getattr(cfg.dataset, "topics", None),
             use_split_files=use_split_files,
             train_csv=train_csv,
             val_csv=val_csv,
+            test_csv=test_csv,
         )
 
         # Log dataset info
-        mlflow.log_params(
-            {
-                "train_size": len(raw_data["train"]),
-                "test_size": len(raw_data["test"]),
-                "total_size": len(raw_data["train"]) + len(raw_data["test"]),
-            }
-        )
+        dataset_info = {
+            "train_size": len(raw_data["train"]),
+            "test_size": len(raw_data["test"]),
+            "total_size": len(raw_data["train"]) + len(raw_data["test"]),
+        }
+        if "val" in raw_data:
+            dataset_info["val_size"] = len(raw_data["val"])
+            dataset_info["total_size"] = len(raw_data["train"]) + len(raw_data["val"]) + len(raw_data["test"])
+        mlflow.log_params(dataset_info)
 
         # Setup model and tokenizer
         tokenizer, model = setup_model_and_tokenizer(
@@ -127,13 +137,28 @@ def main() -> None:
 
         # Setup training arguments and trainer
         training_args = setup_training_args(cfg, output_dir)
-        trainer = setup_trainer(model, training_args, tokenized_data, tokenizer)
+        
+        # Log eval_strategy and eval_steps after setup (since they may be overridden)
+        eval_strategy_to_log = training_args.eval_strategy
+        mlflow.log_param("eval_strategy", eval_strategy_to_log)
+        if eval_strategy_to_log == "steps":
+            mlflow.log_param("eval_steps", training_args.eval_steps)
+        
+        trainer = setup_trainer(model, training_args, tokenized_data, tokenizer, cfg)
 
         # Training
         print("Starting training...")
+        # Evaluate on validation set before training (if available, otherwise test set)
+        eval_set_name = "validation" if "val" in tokenized_data else "test"
+        print(f"Evaluating on {eval_set_name} set before training...")
+        metrics = trainer.evaluate()
+        print(f"Metrics before training: {metrics}")
+        mlflow.log_metrics({f"initial_{k}": v for k, v in metrics.items()})
+
         trainer.train()
 
-        # Perform detailed evaluation
+        # The best model is automatically loaded at the end of training (load_best_model_at_end=True)
+        # Perform detailed evaluation on test set
         print("\nPerforming detailed evaluation on test dataset...")
         detailed_metrics = detailed_evaluation(
             trainer, tokenized_data["test"], label_order
