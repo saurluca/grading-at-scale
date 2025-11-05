@@ -66,21 +66,9 @@ def main() -> None:
 
     # Start MLflow experiment
     experiment_name = getattr(cfg.mlflow, "experiment_name", "peft_lora_training")
-
-    # Add quantization info to experiment name if enabled
-    if "quantization" in cfg and cfg.quantization.get("load_in_4bit", False):
-        experiment_name = experiment_name.replace(
-            "peft_lora_training", "peft_lora_training_4bit"
-        )
-
     mlflow.set_experiment(experiment_name)
 
-    run_name_suffix = (
-        "qlora"
-        if ("quantization" in cfg and cfg.quantization.get("load_in_4bit", False))
-        else "lora"
-    )
-    with mlflow.start_run(run_name=f"{run_name_suffix}_{model_name.split('/')[-1]}"):
+    with mlflow.start_run(run_name=f"lora_{model_name.split('/')[-1]}"):
         # Log the raw dataset as an MLflow Dataset
         try:
             raw_df = pd.read_csv(dataset_csv, delimiter=";")
@@ -131,7 +119,6 @@ def main() -> None:
                 "include_chunk_text": bool(
                     getattr(cfg.tokenization, "include_chunk_text", False)
                 ),
-                "load_in_4bit": bool(getattr(cfg.quantization, "load_in_4bit", False)),
                 "init_lora_weights": cfg.lora.get("init_weights"),
             }
         )
@@ -160,36 +147,9 @@ def main() -> None:
             }
         )
 
-        # Setup model and tokenizer (with optional quantization)
-        # TODO simplify this
-        quantization_config = None
-        if "quantization" in cfg and cfg.quantization.get("load_in_4bit", False):
-            print("Quantization enabled in config")
-            quantization_config = {
-                "load_in_4bit": cfg.quantization.load_in_4bit,
-                "bnb_4bit_compute_dtype": cfg.quantization.get(
-                    "bnb_4bit_compute_dtype", "float16"
-                ),
-                "bnb_4bit_quant_type": cfg.quantization.get(
-                    "bnb_4bit_quant_type", "nf4"
-                ),
-                "bnb_4bit_use_double_quant": cfg.quantization.get(
-                    "bnb_4bit_use_double_quant", True
-                ),
-            }
-            mlflow.log_params(
-                {
-                    "quant_bits": 4,
-                    "quant_type": quantization_config["bnb_4bit_quant_type"],
-                    "quant_enabled": True,
-                }
-            )
-        else:
-            print("Quantization disabled or not configured")
-            mlflow.log_param("quant_enabled", False)
-
+        # Setup model and tokenizer
         tokenizer, base_model = setup_model_and_tokenizer(
-            model_name, label2id, id2label, cache_path, quantization_config
+            model_name, label2id, id2label, cache_path
         )
 
         # Setup LoRA model

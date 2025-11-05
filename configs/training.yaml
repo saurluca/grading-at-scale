@@ -6,7 +6,6 @@ model:
   # base: openai-community/gpt2
   # base: google/flan-t5-base
   base: Qwen/Qwen3-0.6B
-  # base: swiss-ai/Apertus-8B-Instruct-2509
 
 # Task selection for dispatcher
 task_type: lora-classification  # lora-classification | lora-regression | vanilla-classification
@@ -55,7 +54,7 @@ output:
   push_to_hub: false
   save_strategy: epoch
 
-# LoRA configuration (used for lora, lora_quantized, lora_typst types)
+# LoRA configuration
 lora:
   r: 16
   alpha: 16
@@ -64,16 +63,6 @@ lora:
   # target_modules: ["c_attn", "c_proj", "c_fc"]  # Include feed-forward layers too
   init_weights: False # False disables init_lora_weights
   use_rslora: False # False disables use_rslora
-
-# Quantization settings for LoRA training
-# Set load_in_4bit to true to enable 4-bit quantization (QLoRA)
-# Set to false for full precision training
-quantization:
-  load_in_4bit: false  # Set to true to enable 4-bit quantization
-  bnb_4bit_use_double_quant: false  # Use double quantization for better accuracy
-  bnb_4bit_compute_dtype: float16  # Options: float16, bfloat16
-  bnb_4bit_quant_type: nf4  # Options: nf4, fp4
-
 
 # Training hyperparameters
 training:

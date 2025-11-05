@@ -18,12 +18,8 @@ from transformers import (
     DataCollatorWithPadding,
     TrainingArguments,
     Trainer,
-    ApertusForCausalLM,
-    BitsAndBytesConfig,
 )
 from datasets import concatenate_datasets
-from peft import prepare_model_for_kbit_training
-import torch
 
 
 def map_labels(example: Dict[str, Any], label2id: Dict[str, int]) -> Dict[str, Any]:
@@ -414,21 +410,15 @@ def setup_model_and_tokenizer(
     label2id: Dict[str, int],
     id2label: Dict[int, str],
     cache_dir: str | None,
-    quantization_config: Dict[str, Any] | None = None,
 ):
     """
-    Setup tokenizer and model, with optional quantization.
+    Setup tokenizer and model.
 
     Args:
         model_name: Name of the model to load
         label2id: Label to ID mapping
         id2label: ID to label mapping
         cache_dir: Cache directory for model files
-        quantization_config: Optional dict with quantization settings:
-            - load_in_4bit: bool
-            - bnb_4bit_compute_dtype: str (e.g., "float16", "bfloat16")
-            - bnb_4bit_quant_type: str (e.g., "nf4")
-            - bnb_4bit_use_double_quant: bool
 
     Returns:
         tokenizer, base_model
@@ -443,29 +433,6 @@ def setup_model_and_tokenizer(
         else:
             tokenizer.add_special_tokens({"pad_token": "[PAD]"})
 
-    # Setup quantization config if requested
-    quant_config = None
-    if quantization_config and quantization_config.get("load_in_4bit", False):
-        print("Setting up 4-bit quantization...")
-        compute_dtype_str = quantization_config.get("bnb_4bit_compute_dtype", "float16")
-        if compute_dtype_str == "bfloat16":
-            compute_dtype = (
-                torch.bfloat16 if torch.cuda.is_available() else torch.float16
-            )
-        else:
-            compute_dtype = torch.float16
-
-        quant_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_use_double_quant=quantization_config.get(
-                "bnb_4bit_use_double_quant", True
-            ),
-            bnb_4bit_quant_type=quantization_config.get("bnb_4bit_quant_type", "nf4"),
-            bnb_4bit_compute_dtype=compute_dtype,
-        )
-
-    if model_name == "swiss-ai/Apertus-8B-Instruct-2509":
-        base_model = ApertusForCausalLM.from_pretrained(model_name)
 
     else:
         model_kwargs = {
@@ -475,19 +442,9 @@ def setup_model_and_tokenizer(
             "cache_dir": cache_dir,
         }
 
-        # Add quantization config if provided
-        if quant_config is not None:
-            model_kwargs["quantization_config"] = quant_config
-            model_kwargs["device_map"] = "auto"
-
         base_model = AutoModelForSequenceClassification.from_pretrained(
             model_name, **model_kwargs
         )
-
-        # Prepare model for k-bit training if quantized
-        if quant_config is not None:
-            print("Preparing model for k-bit training...")
-            base_model = prepare_model_for_kbit_training(base_model)
 
     # Resize embeddings if new tokens were added and align pad_token_id
     if hasattr(base_model, "resize_token_embeddings"):
