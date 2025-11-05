@@ -10,6 +10,7 @@ from sklearn.metrics import (
     precision_recall_fscore_support,
     classification_report,
     confusion_matrix,
+    cohen_kappa_score,
 )
 from transformers import (
     AutoTokenizer,
@@ -575,6 +576,9 @@ def detailed_evaluation(trainer, test_dataset, label_order):
         y_true, y_pred, average=None, zero_division=0
     )
 
+    # Calculate quadratic weighted kappa (for ordinal classification)
+    qwk = cohen_kappa_score(y_true, y_pred, weights='quadratic')
+
     # Calculate macro averages
     macro_precision = np.mean(precision)
     macro_recall = np.mean(recall)
@@ -612,6 +616,7 @@ def detailed_evaluation(trainer, test_dataset, label_order):
 
     # Print detailed results
     print(f"Overall Accuracy: {accuracy:.4f}")
+    print(f"Quadratic Weighted Kappa: {qwk:.4f}")
     print(f"Macro F1 Score: {macro_f1:.4f}")
     print(f"Macro F1 (naive majority): {macro_f1_naive:.4f}")
     print(f"Macro F1 (random label-proportional): {macro_f1_random:.4f}")
@@ -642,6 +647,7 @@ def detailed_evaluation(trainer, test_dataset, label_order):
     # Return metrics for MLflow logging
     evaluation_metrics = {
         "accuracy": accuracy,
+        "quadratic_weighted_kappa": qwk,
         "macro_precision": macro_precision,
         "macro_recall": macro_recall,
         "macro_f1": macro_f1,

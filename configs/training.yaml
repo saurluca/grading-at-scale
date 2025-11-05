@@ -31,15 +31,16 @@ dataset:
   # dataset_name: ASAG2024
   dataset_name: gras
   
-  # Option 1: Single CSV file - will be split at runtime
-  csv_file: train.csv  # Single file to split at runtime
-  csv_path: data/${dataset.dataset_name}/${dataset.csv_file}
-  
-  # Option 2: Separate train/val/test files - set use_split_files: true
+  # Option 1: Separate train/val/test files - set use_split_files: true
   use_split_files: true  # If true, uses train.csv and val.csv from dataset folder
   train_file: train.csv
   val_file: val.csv
-  test_file: test.csv  # Currently ignored, val.csv used for testing
+  test_file: test.csv  # Currently ignored, val.csv used for testing'
+
+  # Option 2: Single CSV file - will be split at runtime
+  csv_file: train.csv  # Single file to split at runtime
+  csv_path: data/${dataset.dataset_name}/${dataset.csv_file}
+  
   
   test_size: 0.4  # Only used when use_split_files: false
   use_unseen_questions: true # Split by question ID, not random (only for runtime split)
@@ -50,8 +51,8 @@ dataset:
 # Output
 output:
   dir: ${paths.output_dir}/peft_output
-  save_model_locally: true
-  push_to_hub: true
+  save_model_locally: false
+  push_to_hub: false
   save_strategy: epoch
 
 # LoRA configuration (used for lora, lora_quantized, lora_typst types)
@@ -88,7 +89,7 @@ training:
 
 # Tokenization settings
 tokenization:
-  include_reference_answer: false # true
+  include_reference_answer: true # true
   include_chunk_text: false # false
 
 # MLflow tracking

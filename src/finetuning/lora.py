@@ -128,6 +128,9 @@ def main() -> None:
                 "include_reference_answer": bool(
                     getattr(cfg.tokenization, "include_reference_answer", False)
                 ),
+                "include_chunk_text": bool(
+                    getattr(cfg.tokenization, "include_chunk_text", False)
+                ),
                 "load_in_4bit": bool(getattr(cfg.quantization, "load_in_4bit", False)),
                 "init_lora_weights": cfg.lora.get("init_weights"),
             }
