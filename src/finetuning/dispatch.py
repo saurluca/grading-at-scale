@@ -1,6 +1,7 @@
 import os
 import time
 import random
+import sys
 from importlib import import_module
 from pathlib import Path
 
@@ -8,12 +9,15 @@ from omegaconf import OmegaConf
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+# Add finetuning directory to path so import_module can find lora, base, etc.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def select_main(task_type: str):
     mapping = {
         "lora-classification": "lora",
         "vanilla-classification": "base",
+        "lora-classification-gridsearch": "lora_gridsearch",
     }
     if task_type not in mapping:
         raise ValueError(f"Unknown task_type: {task_type}")
@@ -22,11 +26,25 @@ def select_main(task_type: str):
 
 def main() -> None:
     base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
-    training_path = PROJECT_ROOT / "configs" / "training.yaml"
-    training_cfg = OmegaConf.load(training_path)
+    
+    # Check if TRAINING_CONFIG_PATH is set (for direct runs or grid search)
+    training_cfg_path = os.environ.get("TRAINING_CONFIG_PATH")
+    if training_cfg_path and Path(training_cfg_path).exists():
+        training_cfg = OmegaConf.load(training_cfg_path)
+    else:
+        # Default to training.yaml
+        training_path = PROJECT_ROOT / "configs" / "training.yaml"
+        training_cfg = OmegaConf.load(training_path)
+    
     cfg = OmegaConf.merge(base_cfg, training_cfg)
 
     task_type = str(getattr(cfg, "task_type", "lora-classification"))
+    
+    # For grid search, skip dispatcher logic and run directly
+    if task_type == "lora-classification-gridsearch":
+        runner = select_main(task_type)
+        runner()
+        return
 
     dispatcher = getattr(cfg, "dispatcher", {})
     models_list = dispatcher.get("models")

@@ -125,7 +125,7 @@ def tokenize_fn(
 
 
 def compute_metrics(eval_pred):
-    """Compute accuracy using logits and labels from EvalPrediction or tuple."""
+    """Compute accuracy, macro_f1, and weighted_f1 using logits and labels from EvalPrediction or tuple."""
     # Support both (logits, labels) tuple and EvalPrediction object
     if hasattr(eval_pred, "predictions"):
         logits = eval_pred.predictions
@@ -138,7 +138,22 @@ def compute_metrics(eval_pred):
 
     predictions = np.argmax(logits, axis=-1)
     accuracy = (predictions == labels).astype(np.float32).mean().item()
-    return {"accuracy": accuracy}
+    
+    # Calculate F1 scores
+    _, _, f1, _ = precision_recall_fscore_support(
+        labels, predictions, average=None, zero_division=0
+    )
+    macro_f1 = np.mean(f1).item()
+    
+    _, _, weighted_f1, _ = precision_recall_fscore_support(
+        labels, predictions, average="weighted", zero_division=0
+    )
+    
+    return {
+        "accuracy": accuracy,
+        "macro_f1": macro_f1,
+        "weighted_f1": weighted_f1,
+    }
 
 
 def load_and_preprocess_data(

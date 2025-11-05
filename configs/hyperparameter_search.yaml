@@ -1,0 +1,81 @@
+# Hyperparameter Grid Search Configuration
+# This config extends training.yaml and defines grid search parameters
+
+# Model selection (single model only for grid search)
+model:
+  base: Qwen/Qwen3-0.6B
+
+# Task selection for dispatcher
+task_type: lora-classification-gridsearch
+
+# Grid search parameters
+grid_search:
+  # Optimization metric to use for selecting best combination
+  optimization_metric: weighted_f1  # weighted_f1 | macro_f1 | accuracy | eval_loss
+  
+  # Seed to use for all grid search runs
+  seed: 42
+  
+  # Learning rate values to explore
+  # learning_rate: [0.0001, 0.0005, 0.001, 0.01]
+  learning_rate: [0.001, 0.01]
+  
+  # LoRA rank (r) values to explore
+  lora_r: [8, 16, 32]
+  
+  # LoRA alpha ratios (alpha will be computed as r * ratio)
+  lora_alpha_ratios: [0.5, 1.0, 2.0]
+  # lora_alpha_ratios: [1.0]
+  
+  # LoRA dropout values to explore
+  lora_dropout: [0.05, 0.1, 0.2]
+  # lora_dropout: [0.1]
+  
+  # Gradient accumulation steps (effective batch size = batch_size * gradient_accumulation_steps)
+  # Keep per_device_batch_size fixed at 8, so effective batch sizes: 8, 16, 24, ...
+  gradient_accumulation_steps: [1, 2, 4]
+  # gradient_accumulation_steps: [1]
+
+# Dataset (inherits from training.yaml if not specified)
+dataset:
+  dataset_name: gras
+  use_split_files: true
+  train_file: train.csv
+  val_file: val.csv
+  test_file: test.csv
+  topics: []
+
+# Output
+output:
+  dir: ${paths.output_dir}/peft_output_gridsearch
+  save_model_locally: false
+  push_to_hub: false
+  save_strategy: epoch
+
+# LoRA configuration (base values, will be overridden by grid_search)
+lora:
+  r: 16
+  alpha: 16
+  dropout: 0.1
+  target_modules: "all-linear"
+
+# Training hyperparameters (base values, will be overridden by grid_search)
+training:
+  num_epochs: 4
+  batch_size: 
+    train: 16
+    eval: 16
+  weight_decay: 0.01
+  eval_strategy: epoch
+  early_stopping_patience: 3
+  logging_steps: 20
+
+# Tokenization settings
+tokenization:
+  include_reference_answer: true
+  include_chunk_text: false
+
+# MLflow tracking
+mlflow:
+  experiment_name: lora_gridsearch
+

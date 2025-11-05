@@ -28,7 +28,8 @@ output_file.txt
 configs/.runs/*
 optimized_grader_single.json
 
-
+*.out
+*.log
 *.sqlite
 grading_results.json
 grading_interface.html
