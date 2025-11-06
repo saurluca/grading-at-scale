@@ -122,8 +122,7 @@ def tokenize_fn(
         texts.append("\n".join(parts))
 
     return tokenizer(texts, truncation=True, max_length=1024)
-
-
+ 
 def compute_metrics(eval_pred):
     """Compute accuracy, macro_f1, and weighted_f1 using logits and labels from EvalPrediction or tuple."""
     # Support both (logits, labels) tuple and EvalPrediction object
@@ -326,21 +325,57 @@ def load_and_preprocess_data(
         print("Out-of-topic samples will be added to test set")
 
         # Apply split logic to in-topic data - always split by questions (task_id)
-        print("Splitting in-topic data by questions (task_id) to ensure no overlap...")
-        # Get unique task_ids from in-topic data
-        unique_task_ids = sorted(list(set(in_topic_data["task_id"])))
-
-        # Randomly shuffle and split task_ids
+        # Split stratified by topic to maintain topic proportions
+        print("Splitting in-topic data by questions (task_id) with topic stratification...")
+        
+        # Group task_ids by topic for stratified splitting
+        in_topic_df = in_topic_data.to_pandas()
+        task_id_to_topic = in_topic_df.groupby("task_id")["topic"].first().to_dict()
+        topics_to_task_ids = {}
+        for task_id, topic in task_id_to_topic.items():
+            if topic not in topics_to_task_ids:
+                topics_to_task_ids[topic] = []
+            topics_to_task_ids[topic].append(task_id)
+        
+        # Split task_ids by topic to maintain topic proportions
         rng = np.random.default_rng(seed)
-        rng.shuffle(unique_task_ids)
-
-        n_test_task_ids = int(len(unique_task_ids) * test_size)
-        test_task_ids = set(unique_task_ids[:n_test_task_ids])
-        train_task_ids = set(unique_task_ids[n_test_task_ids:])
-
+        train_task_ids = []
+        test_task_ids = []
+        
+        for topic, task_ids in sorted(topics_to_task_ids.items()):
+            # Shuffle task_ids for this topic
+            shuffled_task_ids = task_ids.copy()
+            rng.shuffle(shuffled_task_ids)
+            
+            # Calculate split sizes for this topic
+            n_total = len(shuffled_task_ids)
+            
+            # For very small topics, ensure at least one question in test if possible
+            if n_total == 1:
+                # Only 1 question: put in train (can't split)
+                n_train = 1
+                n_test = 0
+            else:
+                # For 2+ questions, use proportional split
+                n_test = max(1, round(n_total * test_size))  # Round for better distribution
+                n_train = n_total - n_test
+            
+            topic_train = shuffled_task_ids[:n_train]
+            topic_test = shuffled_task_ids[n_train:] if n_test > 0 else []
+            
+            train_task_ids.extend(topic_train)
+            if topic_test:
+                test_task_ids.extend(topic_test)
+            
+            print(
+                f"  Topic '{topic}': {n_total} questions -> train={len(topic_train)}, test={len(topic_test)}"
+            )
+        
+        train_task_ids = set(train_task_ids)
+        test_task_ids = set(test_task_ids)
+        
         print(
-            f"Number of unique task_ids in in-topic data: {len(unique_task_ids)} "
-            f"(train: {len(train_task_ids)}, test: {len(test_task_ids)})"
+            f"Total task_ids: train={len(train_task_ids)}, test={len(test_task_ids)}"
         )
 
         # Filter the in-topic dataset based on task_id assignment
@@ -376,22 +411,59 @@ def load_and_preprocess_data(
 
     else:
         # No topic filtering - apply split logic to full dataset
-        # Always split by questions (task_id) to ensure no overlap
-        print("Splitting by questions (task_id) to ensure no overlap...")
-        # Get unique task_ids
-        unique_task_ids = sorted(list(set(full_dataset["task_id"])))
-
-        # Randomly shuffle and split task_ids
+        # Always split by questions (task_id) with topic stratification
+        print("Splitting by questions (task_id) with topic stratification...")
+        
+        # Group task_ids by topic for stratified splitting
+        full_df = full_dataset.to_pandas()
+        task_id_to_topic = full_df.groupby("task_id")["topic"].first().to_dict()
+        topics_to_task_ids = {}
+        for task_id, topic in task_id_to_topic.items():
+            if topic not in topics_to_task_ids:
+                topics_to_task_ids[topic] = []
+            topics_to_task_ids[topic].append(task_id)
+        
+        print(f"Topics found: {sorted(topics_to_task_ids.keys())}")
+        
+        # Split task_ids by topic to maintain topic proportions
         rng = np.random.default_rng(seed)
-        rng.shuffle(unique_task_ids)
-
-        n_test_task_ids = int(len(unique_task_ids) * test_size)
-        test_task_ids = set(unique_task_ids[:n_test_task_ids])
-        train_task_ids = set(unique_task_ids[n_test_task_ids:])
-
+        train_task_ids = []
+        test_task_ids = []
+        
+        for topic, task_ids in sorted(topics_to_task_ids.items()):
+            # Shuffle task_ids for this topic
+            shuffled_task_ids = task_ids.copy()
+            rng.shuffle(shuffled_task_ids)
+            
+            # Calculate split sizes for this topic
+            n_total = len(shuffled_task_ids)
+            
+            # For very small topics, ensure at least one question in test if possible
+            if n_total == 1:
+                # Only 1 question: put in train (can't split)
+                n_train = 1
+                n_test = 0
+            else:
+                # For 2+ questions, use proportional split
+                n_test = max(1, round(n_total * test_size))  # Round for better distribution
+                n_train = n_total - n_test
+            
+            topic_train = shuffled_task_ids[:n_train]
+            topic_test = shuffled_task_ids[n_train:] if n_test > 0 else []
+            
+            train_task_ids.extend(topic_train)
+            if topic_test:
+                test_task_ids.extend(topic_test)
+            
+            print(
+                f"  Topic '{topic}': {n_total} questions -> train={len(topic_train)}, test={len(topic_test)}"
+            )
+        
+        train_task_ids = set(train_task_ids)
+        test_task_ids = set(test_task_ids)
+        
         print(
-            f"Number of unique task_ids: {len(unique_task_ids)} "
-            f"(train: {len(train_task_ids)}, test: {len(test_task_ids)})"
+            f"Total task_ids: train={len(train_task_ids)}, test={len(test_task_ids)}"
         )
 
         # Filter the full dataset based on task_id assignment

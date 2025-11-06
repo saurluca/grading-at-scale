@@ -57,22 +57,69 @@ df_full_with_labels = raw_data["train"].to_pandas()
 df_test_with_labels = raw_data["test"].to_pandas()
 df_combined = pd.concat([df_full_with_labels, df_test_with_labels], ignore_index=True)
 
-unique_task_ids = sorted(df_combined["task_id"].unique())
-print(f"Total unique task_ids: {len(unique_task_ids)}")
+# Group task_ids by topic for stratified splitting
+task_id_to_topic = df_combined.groupby("task_id")["topic"].first().to_dict()
+topics_to_task_ids = {}
+for task_id, topic in task_id_to_topic.items():
+    if topic not in topics_to_task_ids:
+        topics_to_task_ids[topic] = []
+    topics_to_task_ids[topic].append(task_id)
 
-# Split task_ids: 60% train, 20% val, 20% test
+print(f"Total unique task_ids: {len(task_id_to_topic)}")
+print(f"Topics found: {sorted(topics_to_task_ids.keys())}")
+
+# Split task_ids by topic to maintain topic proportions across splits
 rng = np.random.default_rng(seed)
-rng.shuffle(unique_task_ids)
+train_task_ids = []
+val_task_ids = []
+test_task_ids = []
 
-n_test_task_ids = int(len(unique_task_ids) * 0.2)  # 20% for test
-n_val_task_ids = int(len(unique_task_ids) * 0.2)   # 20% for val
+for topic, task_ids in sorted(topics_to_task_ids.items()):
+    # Shuffle task_ids for this topic
+    shuffled_task_ids = task_ids.copy()
+    rng.shuffle(shuffled_task_ids)
+    
+    # Calculate split sizes for this topic (60% train, 20% val, 20% test)
+    n_total = len(shuffled_task_ids)
+    
+    # For very small topics, ensure at least one question per split if possible
+    if n_total <= 2:
+        # If only 1-2 questions, put all in train (can't split properly)
+        n_train = n_total
+        n_val = 0
+        n_test = 0
+    elif n_total == 3:
+        # 3 questions: 1 train, 1 val, 1 test
+        n_train = 1
+        n_val = 1
+        n_test = 1
+    else:
+        # For 4+ questions, use proportional split (60/20/20)
+        # Calculate target sizes and round to nearest integers
+        n_test = max(1, round(n_total * 0.2))
+        n_val = max(1, round(n_total * 0.2))
+        n_train = n_total - n_test - n_val  # Remaining goes to train
+    
+    topic_train = shuffled_task_ids[:n_train]
+    topic_val = shuffled_task_ids[n_train:n_train + n_val] if n_val > 0 else []
+    topic_test = shuffled_task_ids[n_train + n_val:] if n_test > 0 else []
+    
+    train_task_ids.extend(topic_train)
+    if topic_val:
+        val_task_ids.extend(topic_val)
+    if topic_test:
+        test_task_ids.extend(topic_test)
+    
+    print(
+        f"Topic '{topic}': {n_total} questions -> train={len(topic_train)}, val={len(topic_val)}, test={len(topic_test)}"
+    )
 
-test_task_ids = set(unique_task_ids[:n_test_task_ids])
-val_task_ids = set(unique_task_ids[n_test_task_ids:n_test_task_ids + n_val_task_ids])
-train_task_ids = set(unique_task_ids[n_test_task_ids + n_val_task_ids:])
+train_task_ids = set(train_task_ids)
+val_task_ids = set(val_task_ids)
+test_task_ids = set(test_task_ids)
 
 print(
-    f"Task_id split: train={len(train_task_ids)}, val={len(val_task_ids)}, test={len(test_task_ids)}"
+    f"\nOverall task_id split: train={len(train_task_ids)}, val={len(val_task_ids)}, test={len(test_task_ids)}"
 )
 
 # Filter datasets based on task_id assignment
