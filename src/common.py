@@ -161,7 +161,6 @@ def load_and_preprocess_data(
     cache_dir: str | None,
     seed: int = 42,
     test_size: float = 0.5,
-    use_unseen_questions: bool = False,
     topics: list[str] | None = None,
     use_split_files: bool = False,
     train_csv: str | None = None,
@@ -170,14 +169,16 @@ def load_and_preprocess_data(
 ):
     """
     Load and preprocess dataset.
+    
+    Always splits by questions (task_id) to ensure no question overlap between splits.
+    Questions and their answers will only appear in one split (train, val, or test).
 
     Args:
         dataset_csv: Path to single CSV file (used when use_split_files=False)
         cache_dir: Cache directory for datasets
         seed: Random seed for reproducibility
         test_size: Fraction of data for test set (only used when use_split_files=False)
-        use_unseen_questions: Whether to split by questions (only used when use_split_files=False)
-        topics: List of topics to filter (applies to both modes)
+        topics: List of topics to filter (applies to both modes). If None or empty, uses all topics.
         use_split_files: If True, use separate train/val/test files instead of splitting
         train_csv: Path to train.csv (used when use_split_files=True)
         val_csv: Path to val.csv (used when use_split_files=True)
@@ -324,52 +325,42 @@ def load_and_preprocess_data(
         )
         print("Out-of-topic samples will be added to test set")
 
-        # Apply split logic to in-topic data only
-        if use_unseen_questions:
-            print(
-                "Splitting in-topic data by questions (unseen questions in test set)..."
-            )
-            # Get unique questions from in-topic data
-            unique_questions = list(set(in_topic_data["question"]))
+        # Apply split logic to in-topic data - always split by questions (task_id)
+        print("Splitting in-topic data by questions (task_id) to ensure no overlap...")
+        # Get unique task_ids from in-topic data
+        unique_task_ids = sorted(list(set(in_topic_data["task_id"])))
 
-            # Randomly shuffle and split questions
-            rng = np.random.default_rng(seed)
-            rng.shuffle(unique_questions)
+        # Randomly shuffle and split task_ids
+        rng = np.random.default_rng(seed)
+        rng.shuffle(unique_task_ids)
 
-            n_test_questions = int(len(unique_questions) * test_size)
-            test_questions = set(unique_questions[:n_test_questions])
-            train_questions = set(unique_questions[n_test_questions:])
+        n_test_task_ids = int(len(unique_task_ids) * test_size)
+        test_task_ids = set(unique_task_ids[:n_test_task_ids])
+        train_task_ids = set(unique_task_ids[n_test_task_ids:])
 
-            print(
-                f"Number of unique questions in in-topic data: {len(unique_questions)} "
-                f"(train: {len(train_questions)}, test: {len(test_questions)})"
-            )
+        print(
+            f"Number of unique task_ids in in-topic data: {len(unique_task_ids)} "
+            f"(train: {len(train_task_ids)}, test: {len(test_task_ids)})"
+        )
 
-            # Filter the in-topic dataset based on question assignment
-            train_indices = [
-                i
-                for i, q in enumerate(in_topic_data["question"])
-                if q in train_questions
-            ]
-            test_indices = [
-                i
-                for i, q in enumerate(in_topic_data["question"])
-                if q in test_questions
-            ]
+        # Filter the in-topic dataset based on task_id assignment
+        train_indices = [
+            i
+            for i, task_id in enumerate(in_topic_data["task_id"])
+            if task_id in train_task_ids
+        ]
+        test_indices = [
+            i
+            for i, task_id in enumerate(in_topic_data["task_id"])
+            if task_id in test_task_ids
+        ]
 
-            in_topic_split = DatasetDict(
-                {
-                    "train": in_topic_data.select(train_indices),
-                    "test": in_topic_data.select(test_indices),
-                }
-            )
-
-        else:
-            print("Splitting in-topic data by samples (standard stratified split)...")
-            # use stratified split on in-topic data
-            in_topic_split = in_topic_data.train_test_split(
-                test_size=test_size, seed=seed, stratify_by_column="labels"
-            )
+        in_topic_split = DatasetDict(
+            {
+                "train": in_topic_data.select(train_indices),
+                "test": in_topic_data.select(test_indices),
+            }
+        )
 
         # Combine test sets: out-of-topic data + test portion from in-topic split
         combined_test = concatenate_datasets(
@@ -385,47 +376,40 @@ def load_and_preprocess_data(
 
     else:
         # No topic filtering - apply split logic to full dataset
-        if use_unseen_questions:
-            print("Splitting by questions (unseen questions in test set)...")
-            # Get unique questions
-            unique_questions = list(set(full_dataset["question"]))
+        # Always split by questions (task_id) to ensure no overlap
+        print("Splitting by questions (task_id) to ensure no overlap...")
+        # Get unique task_ids
+        unique_task_ids = sorted(list(set(full_dataset["task_id"])))
 
-            # Randomly shuffle and split questions
-            rng = np.random.default_rng(seed)
-            rng.shuffle(unique_questions)
+        # Randomly shuffle and split task_ids
+        rng = np.random.default_rng(seed)
+        rng.shuffle(unique_task_ids)
 
-            n_test_questions = int(len(unique_questions) * test_size)
-            test_questions = set(unique_questions[:n_test_questions])
-            train_questions = set(unique_questions[n_test_questions:])
+        n_test_task_ids = int(len(unique_task_ids) * test_size)
+        test_task_ids = set(unique_task_ids[:n_test_task_ids])
+        train_task_ids = set(unique_task_ids[n_test_task_ids:])
 
-            print(
-                f"Number of unique questions: {len(unique_questions)} "
-                f"(train: {len(train_questions)}, test: {len(test_questions)})"
-            )
+        print(
+            f"Number of unique task_ids: {len(unique_task_ids)} "
+            f"(train: {len(train_task_ids)}, test: {len(test_task_ids)})"
+        )
 
-            # Filter the full dataset based on question assignment
-            train_indices = [
-                i
-                for i, q in enumerate(full_dataset["question"])
-                if q in train_questions
-            ]
-            test_indices = [
-                i for i, q in enumerate(full_dataset["question"]) if q in test_questions
-            ]
+        # Filter the full dataset based on task_id assignment
+        train_indices = [
+            i
+            for i, task_id in enumerate(full_dataset["task_id"])
+            if task_id in train_task_ids
+        ]
+        test_indices = [
+            i for i, task_id in enumerate(full_dataset["task_id"]) if task_id in test_task_ids
+        ]
 
-            raw = DatasetDict(
-                {
-                    "train": full_dataset.select(train_indices),
-                    "test": full_dataset.select(test_indices),
-                }
-            )
-
-        else:
-            print("Splitting by samples (standard stratified split)...")
-            # use stratified split
-            raw = full_dataset.train_test_split(
-                test_size=test_size, seed=seed, stratify_by_column="labels"
-            )
+        raw = DatasetDict(
+            {
+                "train": full_dataset.select(train_indices),
+                "test": full_dataset.select(test_indices),
+            }
+        )
 
     print(f"Number of training samples: {len(raw['train'])}")
     if "val" in raw:

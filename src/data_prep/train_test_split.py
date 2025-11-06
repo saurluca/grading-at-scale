@@ -3,7 +3,8 @@ from pathlib import Path
 import pandas as pd
 import yaml
 import sys
-from datasets import DatasetDict
+import numpy as np
+from datasets import DatasetDict, Dataset
 
 # Add src to path to import common module
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -28,10 +29,6 @@ config = {**base_config, **data_config}
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 data_dir = PROJECT_ROOT / config["paths"]["data_dir"]
 synth_dir = PROJECT_ROOT / "data" / "gras"
-# Parameters
-use_unseen_questions = (
-    True  # Set to True to split by questions, False for standard split
-)
 seed = config["project"]["seed"]
 
 # Load the full dataset
@@ -43,32 +40,63 @@ temp_csv_path = synth_dir / "temp_full.csv"
 df_full.to_csv(temp_csv_path, index=False, sep=";")
 
 # %%
-# Split dataset using common.py functions
-print("Splitting dataset into train/val/test (6/2/2)...")
+# Split dataset by task_id (questions) to ensure no overlap between splits
+print("Splitting dataset into train/val/test (6/2/2) by task_id...")
 
-# First split: 80% train+val, 20% test
+# Load and preprocess data (for label mapping, etc.)
+# Note: load_and_preprocess_data always splits by questions (task_id) now
 raw_data, label_order, label2id, id2label = load_and_preprocess_data(
     dataset_csv=str(temp_csv_path),
     cache_dir=None,
     seed=seed,
     test_size=0.2,  # 20% for test
-    use_unseen_questions=use_unseen_questions,
 )
 
-# Second split: split the 80% into 75% train, 25% val (which gives us 60% train, 20% val of original)
-train_val_data = raw_data["train"]
-train_val_split = train_val_data.train_test_split(
-    test_size=0.25,  # 25% of 80% = 20% of original
-    seed=seed,
-    stratify_by_column="labels",
+# Get unique task_ids from the full dataset
+df_full_with_labels = raw_data["train"].to_pandas()
+df_test_with_labels = raw_data["test"].to_pandas()
+df_combined = pd.concat([df_full_with_labels, df_test_with_labels], ignore_index=True)
+
+unique_task_ids = sorted(df_combined["task_id"].unique())
+print(f"Total unique task_ids: {len(unique_task_ids)}")
+
+# Split task_ids: 60% train, 20% val, 20% test
+rng = np.random.default_rng(seed)
+rng.shuffle(unique_task_ids)
+
+n_test_task_ids = int(len(unique_task_ids) * 0.2)  # 20% for test
+n_val_task_ids = int(len(unique_task_ids) * 0.2)   # 20% for val
+
+test_task_ids = set(unique_task_ids[:n_test_task_ids])
+val_task_ids = set(unique_task_ids[n_test_task_ids:n_test_task_ids + n_val_task_ids])
+train_task_ids = set(unique_task_ids[n_test_task_ids + n_val_task_ids:])
+
+print(
+    f"Task_id split: train={len(train_task_ids)}, val={len(val_task_ids)}, test={len(test_task_ids)}"
 )
 
-# Create final dataset with 6/2/2 split
+# Filter datasets based on task_id assignment
+train_indices = [
+    i for i, task_id in enumerate(df_combined["task_id"]) if task_id in train_task_ids
+]
+val_indices = [
+    i for i, task_id in enumerate(df_combined["task_id"]) if task_id in val_task_ids
+]
+test_indices = [
+    i for i, task_id in enumerate(df_combined["task_id"]) if task_id in test_task_ids
+]
+
+# Convert back to datasets
+train_dataset = Dataset.from_pandas(df_combined.iloc[train_indices].reset_index(drop=True))
+val_dataset = Dataset.from_pandas(df_combined.iloc[val_indices].reset_index(drop=True))
+test_dataset = Dataset.from_pandas(df_combined.iloc[test_indices].reset_index(drop=True))
+
+# Create final dataset with 6/2/2 split (60% train, 20% val, 20% test)
 final_dataset = DatasetDict(
     {
-        "train": train_val_split["train"],  # 60% of original
-        "val": train_val_split["test"],  # 20% of original
-        "test": raw_data["test"],  # 20% of original
+        "train": train_dataset,
+        "val": val_dataset,
+        "test": test_dataset,
     }
 )
 

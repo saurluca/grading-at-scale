@@ -42,7 +42,6 @@ dataset:
   
   
   test_size: 0.4  # Only used when use_split_files: false
-  use_unseen_questions: true # Split by question ID, not random (only for runtime split)
   # topics: ["SciEntsBank", "Beetle", "Mohler", "DigiKlausur", "SAF", "Stita", "CU-NLP"]
   # topics: ["language", "ai", "neuro", "memory"] 
   topics: [] # null or empty list = all topics
