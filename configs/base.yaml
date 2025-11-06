@@ -26,3 +26,7 @@ labels:
     0: incorrect
     1: partial
     2: correct
+
+# MLflow tracking configuration
+mlflow:
+  tracking_uri: sqlite:///mlflow.db  # SQLite database path relative to project root

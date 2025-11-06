@@ -14,11 +14,11 @@ grid_search:
   optimization_metric: weighted_f1  # weighted_f1 | macro_f1 | accuracy | eval_loss
   
   # Seed to use for all grid search runs
-  seed: 42
+  seed: 43
   
   # Learning rate values to explore
-  # learning_rate: [0.0001, 0.0005, 0.001, 0.01]
-  learning_rate: [0.001, 0.01]
+  learning_rate: [0.0001, 0.0005, 0.001, 0.01]
+  #learning_rate: [0.001, 0.01]
   
   # LoRA rank (r) values to explore
   lora_r: [8, 16, 32]

@@ -33,3 +33,6 @@ optimized_grader_single.json
 *.sqlite
 grading_results.json
 grading_interface.html
+*.db
+
+mlruns.backup/

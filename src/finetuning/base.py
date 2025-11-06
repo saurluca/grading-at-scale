@@ -20,6 +20,7 @@ from src.common import (  # noqa: E402
     tokenize_dataset,
     detailed_evaluation,
 )
+from src.mlflow_config import setup_mlflow  # noqa: E402
 
 
 def main() -> None:
@@ -69,6 +70,9 @@ def main() -> None:
         )
         os.makedirs(cache_path, exist_ok=True)
 
+    # Setup MLflow tracking URI from config
+    setup_mlflow(cfg, PROJECT_ROOT)
+
     # Start MLflow experiment
     experiment_name = "vanilla_training"
     mlflow.set_experiment(experiment_name)
@@ -100,9 +104,6 @@ def main() -> None:
             cache_dir,
             int(getattr(cfg.project, "seed", 42)),
             test_size=cfg.dataset.test_size,
-            use_unseen_questions=bool(
-                getattr(cfg.dataset, "use_unseen_questions", False)
-            ),
             topics=getattr(cfg.dataset, "topics", None),
             use_split_files=use_split_files,
             train_csv=train_csv,

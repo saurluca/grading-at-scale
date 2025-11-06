@@ -20,6 +20,7 @@ from src.common import (  # noqa: E402
     detailed_evaluation,
     setup_model_and_tokenizer,
 )
+from src.mlflow_config import setup_mlflow  # noqa: E402
 
 
 def main() -> None:
@@ -68,6 +69,9 @@ def main() -> None:
             else cache_dir
         )
         os.makedirs(cache_path, exist_ok=True)
+
+    # Setup MLflow tracking URI from config
+    setup_mlflow(cfg, PROJECT_ROOT)
 
     # Start MLflow experiment
     experiment_name = getattr(cfg.mlflow, "experiment_name", "peft_lora_training")
@@ -138,9 +142,6 @@ def main() -> None:
             cache_dir,
             int(getattr(cfg.project, "seed", 42)),
             test_size=cfg.dataset.test_size,
-            use_unseen_questions=bool(
-                getattr(cfg.dataset, "use_unseen_questions", False)
-            ),
             topics=topics,
             use_split_files=use_split_files,
             train_csv=train_csv,

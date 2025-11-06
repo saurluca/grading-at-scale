@@ -21,6 +21,7 @@ from src.common import (  # noqa: E402
     detailed_evaluation,
     setup_model_and_tokenizer,
 )
+from src.mlflow_config import setup_mlflow  # noqa: E402
 
 
 def run_single_training(cfg, cache_dir, output_dir_base, combination_idx, total_combinations):
@@ -59,9 +60,6 @@ def run_single_training(cfg, cache_dir, output_dir_base, combination_idx, total_
         cache_dir,
         int(getattr(cfg.project, "seed", 42)),
         test_size=getattr(cfg.dataset, "test_size", 0.4),
-        use_unseen_questions=bool(
-            getattr(cfg.dataset, "use_unseen_questions", False)
-        ),
         topics=topics,
         use_split_files=use_split_files,
         train_csv=train_csv,
@@ -192,6 +190,9 @@ def main() -> None:
         os.makedirs(cache_path, exist_ok=True)
     else:
         cache_path = None
+    
+    # Setup MLflow tracking URI from config
+    setup_mlflow(cfg, PROJECT_ROOT)
     
     # Start MLflow experiment with parent run
     experiment_name = getattr(cfg.mlflow, "experiment_name", "lora_gridsearch")

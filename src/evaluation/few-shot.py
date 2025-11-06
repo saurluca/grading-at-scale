@@ -25,14 +25,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 from src.model_builder import build_lm  # noqa: E402
+from src.mlflow_config import setup_mlflow  # noqa: E402
 
 logging.getLogger("dspy").setLevel(logging.ERROR)
 
 # Enable nice tqdm integration with pandas
 tqdm.pandas(desc="Grading answers")
-
-# Configure MLflow tracking (autolog will be called inside the run context)
-mlflow.set_experiment("DSPy-Optimization")
 
 
 def log_config_params_to_mlflow(cfg):
@@ -274,6 +272,9 @@ few_shot_cfg = OmegaConf.load(few_shot_config_path)
 cfg = OmegaConf.merge(base_cfg, few_shot_cfg)
 output_dir = os.path.join(PROJECT_ROOT, cfg.output.dir)
 
+# Setup MLflow tracking URI from config
+setup_mlflow(cfg, PROJECT_ROOT)
+
 print(f"Using model {cfg.model.base} for evaluation")
 
 # Create run name based on model and configuration
@@ -283,6 +284,9 @@ prompt_str = "prompt" if cfg.model.with_prompt else "noprompt"
 ref_str = "ref" if cfg.model.pass_reference else "noref"
 refans_str = "refans" if cfg.model.pass_reference_answer else "norefans"
 run_name = f"few_shot_{model_short}_{prompt_str}_{ref_str}_{refans_str}"
+
+# Configure MLflow experiment
+mlflow.set_experiment("DSPy-Optimization")
 
 # Start parent MLflow run
 with mlflow.start_run(run_name=run_name) as run:
