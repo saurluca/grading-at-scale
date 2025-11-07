@@ -764,8 +764,8 @@ def detailed_evaluation(trainer, test_dataset, label_order):
             }
         )
 
-    # Add per-topic micro F1 scores for all topics in test set
-    print("\nPer-topic Micro F1 Scores:")
+    # Add per-topic metrics for all topics in test set
+    print("\nPer-topic Metrics:")
     print("-" * 40)
 
     # Check if topic column exists in test dataset
@@ -776,6 +776,10 @@ def detailed_evaluation(trainer, test_dataset, label_order):
         # Get all unique topics in the test set
         unique_test_topics = list(set(test_topics))
 
+        # Store per-topic weighted F1 scores for overall weighted average calculation
+        topic_weighted_f1_scores = []
+        topic_supports = []
+
         for topic in unique_test_topics:
             # Find indices where the topic matches
             topic_indices = [i for i, t in enumerate(test_topics) if t == topic]
@@ -783,23 +787,69 @@ def detailed_evaluation(trainer, test_dataset, label_order):
             if len(topic_indices) == 0:
                 print(f"{topic}: No samples found")
                 evaluation_metrics[f"{topic}_micro_f1"] = 0.0
+                evaluation_metrics[f"{topic}_cohens_kappa"] = 0.0
+                evaluation_metrics[f"{topic}_macro_f1"] = 0.0
+                evaluation_metrics[f"{topic}_weighted_f1"] = 0.0
                 evaluation_metrics[f"{topic}_support"] = 0
                 continue
 
             # Get predictions and labels for this topic
-            topic_y_true = [y_true[i] for i in topic_indices]
-            topic_y_pred = [y_pred[i] for i in topic_indices]
+            topic_y_true = np.array([y_true[i] for i in topic_indices])
+            topic_y_pred = np.array([y_pred[i] for i in topic_indices])
+            topic_support = len(topic_indices)
 
             # Calculate micro F1 for this topic
-            topic_precision, topic_recall, topic_f1, topic_support = (
+            topic_precision_micro, topic_recall_micro, topic_f1_micro, _ = (
                 precision_recall_fscore_support(
                     topic_y_true, topic_y_pred, average="micro", zero_division=0
                 )
             )
 
-            print(f"{topic}: {topic_f1:.4f} (support: {len(topic_indices)})")
-            evaluation_metrics[f"{topic}_micro_f1"] = topic_f1
-            evaluation_metrics[f"{topic}_support"] = len(topic_indices)
+            # Calculate Cohen's kappa (quadratic weighted, consistent with overall)
+            topic_kappa = cohen_kappa_score(topic_y_true, topic_y_pred, weights="quadratic")
+
+            # Calculate macro F1 for this topic
+            _, _, topic_f1_macro, _ = (
+                precision_recall_fscore_support(
+                    topic_y_true, topic_y_pred, average="macro", zero_division=0
+                )
+            )
+
+            # Calculate weighted F1 for this topic
+            _, _, topic_f1_weighted, _ = (
+                precision_recall_fscore_support(
+                    topic_y_true, topic_y_pred, average="weighted", zero_division=0
+                )
+            )
+
+            # Store metrics
+            evaluation_metrics[f"{topic}_micro_f1"] = topic_f1_micro
+            evaluation_metrics[f"{topic}_cohens_kappa"] = topic_kappa
+            evaluation_metrics[f"{topic}_macro_f1"] = topic_f1_macro
+            evaluation_metrics[f"{topic}_weighted_f1"] = topic_f1_weighted
+            evaluation_metrics[f"{topic}_support"] = topic_support
+
+            # Store for overall weighted average calculation
+            topic_weighted_f1_scores.append(topic_f1_weighted)
+            topic_supports.append(topic_support)
+
+            print(
+                f"{topic}: micro_f1={topic_f1_micro:.4f}, "
+                f"cohens_kappa={topic_kappa:.4f}, "
+                f"macro_f1={topic_f1_macro:.4f}, "
+                f"weighted_f1={topic_f1_weighted:.4f} "
+                f"(support: {topic_support})"
+            )
+
+        # Calculate overall weighted average of per-topic weighted F1 scores
+        if len(topic_weighted_f1_scores) > 0 and sum(topic_supports) > 0:
+            overall_topic_weighted_f1 = np.average(
+                topic_weighted_f1_scores, weights=topic_supports
+            )
+            evaluation_metrics["overall_topic_weighted_f1"] = overall_topic_weighted_f1
+            print(
+                f"\nOverall weighted average of per-topic weighted F1: {overall_topic_weighted_f1:.4f}"
+            )
     else:
         print(
             "Warning: Topic column not found in test dataset. Skipping per-topic evaluation."

@@ -8,7 +8,7 @@ model:
   base: Qwen/Qwen3-0.6B
 
 # Task selection for dispatcher
-task_type: lora-regression  # lora-classification | lora-regression | vanilla-classification
+task_type: lora-classification  # lora-classification | lora-regression | vanilla-classification
 
 # Dispatcher controls
 dispatcher:
@@ -64,7 +64,7 @@ lora:
 training:
   num_epochs: 4 # 3
   batch_size: 
-    train: 8 # 8
+    train: 16 # 8
     eval: 16 # 16
   gradient_accumulation_steps: 1  # batch_size * gradient_accumulation_steps = 8
   learning_rate: 0.0002 # 0.0002
