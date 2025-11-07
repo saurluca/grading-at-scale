@@ -55,9 +55,9 @@ output:
 
 # LoRA configuration
 lora:
-  r: 16
+  r: 8
   alpha: 16
-  dropout: 0.1
+  dropout: 0.05
   target_modules: "all-linear"
 
 # Training hyperparameters
@@ -67,7 +67,7 @@ training:
     train: 16 # 8
     eval: 16 # 16
   gradient_accumulation_steps: 1  # batch_size * gradient_accumulation_steps = 8
-  learning_rate: 0.0002 # 0.0002
+  learning_rate: 0.0005 # 0.0002
   weight_decay: 0.01 # 0.01
   eval_strategy: epoch # epoch | steps
   eval_steps: 100  # Evaluation frequency in steps (only used when eval_strategy is overridden to steps)
