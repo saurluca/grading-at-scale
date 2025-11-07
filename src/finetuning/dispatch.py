@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 def select_main(task_type: str):
     mapping = {
         "lora-classification": "lora",
+        "lora-regression": "lora_regression",
         "vanilla-classification": "base",
         "lora-classification-gridsearch": "lora_gridsearch",
     }
