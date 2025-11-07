@@ -276,11 +276,23 @@ def main() -> None:
     unique_topics = sorted(list(set(full_dataset["topic"])))
     print(f"\nFound {len(unique_topics)} unique topics: {unique_topics}")
     
+    # Get k-fold configuration
+    kfold_config = getattr(cfg, "kfold", {})
+    train_topics_count = int(getattr(kfold_config, "train_topics", 3))  # Default to 3
+    
+    # Validate configuration
+    if train_topics_count not in [2, 3]:
+        print(f"Warning: train_topics must be 2 or 3, got {train_topics_count}. Defaulting to 3.")
+        train_topics_count = 3
+    
     if len(unique_topics) < 4:
         print(f"Warning: Expected at least 4 topics, found {len(unique_topics)}")
     
-    # Generate all combinations of 2 topics for training
-    train_topic_combinations = list(itertools.combinations(unique_topics, 2))
+    test_topics_count = len(unique_topics) - train_topics_count
+    print(f"\nK-fold configuration: Train on {train_topics_count} topics, Test on {test_topics_count} topics")
+    
+    # Generate all combinations of train_topics_count topics for training
+    train_topic_combinations = list(itertools.combinations(unique_topics, train_topics_count))
     print(f"\nGenerated {len(train_topic_combinations)} topic combinations for training:")
     for i, combo in enumerate(train_topic_combinations, 1):
         test_combo = [t for t in unique_topics if t not in combo]
@@ -303,6 +315,8 @@ def main() -> None:
             "num_folds": len(train_topic_combinations),
             "num_topics": len(unique_topics),
             "topics": ", ".join(unique_topics),
+            "kfold_train_topics": train_topics_count,
+            "kfold_test_topics": test_topics_count,
         })
         
         # Process each fold
