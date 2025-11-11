@@ -1,0 +1,28 @@
+model:
+  # List of models to evaluate (from training.yaml dispatcher.models)
+  models: [
+    meta-llama/Llama-3.2-1B-Instruct,
+    openai-community/gpt2-large,
+    openai-community/gpt2,
+    google/flan-t5-base,
+    Qwen/Qwen3-0.6B,
+  ]
+  cache: true
+  # temperature: 0.6
+  max_tokens: 4096
+
+  with_prompt: false
+  pass_reference_answer: true
+
+
+dataset:
+  csv_test: data/gras/test.csv  # Always use test.csv
+
+
+evaluation:
+  num_threads: 16  # For DSPy batched processing
+
+
+output:
+  dir: ${paths.output_dir}/baseline
+

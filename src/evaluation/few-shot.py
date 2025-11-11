@@ -286,7 +286,7 @@ refans_str = "refans" if cfg.model.pass_reference_answer else "norefans"
 run_name = f"few_shot_{model_short}_{prompt_str}_{ref_str}_{refans_str}"
 
 # Configure MLflow experiment
-mlflow.set_experiment("DSPy-Optimization")
+mlflow.set_experiment("DSPy-Evaluation")
 
 # Start parent MLflow run
 with mlflow.start_run(run_name=run_name) as run:
@@ -301,12 +301,14 @@ with mlflow.start_run(run_name=run_name) as run:
     log_config_params_to_mlflow(cfg)
 
     # Build LM and Grader program(s)
-    grader_lm = build_lm(
-        cfg.model.base,
-        max_tokens=cfg.model.max_tokens,
-        cache=cfg.model.cache,
-        temperature=cfg.model.temperature,
-    )
+    build_lm_kwargs = {
+        "max_tokens": cfg.model.max_tokens,
+        "cache": cfg.model.cache,
+    }
+    if hasattr(cfg.model, "temperature") and cfg.model.temperature is not None:
+        build_lm_kwargs["temperature"] = cfg.model.temperature
+
+    grader_lm = build_lm(cfg.model.base, **build_lm_kwargs)
 
     print(f"Using LM {cfg.model.base}")
 
