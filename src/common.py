@@ -530,18 +530,17 @@ def setup_model_and_tokenizer(
         else:
             tokenizer.add_special_tokens({"pad_token": "[PAD]"})
 
+    # Load the model (always execute, regardless of pad_token status)
+    model_kwargs = {
+        "num_labels": 3,
+        "id2label": id2label,
+        "label2id": label2id,
+        "cache_dir": cache_dir,
+    }
 
-    else:
-        model_kwargs = {
-            "num_labels": 3,
-            "id2label": id2label,
-            "label2id": label2id,
-            "cache_dir": cache_dir,
-        }
-
-        base_model = AutoModelForSequenceClassification.from_pretrained(
-            model_name, **model_kwargs
-        )
+    base_model = AutoModelForSequenceClassification.from_pretrained(
+        model_name, **model_kwargs
+    )
 
     # Resize embeddings if new tokens were added and align pad_token_id
     if hasattr(base_model, "resize_token_embeddings"):

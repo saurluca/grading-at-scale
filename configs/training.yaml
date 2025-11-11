@@ -12,17 +12,17 @@ task_type: lora-classification  # lora-classification | lora-regression | vanill
 
 # Dispatcher controls
 dispatcher:
-  num_runs: 1
+  num_runs: 2
   seed_strategy: random  # same | random
   # seeds: [42,43,44]          # optional list; if provided, overrides both above
   # optional list of model base names to run; if empty uses model.base
-  # models: [
-  #   meta-llama/Llama-3.2-1B-Instruct,
-  #   openai-community/gpt2-large,
-  #   openai-community/gpt2,
-  #   google/flan-t5-base,
-  #   Qwen/Qwen3-0.6B,
-  # ]             
+  models: [
+    meta-llama/Llama-3.2-1B-Instruct,
+    openai-community/gpt2-large,
+    openai-community/gpt2,
+    google/flan-t5-base,
+    Qwen/Qwen3-0.6B,
+  ]             
 
 
 # Dataset
@@ -64,8 +64,8 @@ lora:
 training:
   num_epochs: 4 # 3
   batch_size: 
-    train: 16 # 16
-    eval: 24 # 16
+    train: 32 # 16
+    eval: 64 # 16
   gradient_accumulation_steps: 1  # batch_size * gradient_accumulation_steps = 8
   learning_rate: 0.0005 # 0.0002
   weight_decay: 0.01 # 0.01
@@ -81,7 +81,7 @@ tokenization:
 
 # MLflow tracking
 mlflow:
-  experiment_name: lora_training_comparison_v2
+  experiment_name: lora_training_comparison_v3
 
 # Topic k-fold cross-validation settings
 kfold:

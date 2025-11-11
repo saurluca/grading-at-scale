@@ -69,6 +69,8 @@ def main() -> None:
             else cache_dir
         )
         os.makedirs(cache_path, exist_ok=True)
+    else:
+        cache_path = None
 
     # Setup MLflow tracking URI from config
     setup_mlflow(cfg, PROJECT_ROOT)
