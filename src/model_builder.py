@@ -38,6 +38,31 @@ model_configs = {
         "api_key": "",
         "api_base": os.getenv("VLLM_API_BASE"),
     },
+    "meta-llama/Llama-3.2-1B-Instruct": {
+        "model": "hosted_vllm/meta-llama/Llama-3.2-1B-Instruct",
+        "api_key": "",
+        "api_base": os.getenv("VLLM_API_BASE"),
+    },
+    "openai-community/gpt2-large": {
+        "model": "hosted_vllm/openai-community/gpt2-large",
+        "api_key": "",
+        "api_base": os.getenv("VLLM_API_BASE"),
+    },
+    "openai-community/gpt2": {
+        "model": "hosted_vllm/openai-community/gpt2",
+        "api_key": "",
+        "api_base": os.getenv("VLLM_API_BASE"),
+    },
+    "google/flan-t5-base": {
+        "model": "hosted_vllm/google/flan-t5-base",
+        "api_key": "",
+        "api_base": os.getenv("VLLM_API_BASE"),
+    },
+    "Qwen/Qwen3-0.6B": {
+        "model": "hosted_vllm/Qwen/Qwen3-0.6B",
+        "api_key": "",
+        "api_base": os.getenv("VLLM_API_BASE"),
+    },
 }
 
 
