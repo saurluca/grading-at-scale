@@ -1,6 +1,8 @@
 import logging
 import os
 import sys
+import subprocess
+import time
 from pathlib import Path
 
 import dspy
@@ -18,14 +20,119 @@ from sklearn.metrics import (
 )
 from tqdm import tqdm
 import mlflow
+import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from src.model_builder import build_lm  # noqa: E402
+from src.model_builder import build_lm, model_configs  # noqa: E402
 from src.mlflow_config import setup_mlflow  # noqa: E402
 
 logging.getLogger("dspy").setLevel(logging.ERROR)
+
+# vLLM server configuration
+VLLM_PORT = 8000
+VLLM_BASE_URL = f"http://localhost:{VLLM_PORT}"
+VLLM_STARTUP_TIMEOUT = 300  # seconds
+
+
+def is_vllm_model(model_name: str) -> bool:
+    """Check if a model uses vLLM hosting."""
+    if model_name not in model_configs:
+        return False
+    config = model_configs[model_name]
+    model_path = config.get("model", "")
+    return model_path.startswith("hosted_vllm/")
+
+
+def get_vllm_model_name(model_name: str) -> str:
+    """Extract the actual model name for vLLM (remove 'hosted_vllm/' prefix)."""
+    if model_name not in model_configs:
+        return model_name
+    config = model_configs[model_name]
+    model_path = config.get("model", "")
+    if model_path.startswith("hosted_vllm/"):
+        return model_path.replace("hosted_vllm/", "")
+    return model_name
+
+
+def wait_for_vllm_server(timeout: int = VLLM_STARTUP_TIMEOUT) -> bool:
+    """Wait for vLLM server to be ready."""
+    print("Waiting for vLLM server to be ready...")
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            response = requests.get(f"{VLLM_BASE_URL}/health", timeout=2)
+            if response.status_code == 200:
+                print("✓ vLLM server is ready!")
+                time.sleep(2)  # Extra buffer for server to fully initialize
+                return True
+        except requests.exceptions.RequestException:
+            pass
+        time.sleep(2)
+    return False
+
+
+def start_vllm_server(model_name: str) -> subprocess.Popen:
+    """Start vLLM server for a specific model."""
+    # Extract actual model name (remove hosted_vllm/ prefix)
+    actual_model = get_vllm_model_name(model_name)
+    
+    log_file = PROJECT_ROOT / "logs" / f"vllm_{actual_model.replace('/', '_')}.log"
+    log_file.parent.mkdir(exist_ok=True)
+    
+    cmd = [
+        "python", "-m", "vllm.entrypoints.openai.api_server",
+        "--model", actual_model,
+        "--port", str(VLLM_PORT),
+        "--host", "0.0.0.0",
+    ]
+    
+    print(f"\n{'='*80}")
+    print(f"Starting vLLM server for: {actual_model}")
+    print(f"{'='*80}")
+    print(f"Command: {' '.join(cmd)}")
+    print(f"Logs: {log_file}")
+    
+    with open(log_file, "w") as f:
+        process = subprocess.Popen(
+            cmd,
+            stdout=f,
+            stderr=subprocess.STDOUT,
+            cwd=PROJECT_ROOT,
+        )
+    
+    return process
+
+
+def stop_vllm_server(process: subprocess.Popen):
+    """Stop vLLM server gracefully."""
+    print("\nStopping vLLM server...")
+    process.terminate()
+    try:
+        process.wait(timeout=10)
+        print("✓ Server stopped gracefully")
+    except subprocess.TimeoutExpired:
+        print("Force killing vLLM server...")
+        process.kill()
+        process.wait()
+        print("✓ Server force stopped")
+    time.sleep(2)  # Brief pause after stopping
+
+
+def ensure_no_vllm_server():
+    """Ensure no vLLM server is running on the port."""
+    try:
+        response = requests.get(f"{VLLM_BASE_URL}/health", timeout=2)
+        if response.status_code == 200:
+            print("Found existing vLLM server, stopping it...")
+            subprocess.run(
+                ["pkill", "-f", f"vllm.entrypoints.openai.api_server.*--port.*{VLLM_PORT}"],
+                check=False,
+            )
+            time.sleep(3)
+    except requests.exceptions.RequestException:
+        pass  # No server running, which is fine
 
 
 def log_config_params_to_mlflow(cfg):
@@ -403,74 +510,106 @@ testset = convert_df_to_dspy_format(
 mlflow.set_experiment("DSPy-Baseline-Evaluation")
 
 # Evaluate each model
-for model_name in models_list:
+vllm_server_process = None
+
+for i, model_name in enumerate(models_list, 1):
     print("\n" + "=" * 80)
-    print(f"Evaluating model: {model_name}")
+    print(f"Evaluating model {i}/{len(models_list)}: {model_name}")
     print("=" * 80)
+
+    # Check if this is a vLLM model
+    is_vllm = is_vllm_model(model_name)
+    
+    # Manage vLLM server if needed
+    if is_vllm:
+        # Ensure no server is running from previous iteration
+        ensure_no_vllm_server()
+        
+        # Start vLLM server for this model
+        vllm_server_process = start_vllm_server(model_name)
+        
+        # Wait for server to be ready
+        if not wait_for_vllm_server():
+            print(f"ERROR: vLLM server for {model_name} failed to start!")
+            if vllm_server_process:
+                stop_vllm_server(vllm_server_process)
+            continue
+    else:
+        print(f"Using external API for {model_name} (no vLLM server needed)")
 
     # Create run name based on model
     model_short = model_name.split("/")[-1]
     run_name = f"baseline_{model_short}"
 
-    # Start MLflow run for this model
-    with mlflow.start_run(run_name=run_name) as run:
-        # Log model name as parameter
-        mlflow.log_param("model", model_name)
-        log_config_params_to_mlflow(cfg)
+    try:
+        # Start MLflow run for this model
+        with mlflow.start_run(run_name=run_name) as run:
+            # Log model name as parameter
+            mlflow.log_param("model", model_name)
+            mlflow.log_param("is_vllm", is_vllm)
+            log_config_params_to_mlflow(cfg)
 
-        # Build LM and Grader program
-        build_lm_kwargs = {
-            "max_tokens": cfg.model.max_tokens,
-            "cache": cfg.model.cache,
-        }
-        if hasattr(cfg.model, "temperature") and cfg.model.temperature is not None:
-            build_lm_kwargs["temperature"] = cfg.model.temperature
+            # Build LM and Grader program
+            build_lm_kwargs = {
+                "max_tokens": cfg.model.max_tokens,
+                "cache": cfg.model.cache,
+            }
+            if hasattr(cfg.model, "temperature") and cfg.model.temperature is not None:
+                build_lm_kwargs["temperature"] = cfg.model.temperature
 
-        try:
-            grader_lm = build_lm(model_name, **build_lm_kwargs)
-        except KeyError:
-            print(f"Warning: Model {model_name} not found in model_builder.py. Skipping.")
-            continue
+            try:
+                grader_lm = build_lm(model_name, **build_lm_kwargs)
+            except KeyError:
+                print(f"Warning: Model {model_name} not found in model_builder.py. Skipping.")
+                if is_vllm and vllm_server_process:
+                    stop_vllm_server(vllm_server_process)
+                continue
 
-        print(f"Using LM {model_name}")
+            print(f"Using LM {model_name}")
 
-        grader = dspy.Predict(GraderSingle_without_prompt)
+            grader = dspy.Predict(GraderSingle_without_prompt)
 
-        dspy.configure(lm=grader_lm)
-        grader.set_lm(grader_lm)
+            dspy.configure(lm=grader_lm)
+            grader.set_lm(grader_lm)
 
-        # Log test dataset as MLflow Dataset
-        test_ml_dataset = mlflow.data.from_pandas(
-            test_df, source=test_csv_path, name="test_dataset"
-        )
-        mlflow.log_input(test_ml_dataset, context="evaluation")
+            # Log test dataset as MLflow Dataset
+            test_ml_dataset = mlflow.data.from_pandas(
+                test_df, source=test_csv_path, name="test_dataset"
+            )
+            mlflow.log_input(test_ml_dataset, context="evaluation")
 
-        # Create evaluator with batched processing
-        num_threads = cfg.evaluation.num_threads if hasattr(cfg.evaluation, "num_threads") else 16
-        evaluator = Evaluate(
-            devset=testset,
-            num_threads=num_threads,
-            display_progress=True,
-            display_table=False,
-        )
+            # Create evaluator with batched processing
+            num_threads = cfg.evaluation.num_threads if hasattr(cfg.evaluation, "num_threads") else 16
+            evaluator = Evaluate(
+                devset=testset,
+                num_threads=num_threads,
+                display_progress=True,
+                display_table=False,
+            )
 
-        # Launch evaluation with DSPy (for basic accuracy score)
-        print("Running evaluation...")
-        result = evaluator(grader, metric=metric)
-        
-        # Log basic accuracy from evaluator
-        mlflow.log_metric("evaluation_accuracy", result.score)
+            # Launch evaluation with DSPy (for basic accuracy score)
+            print("Running evaluation...")
+            result = evaluator(grader, metric=metric)
+            
+            # Log basic accuracy from evaluator
+            mlflow.log_metric("evaluation_accuracy", result.score)
 
-        # Get detailed evaluation results by running grader directly
-        evaluation_metrics = detailed_evaluation_dspy(
-            testset, grader, test_df, label_order=["incorrect", "partial", "correct"]
-        )
+            # Get detailed evaluation results by running grader directly
+            evaluation_metrics = detailed_evaluation_dspy(
+                testset, grader, test_df, label_order=["incorrect", "partial", "correct"]
+            )
 
-        # Log all metrics to MLflow
-        for metric_name, metric_value in evaluation_metrics.items():
-            mlflow.log_metric(metric_name, metric_value)
+            # Log all metrics to MLflow
+            for metric_name, metric_value in evaluation_metrics.items():
+                mlflow.log_metric(metric_name, metric_value)
 
-        print(f"\nEvaluation complete for {model_name}. MLflow run ID: {run.info.run_id}")
+            print(f"\nEvaluation complete for {model_name}. MLflow run ID: {run.info.run_id}")
+    
+    finally:
+        # Always stop vLLM server after evaluation if we started one
+        if is_vllm and vllm_server_process:
+            stop_vllm_server(vllm_server_process)
+            vllm_server_process = None
 
 print("\n" + "=" * 80)
 print("All model evaluations complete!")
