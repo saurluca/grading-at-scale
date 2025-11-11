@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import mlflow
 import pandas as pd
-from datasets import load_dataset, ClassLabel, DatasetDict
+from datasets import load_dataset, ClassLabel, DatasetDict, concatenate_datasets
 from peft import LoraConfig, get_peft_model, TaskType
 from omegaconf import OmegaConf
 from sklearn.metrics import precision_recall_fscore_support
@@ -33,6 +33,7 @@ def split_by_topics(
     test_topics: List[str],
     seed: int = 42,
     val_size: float = 0.2,
+    out_of_fold_samples: int = 0,
 ) -> Tuple[DatasetDict, List[str], Dict[str, int], Dict[int, str]]:
     """
     Split dataset by topics: train on train_topics, test on test_topics.
@@ -44,6 +45,7 @@ def split_by_topics(
         test_topics: List of topics to use for testing
         seed: Random seed for reproducibility
         val_size: Fraction of train data to use for validation
+        out_of_fold_samples: Number of samples from test topics to include in training
         
     Returns:
         DatasetDict with train, val, test splits
@@ -164,16 +166,88 @@ def split_by_topics(
     # Test data uses all task_ids from test topics
     test_indices = list(range(len(test_data)))
     
-    raw = DatasetDict(
-        {
-            "train": train_data.select(train_indices),
-            "val": train_data.select(val_indices),
-            "test": test_data.select(test_indices),
-        }
-    )
+    # Optionally include samples from test topics in training (for few-shot experiments)
+    oof_samples_added = 0
+    if out_of_fold_samples > 0:
+        print(f"\nIncluding {out_of_fold_samples} samples from test topics in training...")
+        
+        # Convert test_data to pandas for easier sampling
+        test_df = test_data.to_pandas()
+        
+        # Sample stratified by label to get balanced representation
+        oof_indices = []
+        labels_in_test = test_df["labels"].unique()
+        
+        # Calculate samples per label (try to balance)
+        samples_per_label = max(1, out_of_fold_samples // len(labels_in_test))
+        remaining_samples = out_of_fold_samples - (samples_per_label * len(labels_in_test))
+        
+        rng = np.random.default_rng(seed)
+        
+        for label in labels_in_test:
+            label_indices = test_df[test_df["labels"] == label].index.tolist()
+            if len(label_indices) == 0:
+                continue
+            
+            # Shuffle and take samples
+            shuffled = label_indices.copy()
+            rng.shuffle(shuffled)
+            
+            # Take samples_per_label, plus one extra if we have remaining_samples
+            n_to_take = samples_per_label + (1 if remaining_samples > 0 else 0)
+            if remaining_samples > 0:
+                remaining_samples -= 1
+            
+            n_to_take = min(n_to_take, len(shuffled))
+            oof_indices.extend(shuffled[:n_to_take])
+            
+            if len(oof_indices) >= out_of_fold_samples:
+                oof_indices = oof_indices[:out_of_fold_samples]
+                break
+        
+        # If we still need more samples, fill randomly
+        if len(oof_indices) < out_of_fold_samples:
+            remaining_indices = [i for i in range(len(test_data)) if i not in oof_indices]
+            rng.shuffle(remaining_indices)
+            needed = out_of_fold_samples - len(oof_indices)
+            oof_indices.extend(remaining_indices[:needed])
+        
+        # Convert back to dataset indices (test_data indices)
+        oof_samples_added = len(oof_indices)
+        
+        # Add out-of-fold samples to training set
+        oof_samples_dataset = test_data.select(oof_indices)
+        
+        # Remove out-of-fold samples from test set
+        remaining_test_indices = [i for i in range(len(test_data)) if i not in oof_indices]
+        
+        # Combine train data with out-of-fold samples
+        train_with_oof = concatenate_datasets([
+            train_data.select(train_indices),
+            oof_samples_dataset
+        ])
+        
+        print(f"  Added {oof_samples_added} samples from test topics to training")
+        print(f"  Test set reduced from {len(test_data)} to {len(remaining_test_indices)} samples")
+        
+        raw = DatasetDict(
+            {
+                "train": train_with_oof,
+                "val": train_data.select(val_indices),
+                "test": test_data.select(remaining_test_indices),
+            }
+        )
+    else:
+        raw = DatasetDict(
+            {
+                "train": train_data.select(train_indices),
+                "val": train_data.select(val_indices),
+                "test": test_data.select(test_indices),
+            }
+        )
     
-    print(f"Final split sizes:")
-    print(f"  Train: {len(raw['train'])} samples")
+    print(f"\nFinal split sizes:")
+    print(f"  Train: {len(raw['train'])} samples" + (f" (including {oof_samples_added} from test topics)" if oof_samples_added > 0 else ""))
     print(f"  Val: {len(raw['val'])} samples")
     print(f"  Test: {len(raw['test'])} samples")
     
@@ -291,6 +365,15 @@ def main() -> None:
     test_topics_count = len(unique_topics) - train_topics_count
     print(f"\nK-fold configuration: Train on {train_topics_count} topics, Test on {test_topics_count} topics")
     
+    # Get out-of-fold samples configuration
+    kfold_config = getattr(cfg, "kfold", {})
+    out_of_fold_samples = int(getattr(kfold_config, "out_of_fold_samples", 0))
+    
+    if out_of_fold_samples > 0:
+        print(f"Out-of-fold samples: {out_of_fold_samples} samples from test topics will be included in training")
+    else:
+        print(f"Out-of-fold samples: Disabled (0)")
+    
     # Generate all combinations of train_topics_count topics for training
     train_topic_combinations = list(itertools.combinations(unique_topics, train_topics_count))
     print(f"\nGenerated {len(train_topic_combinations)} topic combinations for training:")
@@ -317,6 +400,7 @@ def main() -> None:
             "topics": ", ".join(unique_topics),
             "kfold_train_topics": train_topics_count,
             "kfold_test_topics": test_topics_count,
+            "kfold_out_of_fold_samples": out_of_fold_samples,
         })
         
         # Process each fold
@@ -359,6 +443,7 @@ def main() -> None:
                     "dataset_csv": dataset_csv,
                     "train_topics": ", ".join(train_topics),
                     "test_topics": ", ".join(test_topics),
+                    "out_of_fold_samples": out_of_fold_samples,
                     "lora_r": int(cfg.lora.r),
                     "lora_alpha": int(cfg.lora.alpha),
                     "lora_dropout": float(cfg.lora.dropout),
@@ -387,6 +472,7 @@ def main() -> None:
                     test_topics=test_topics,
                     seed=seed + fold_idx,  # Different seed per fold
                     val_size=0.2,
+                    out_of_fold_samples=out_of_fold_samples,
                 )
                 
                 # Log dataset sizes
