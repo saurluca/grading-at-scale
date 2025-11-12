@@ -786,7 +786,7 @@ def detailed_evaluation(trainer, test_dataset, label_order):
             if len(topic_indices) == 0:
                 print(f"{topic}: No samples found")
                 evaluation_metrics[f"{topic}_micro_f1"] = 0.0
-                evaluation_metrics[f"{topic}_cohens_kappa"] = 0.0
+                evaluation_metrics[f"{topic}_quadratic_weighted_kappa"] = 0.0
                 evaluation_metrics[f"{topic}_macro_f1"] = 0.0
                 evaluation_metrics[f"{topic}_weighted_f1"] = 0.0
                 evaluation_metrics[f"{topic}_support"] = 0
@@ -804,7 +804,7 @@ def detailed_evaluation(trainer, test_dataset, label_order):
                 )
             )
 
-            # Calculate Cohen's kappa (quadratic weighted, consistent with overall)
+            # Calculate quadratic weighted kappa (consistent with overall)
             topic_kappa = cohen_kappa_score(topic_y_true, topic_y_pred, weights="quadratic")
 
             # Calculate macro F1 for this topic
@@ -823,7 +823,7 @@ def detailed_evaluation(trainer, test_dataset, label_order):
 
             # Store metrics
             evaluation_metrics[f"{topic}_micro_f1"] = topic_f1_micro
-            evaluation_metrics[f"{topic}_cohens_kappa"] = topic_kappa
+            evaluation_metrics[f"{topic}_quadratic_weighted_kappa"] = topic_kappa
             evaluation_metrics[f"{topic}_macro_f1"] = topic_f1_macro
             evaluation_metrics[f"{topic}_weighted_f1"] = topic_f1_weighted
             evaluation_metrics[f"{topic}_support"] = topic_support
@@ -834,7 +834,7 @@ def detailed_evaluation(trainer, test_dataset, label_order):
 
             print(
                 f"{topic}: micro_f1={topic_f1_micro:.4f}, "
-                f"cohens_kappa={topic_kappa:.4f}, "
+                f"quadratic_weighted_kappa={topic_kappa:.4f}, "
                 f"macro_f1={topic_f1_macro:.4f}, "
                 f"weighted_f1={topic_f1_weighted:.4f} "
                 f"(support: {topic_support})"
