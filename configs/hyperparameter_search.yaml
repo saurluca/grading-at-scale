@@ -11,7 +11,7 @@ task_type: lora-classification-gridsearch
 # Grid search parameters
 grid_search:
   # Optimization metric to use for selecting best combination
-  optimization_metric: weighted_f1  # weighted_f1 | macro_f1 | accuracy | eval_loss
+  optimization_metric: macro_f1  # weighted_f1 | macro_f1 | accuracy | eval_loss
   
   # Seed to use for all grid search runs
   seed: 43

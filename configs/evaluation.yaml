@@ -44,14 +44,15 @@ classifier_eval:
     # path: ${paths.output_dir}/peft_output/adapter-flan-t5-base-ASAG2024
     # path: ${paths.output_dir}/peft_output/adapter-Qwen3-0.6B-gras
     # For hub: use Hugging Face Hub repo ID (e.g., 'username/model-name-lora-dataset')
-    path: saurluca/Qwen3-0.6B-lora-gras
+    # path: saurluca/Qwen3-0.6B-lora-gras
+    path: saurluca/Qwen3-0.6B-lora-SciEntsBank_3way
     # For none: no adapter will be loaded, base model will be used directly
 
   dataset:
     load_from_csv: true
     # csv_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv
     # csv_path: data/synth/full_gas.csv
-    # csv_path: data/SciEntsBank_3way/test_ua.csv
+    # csv_path: data/SciEntsBank_3way/test_ud.csv
     # csv_path: data/ASAG2024/val.csv
     csv_path: data/gras/test.csv
     # else load from dataset directory
@@ -62,12 +63,12 @@ classifier_eval:
     sample_fraction: 1.0 # Use 100% of data by default (0.0-1.0)
     sample_seed: 24 # Seed for reproducible sampling
 
-  batch_size: 1
+  batch_size: 32
   output_dir: ${paths.output_dir}/gras_eval
 
 # Tokenization settings
 tokenization:
-  include_reference_answer: false
+  include_reference_answer: true
   include_chunk_text: false
 
 # Output settings
