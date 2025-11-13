@@ -10,9 +10,6 @@ class GraderSingle(dspy.Signature):
     """
 
     question: str = dspy.InputField(description="The question text")
-    reference: Optional[str] = dspy.InputField(
-        description="The ground truth reference text", optional=True
-    )
     reference_answer: Optional[str] = dspy.InputField(
         description="The ground truth reference answer", optional=True
     )
@@ -25,9 +22,6 @@ class GraderSingle(dspy.Signature):
 
 class GraderSingle_without_prompt(dspy.Signature):
     question: str = dspy.InputField(description="The question text")
-    reference: Optional[str] = dspy.InputField(
-        description="The ground truth reference text", optional=True
-    )
     reference_answer: Optional[str] = dspy.InputField(
         description="The ground truth reference answer", optional=True
     )
@@ -46,10 +40,6 @@ class GraderPerQuestion(dspy.Signature):
     """
 
     question: str = dspy.InputField(description="The question text")
-    reference: Optional[str] = dspy.InputField(
-        description="The ground truth reference text for this question",
-        optional=True,
-    )
     reference_answer: Optional[str] = dspy.InputField(
         description="The ground truth reference answer", optional=True
     )
@@ -68,9 +58,6 @@ class GraderAll(dspy.Signature):
     """
 
     questions: List[str] = dspy.InputField(description="Unique questions list")
-    references: Optional[List[str]] = dspy.InputField(
-        description="Reference texts aligned with questions (same order)", optional=True
-    )
     reference_answers: Optional[List[str]] = dspy.InputField(
         description="Correct reference answers aligned with questions, same order as questions",
         optional=True,

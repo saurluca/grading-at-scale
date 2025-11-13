@@ -10,7 +10,6 @@ teacher_model: gpt-4o-mini
 input:
   tasks_filename: all_tasks_n.csv
   raw_tasks_dir: ${paths.raw_dir}/tasks
-  raw_chunks_dir: ${paths.raw_dir}/chunks
   synth_dir: ${paths.synth_dir}
 
 output:
@@ -27,10 +26,6 @@ generation:
   cache: true
 
   # Control what information is passed to generators
-  pass_reference_for:
-    correct: false
-    partial: false
-    incorrect: false
   pass_reference_answer_for:
     correct: true
     partial: true
@@ -40,7 +35,6 @@ generation:
 evaluation:
   mode: per_question # single | per_question | all
   chain_of_thought: false
-  pass_reference: false
   pass_reference_answer: true
 
 # LM settings

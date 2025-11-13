@@ -57,23 +57,11 @@ tasks = pd.read_csv(tasks_file_path, sep=";")
 # Helpers to build kwargs/rows
 # ------------------------------
 
-DEFAULT_PASS_REFERENCE = {
-    "correct": False,
-    "partial": False,
-    "incorrect": False,
-}
 DEFAULT_PASS_REFERENCE_ANSWER = {
     "correct": True,
     "partial": True,
     "incorrect": False,
 }
-
-
-def _should_pass_reference(label: str) -> bool:
-    return bool(
-        getattr(cfg.generation.pass_reference_for, label, DEFAULT_PASS_REFERENCE[label])
-    )
-
 
 def _should_pass_reference_answer(label: str) -> bool:
     return bool(
@@ -86,20 +74,18 @@ def _should_pass_reference_answer(label: str) -> bool:
 
 
 def _build_kwargs_single(
-    label: str, question: str, chunk_text: str, reference_answer: str
+    label: str, question: str, reference_answer: str
 ):
     kwargs = {"question": question}
-    if _should_pass_reference(label):
-        kwargs["reference"] = chunk_text
     if _should_pass_reference_answer(label):
         kwargs["reference_answer"] = reference_answer
     return kwargs
 
 
 def _build_kwargs_perq(
-    label: str, question: str, chunk_text: str, reference_answer: str, count: int
+    label: str, question: str, reference_answer: str, count: int
 ):
-    kwargs = _build_kwargs_single(label, question, chunk_text, reference_answer)
+    kwargs = _build_kwargs_single(label, question, reference_answer)
     kwargs["number_of_answers_per_question"] = count
     return kwargs
 
@@ -107,7 +93,6 @@ def _build_kwargs_perq(
 def _build_kwargs_all(
     label: str,
     questions_list,
-    reference_texts_list,
     reference_answers_list,
     count: int,
 ):
@@ -115,8 +100,6 @@ def _build_kwargs_all(
         "questions": questions_list,
         "number_of_answers_per_question": count,
     }
-    if _should_pass_reference(label):
-        kwargs["references"] = reference_texts_list
     if _should_pass_reference_answer(label):
         kwargs["reference_answers"] = reference_answers_list
     return kwargs
@@ -125,7 +108,6 @@ def _build_kwargs_all(
 def _append_rows(rows, idx, task, answers, label: str):
     question = task["question"]
     reference_answer = task["reference_answer"]
-    chunk_text = task["chunk_text"]
     topic = task["topic"]
     for ans in answers:
         rows.append(
@@ -133,7 +115,6 @@ def _append_rows(rows, idx, task, answers, label: str):
                 "task_id": idx,
                 "question": question,
                 "reference_answer": reference_answer,
-                "chunk_text": chunk_text,
                 "topic": topic,
                 "student_answer": ans,
                 "labels": label,
@@ -154,7 +135,7 @@ def generate_student_answers_df(
         num_incorrect: Number of incorrect answers to generate per question
 
     Returns:
-        DataFrame with columns: task_id, question, reference_answer, chunk_text, topic, student_answer, label
+        DataFrame with columns: task_id, question, reference_answer, topic, student_answer, label
         - label: one of {"incorrect", "partial", "correct"}
     """
     all_answers = []
@@ -168,7 +149,6 @@ def generate_student_answers_df(
     for idx, task in tqdm(tasks_df.iterrows()):
         question = task["question"]
         reference_answer = task["reference_answer"]
-        chunk_text = task["chunk_text"]
 
         for label, count in label_counts:
             if count <= 0:
@@ -177,7 +157,7 @@ def generate_student_answers_df(
             for i in range(count):
                 try:
                     kwargs = _build_kwargs_single(
-                        label, question, chunk_text, reference_answer
+                        label, question, reference_answer
                     )
                     result = predictor(**kwargs)
                     ans = getattr(result, "answer", None)
@@ -203,7 +183,6 @@ def generate_student_answers_df_per_question(
     for idx, task in tqdm(tasks_df.iterrows()):
         question = task["question"]
         reference_answer = task["reference_answer"]
-        chunk_text = task["chunk_text"]
 
         label_counts = [
             ("correct", num_correct),
@@ -216,7 +195,7 @@ def generate_student_answers_df_per_question(
             predictor = models.get(label)
             try:
                 kwargs = _build_kwargs_perq(
-                    label, question, chunk_text, reference_answer, count
+                    label, question, reference_answer, count
                 )
                 res = predictor(**kwargs)
                 answers = res.answers
@@ -264,7 +243,6 @@ def generate_student_answers_df_all(
 
     questions_list = tasks_df["question"].astype(str).tolist()
     reference_answers_list = tasks_df["reference_answer"].astype(str).tolist()
-    reference_texts_list = tasks_df["chunk_text"].astype(str).tolist()
 
     correct_flat = []
     partial_flat = []
@@ -275,7 +253,6 @@ def generate_student_answers_df_all(
             kwargs = _build_kwargs_all(
                 "correct",
                 questions_list,
-                reference_texts_list,
                 reference_answers_list,
                 num_correct,
             )
@@ -286,7 +263,6 @@ def generate_student_answers_df_all(
             kwargs = _build_kwargs_all(
                 "partial",
                 questions_list,
-                reference_texts_list,
                 reference_answers_list,
                 num_partial,
             )
@@ -297,7 +273,6 @@ def generate_student_answers_df_all(
             kwargs = _build_kwargs_all(
                 "incorrect",
                 questions_list,
-                reference_texts_list,
                 reference_answers_list,
                 num_incorrect,
             )
@@ -479,6 +454,5 @@ print(f"Saved student answers to: {output_path}")
 #         print("\nSampled Incorrect Example:")
 #         print("question: ", example["question"])
 #         print("reference_answer: ", example["reference_answer"])
-#         print("chunk_text: ", example["chunk_text"])
 #         print("topic: ", example["topic"])
 #         print("student_answer: ", example["student_answer"])

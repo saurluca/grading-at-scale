@@ -99,7 +99,6 @@ def tokenize_fn(
     batch: Dict[str, Any],
     tokenizer,
     include_reference_answer: bool = False,
-    include_chunk_text: bool = False,
 ) -> Dict[str, Any]:
     """Tokenize text data for model input."""
     # Determine batch size from any available field
@@ -108,17 +107,14 @@ def tokenize_fn(
     questions = batch.get("question", [""] * batch_size)
     student_answers = batch.get("student_answer", [""] * batch_size)
     reference_answers = batch.get("reference_answer", [""] * batch_size)
-    chunk_texts = batch.get("chunk_text", [""] * batch_size)
 
     texts = []
-    for q, a, ref_ans, chunk in zip(
-        questions, student_answers, reference_answers, chunk_texts
+    for q, a, ref_ans in zip(
+        questions, student_answers, reference_answers
     ):
         parts = [f"Question: {q}", f"Answer: {a}"]
         if include_reference_answer and isinstance(ref_ans, str) and ref_ans.strip():
             parts.append(f"Reference answer: {ref_ans}")
-        if include_chunk_text and isinstance(chunk, str) and chunk.strip():
-            parts.append(f"Reference text: {chunk}")
         texts.append("\n".join(parts))
 
     return tokenizer(texts, truncation=True, max_length=1024)
@@ -625,13 +621,12 @@ def tokenize_dataset(
     raw_data,
     tokenizer,
     include_reference_answer: bool = False,
-    include_chunk_text: bool = False,
 ):
     print("Tokenizing dataset...")
 
     def tokenize_batch(batch: Dict[str, Any]) -> Dict[str, Any]:
         return tokenize_fn(
-            batch, tokenizer, include_reference_answer, include_chunk_text
+            batch, tokenizer, include_reference_answer
         )
 
     # Get column names from any available split (e.g., "train" or "test")

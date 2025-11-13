@@ -194,12 +194,10 @@ def main() -> None:
     include_ref_ans = bool(
         getattr(cfg.tokenization, "include_reference_answer", False)
     )
-    include_chunk = bool(getattr(cfg.tokenization, "include_chunk_text", False))
     print(
-        f"\nTokenizing dataset (include_reference_answer={include_ref_ans}, "
-        f"include_chunk_text={include_chunk})..."
+        f"\nTokenizing dataset (include_reference_answer={include_ref_ans})..."
     )
-    tokenized = tokenize_dataset(raw, tokenizer, include_ref_ans, include_chunk)
+    tokenized = tokenize_dataset(raw, tokenizer, include_ref_ans)
 
     # Trainer setup for evaluation only (CPU-friendly settings)
     per_device_eval_batch_size = int(

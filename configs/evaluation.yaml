@@ -14,7 +14,6 @@ api_eval:
   chain_of_thought: false
 
   # What to pass to grader
-  pass_reference: false
   pass_reference_answer: false
 
   # Data source
@@ -69,7 +68,6 @@ classifier_eval:
 # Tokenization settings
 tokenization:
   include_reference_answer: true
-  include_chunk_text: false
 
 # Output settings
 output:

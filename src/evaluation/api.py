@@ -116,11 +116,6 @@ def evaluate_grader_performance(
                     "question": row["question"],
                     "answer": row["student_answer"],
                 }
-                if (
-                    getattr(cfg.api_eval, "pass_reference", False)
-                    and "chunk_text" in row.index
-                ):
-                    kwargs["reference"] = row["chunk_text"]
                 if getattr(cfg.api_eval, "pass_reference_answer", True):
                     kwargs["reference_answer"] = row["reference_answer"]
                 result = grader_single(**kwargs)
@@ -156,21 +151,11 @@ def evaluate_grader_performance(
             answers = group["student_answer"].astype(str).tolist()
             question = str(group.iloc[0]["question"])
             reference_answer = str(group.iloc[0]["reference_answer"])
-            reference_text = (
-                str(group.iloc[0]["chunk_text"])
-                if "chunk_text" in group.columns
-                else None
-            )
             try:
                 kwargs = {
                     "question": question,
                     "answers": answers,
                 }
-                if (
-                    getattr(cfg.api_eval, "pass_reference", False)
-                    and reference_text is not None
-                ):
-                    kwargs["reference"] = reference_text
                 if getattr(cfg.api_eval, "pass_reference_answer", True):
                     kwargs["reference_answer"] = reference_answer
                 batch_result = grader_perq(**kwargs)
@@ -190,17 +175,11 @@ def evaluate_grader_performance(
         # Build compact inputs without repetition
         group_key = "task_id" if "task_id" in answers_df.columns else "question"
         questions_unique = []
-        reference_texts_unique = []
         counts_per_question = []
         answers_flat = []
 
         for _, group in answers_df.groupby(group_key):
             questions_unique.append(str(group.iloc[0]["question"]))
-            reference_texts_unique.append(
-                str(group.iloc[0]["chunk_text"])
-                if "chunk_text" in group.columns
-                else ""
-            )
             group_answers = group["student_answer"].astype(str).tolist()
             counts_per_question.append(len(group_answers))
             answers_flat.extend(group_answers)
@@ -211,8 +190,6 @@ def evaluate_grader_performance(
                 "counts_per_question": counts_per_question,
                 "answers_flat": answers_flat,
             }
-            if getattr(cfg.api_eval, "pass_reference", False):
-                kwargs["references"] = reference_texts_unique
             if getattr(cfg.api_eval, "pass_reference_answer", True):
                 # Build aligned reference answers per unique question
                 reference_answers_unique = []

@@ -11,10 +11,6 @@ class CorrectAnswerGenerator(dspy.Signature):
     """
 
     question: str = dspy.InputField(description="The question text")
-    reference: dspy.InputField = dspy.InputField(
-        description="The correct reference text for this question",
-        optional=True,
-    )
     reference_answer: dspy.InputField = dspy.InputField(
         description="The correct reference answer",
         optional=True,
@@ -34,10 +30,6 @@ class PartialAnswerGenerator(dspy.Signature):
     """
 
     question: str = dspy.InputField(description="The question text")
-    reference: dspy.InputField = dspy.InputField(
-        description="The correct reference text for this question",
-        optional=True,
-    )
     reference_answer: dspy.InputField = dspy.InputField(
         description="The correct reference answer",
         optional=True,
@@ -56,10 +48,6 @@ class IncorrectAnswerGenerator(dspy.Signature):
     """
 
     question: str = dspy.InputField(description="The question text")
-    reference: dspy.InputField = dspy.InputField(
-        description="The correct reference text for this question",
-        optional=True,
-    )
     reference_answer: dspy.InputField = dspy.InputField(
         description="The correct reference answer",
         optional=True,
@@ -81,10 +69,6 @@ class CorrectAnswerGeneratorPerQuestion(dspy.Signature):
     """
 
     question: str = dspy.InputField(description="The question text")
-    reference: dspy.InputField = dspy.InputField(
-        description="The correct reference text for this question",
-        optional=True,
-    )
     reference_answer: dspy.InputField = dspy.InputField(
         description="The correct reference answer",
         optional=True,
@@ -106,10 +90,6 @@ class PartialAnswerGeneratorPerQuestion(dspy.Signature):
     """
 
     question: str = dspy.InputField(description="The question text")
-    reference: dspy.InputField = dspy.InputField(
-        description="The correct reference text for this question",
-        optional=True,
-    )
     reference_answer: dspy.InputField = dspy.InputField(
         description="The correct reference answer",
         optional=True,
@@ -133,10 +113,6 @@ class IncorrectAnswerGeneratorPerQuestion(dspy.Signature):
     """
 
     question: str = dspy.InputField(description="The question text")
-    reference: dspy.InputField = dspy.InputField(
-        description="The correct reference text for this question",
-        optional=True,
-    )
     reference_answer: dspy.InputField = dspy.InputField(
         description="The correct reference answer",
         optional=True,
@@ -161,11 +137,6 @@ class CorrectAnswerGeneratorAll(dspy.Signature):
     """
 
     questions: List[str] = dspy.InputField(description="The list of questions")
-    # references: List[str] = dspy.InputField(description="Optional context texts")
-    references: dspy.InputField = dspy.InputField(
-        description="The list of reference texts that the information for the questions are extracted from",
-        optional=True,
-    )
     reference_answers: dspy.InputField = dspy.InputField(
         description="The list of correct reference answers for the questions",
         optional=True,
@@ -190,11 +161,6 @@ class PartialAnswerGeneratorAll(dspy.Signature):
     """
 
     questions: List[str] = dspy.InputField(description="The list of questions")
-    # references: List[str] = dspy.InputField(description="Optional context texts")
-    references: dspy.InputField = dspy.InputField(
-        description="The list of reference texts aligned with questions",
-        optional=True,
-    )
     reference_answers: dspy.InputField = dspy.InputField(
         description="The list of correct reference answers",
         optional=True,
@@ -218,10 +184,6 @@ class IncorrectAnswerGeneratorAll(dspy.Signature):
     """
 
     questions: List[str] = dspy.InputField(description="The list of questions")
-    references: dspy.InputField = dspy.InputField(
-        description="The list of reference texts aligned with questions",
-        optional=True,
-    )
     reference_answers: dspy.InputField = dspy.InputField(
         description="The list of correct reference answers",
         optional=True,

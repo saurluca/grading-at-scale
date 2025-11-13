@@ -18,7 +18,7 @@ raw_tasks_dir = PROJECT_ROOT / cfg.input.raw_tasks_dir
 
 """
 Process all task JSON files under raw tasks directory into a single CSV with columns:
-question, answer, chunk_text (empty), topic (topic is the file stem, e.g., 'language').
+question, answer, topic (topic is the file stem, e.g., 'language').
 """
 
 # Discover all task files in the raw tasks directory
@@ -46,13 +46,10 @@ for filename in common_files:
             correct = answer_options[0]
         answer = correct.get("answer", "") if correct else ""
 
-        chunk_text = ""  # Empty chunk_text column
-
         data.append(
             {
                 "question": question,
                 "answer": answer,
-                "chunk_text": chunk_text,
                 "topic": topic,
             }
         )

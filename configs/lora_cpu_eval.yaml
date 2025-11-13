@@ -34,7 +34,6 @@ lora_cpu_eval:
 # Tokenization settings (should match training config)
 tokenization:
   include_reference_answer: true  # Match training config for gras
-  include_chunk_text: false  # Match training config for gras
 
 # Output settings
 output:

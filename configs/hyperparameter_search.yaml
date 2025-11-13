@@ -73,7 +73,6 @@ training:
 # Tokenization settings
 tokenization:
   include_reference_answer: true
-  include_chunk_text: false
 
 # MLflow tracking
 mlflow:

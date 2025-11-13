@@ -140,11 +140,6 @@ def evaluate_grader_performance(
                 "question": row["question"],
                 "answer": row["student_answer"],
             }
-            if (
-                getattr(cfg.model, "pass_reference", False)
-                and "chunk_text" in row.index
-            ):
-                kwargs["reference"] = row["chunk_text"]
             if getattr(cfg.model, "pass_reference_answer", True):
                 kwargs["reference_answer"] = row["reference_answer"]
             result = grader(**kwargs)
@@ -207,7 +202,7 @@ def evaluate_grader_performance(
 
 
 def convert_df_to_dspy_format(
-    dataframe, include_reference: bool = False, include_reference_answer: bool = False
+    dataframe, include_reference_answer: bool = False
 ):
     """Convert DataFrame rows to DSPy Example objects."""
     examples = []
@@ -219,16 +214,12 @@ def convert_df_to_dspy_format(
             "label": row["labels"],
         }
 
-        # conditionally include reference and reference answer
-        if include_reference:
-            example_data["reference"] = row["chunk_text"]
+        # conditionally include reference answer
         if include_reference_answer:
             example_data["reference_answer"] = row["reference_answer"]
 
         # Define input keys (everything except the target)
         input_keys = ["question", "answer"]
-        if include_reference:
-            input_keys.append("reference")
         if include_reference_answer:
             input_keys.append("reference_answer")
 
@@ -281,9 +272,8 @@ print(f"Using model {cfg.model.base} for evaluation")
 model_name = cfg.model.base
 model_short = model_name.split("/")[-1]
 prompt_str = "prompt" if cfg.model.with_prompt else "noprompt"
-ref_str = "ref" if cfg.model.pass_reference else "noref"
 refans_str = "refans" if cfg.model.pass_reference_answer else "norefans"
-run_name = f"few_shot_{model_short}_{prompt_str}_{ref_str}_{refans_str}"
+run_name = f"few_shot_{model_short}_{prompt_str}_{refans_str}"
 
 # Configure MLflow experiment
 mlflow.set_experiment("DSPy-Evaluation")
@@ -353,12 +343,10 @@ with mlflow.start_run(run_name=run_name) as run:
     # Convert DataFrame to DSPy format
     trainset = convert_df_to_dspy_format(
         train_df,
-        include_reference=cfg.model.pass_reference,
         include_reference_answer=cfg.model.pass_reference_answer,
     )
     testset = convert_df_to_dspy_format(
         test_df,
-        include_reference=cfg.model.pass_reference,
         include_reference_answer=cfg.model.pass_reference_answer,
     )
 

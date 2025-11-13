@@ -72,7 +72,6 @@ def merge_quiz_data():
             "task_id": task_id,
             "question": row["question"],
             "reference_answer": row["reference_answer"],
-            "chunk_text": "",  # Empty string as specified
             "topic": topic,
             "student_answer": row["student_answer"],
             "labels": convert_points_to_labels(
@@ -89,7 +88,6 @@ def merge_quiz_data():
         "task_id",
         "question",
         "reference_answer",
-        "chunk_text",
         "topic",
         "student_answer",
         "labels",

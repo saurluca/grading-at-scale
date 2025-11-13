@@ -503,7 +503,6 @@ def main() -> None:
         include_ref_ans = bool(
             getattr(cfg.tokenization, "include_reference_answer", False)
         )
-        include_chunk = bool(getattr(cfg.tokenization, "include_chunk_text", False))
 
         # Custom tokenization that preserves weight column
         print("Tokenizing dataset...")
@@ -511,7 +510,7 @@ def main() -> None:
         def tokenize_batch(batch):
             from src.common import tokenize_fn
 
-            return tokenize_fn(batch, tokenizer, include_ref_ans, include_chunk)
+            return tokenize_fn(batch, tokenizer, include_ref_ans)
 
         # Get column names from train split
         # Preserve labels and weight (if it exists) columns
