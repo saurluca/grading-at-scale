@@ -10,6 +10,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 from omegaconf import OmegaConf
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
 
 # Check if CPU enforcement is needed (must be before torch imports)
 base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
@@ -46,6 +50,48 @@ from src.common import (  # noqa: E402
     map_labels,
     sample_dataset,
 )
+
+
+def plot_confusion_matrix(y_true, y_pred, save_path=None):
+    """
+    Plot a confusion matrix using seaborn's heatmap.
+    
+    Parameters:
+    - y_true: List or array of true labels
+    - y_pred: List or array of predicted labels
+    - save_path: Optional path to save the plot
+    """
+    # Only use valid labels (0, 1, 2) for this task
+    valid_labels = [0, 1, 2]
+    
+    # Filter to only include valid labels
+    y_true_array = np.array(y_true)
+    y_pred_array = np.array(y_pred)
+    
+    # Create confusion matrix with only valid labels
+    cm = confusion_matrix(y_true_array, y_pred_array, labels=valid_labels)
+    
+    label_names = {0: "Incorrect", 1: "Partially Correct", 2: "Correct"}
+    label_display_names = [label_names[label] for label in valid_labels]
+    
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        xticklabels=label_display_names,
+        yticklabels=label_display_names,
+    )
+    plt.xlabel("Predicted Labels")
+    plt.ylabel("True Labels")
+    plt.title("Confusion Matrix - Grader Performance")
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"Confusion matrix plot saved to: {save_path}")
+    
+    plt.close()  # Close the figure to free memory
 
 
 def main() -> None:
@@ -249,10 +295,42 @@ def main() -> None:
         print(f"Average time per example: {avg_time_per_example:.4f} seconds ({avg_time_per_example*1000:.2f} ms)")
         print("=" * 60)
     
+    # Get predictions for confusion matrix
+    print("\nGenerating confusion matrix...")
+    predictions = trainer.predict(tokenized["test"])
+    
+    # Handle case where predictions.predictions might be a tuple/list
+    logits = predictions.predictions
+    if isinstance(logits, (tuple, list)):
+        logits = logits[0]
+    
+    y_pred = np.argmax(logits, axis=-1)
+    y_true = predictions.label_ids
+    
+    # Create and save confusion matrix
+    base_model_short = base_model_name.split("/")[-1]
+    adapter_short = ""
+    if adapter_source == "hub" and adapter_path_cfg:
+        adapter_short = f"_{adapter_path_cfg.split('/')[-1]}"
+    elif adapter_source == "local" and adapter_path_cfg:
+        # Extract adapter name from path
+        adapter_path_local = os.path.normpath(
+            os.path.join(PROJECT_ROOT, str(adapter_path_cfg))
+        )
+        adapter_short = f"_{os.path.basename(adapter_path_local)}"
+    elif adapter_source == "none":
+        adapter_short = "_base"
+    
+    confusion_matrix_filename = f"confusion_matrix_{base_model_short}{adapter_short}.png"
+    confusion_matrix_path = os.path.join(output_dir, confusion_matrix_filename)
+    
+    plot_confusion_matrix(y_true, y_pred, save_path=confusion_matrix_path)
+    
     print("\n" + "=" * 60)
     print("EVALUATION COMPLETE")
     print("=" * 60)
     print(f"Results saved to: {output_dir}")
+    print(f"Confusion matrix saved to: {confusion_matrix_path}")
 
 
 if __name__ == "__main__":
