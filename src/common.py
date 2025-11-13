@@ -780,7 +780,6 @@ def detailed_evaluation(trainer, test_dataset, label_order):
 
             if len(topic_indices) == 0:
                 print(f"{topic}: No samples found")
-                evaluation_metrics[f"{topic}_micro_f1"] = 0.0
                 evaluation_metrics[f"{topic}_quadratic_weighted_kappa"] = 0.0
                 evaluation_metrics[f"{topic}_macro_f1"] = 0.0
                 evaluation_metrics[f"{topic}_weighted_f1"] = 0.0
@@ -791,13 +790,6 @@ def detailed_evaluation(trainer, test_dataset, label_order):
             topic_y_true = np.array([y_true[i] for i in topic_indices])
             topic_y_pred = np.array([y_pred[i] for i in topic_indices])
             topic_support = len(topic_indices)
-
-            # Calculate micro F1 for this topic
-            topic_precision_micro, topic_recall_micro, topic_f1_micro, _ = (
-                precision_recall_fscore_support(
-                    topic_y_true, topic_y_pred, average="micro", zero_division=0
-                )
-            )
 
             # Calculate quadratic weighted kappa (consistent with overall)
             topic_kappa = cohen_kappa_score(topic_y_true, topic_y_pred, weights="quadratic")
@@ -817,7 +809,6 @@ def detailed_evaluation(trainer, test_dataset, label_order):
             )
 
             # Store metrics
-            evaluation_metrics[f"{topic}_micro_f1"] = topic_f1_micro
             evaluation_metrics[f"{topic}_quadratic_weighted_kappa"] = topic_kappa
             evaluation_metrics[f"{topic}_macro_f1"] = topic_f1_macro
             evaluation_metrics[f"{topic}_weighted_f1"] = topic_f1_weighted
@@ -828,8 +819,7 @@ def detailed_evaluation(trainer, test_dataset, label_order):
             topic_supports.append(topic_support)
 
             print(
-                f"{topic}: micro_f1={topic_f1_micro:.4f}, "
-                f"quadratic_weighted_kappa={topic_kappa:.4f}, "
+                f"{topic}: quadratic_weighted_kappa={topic_kappa:.4f}, "
                 f"macro_f1={topic_f1_macro:.4f}, "
                 f"weighted_f1={topic_f1_weighted:.4f} "
                 f"(support: {topic_support})"

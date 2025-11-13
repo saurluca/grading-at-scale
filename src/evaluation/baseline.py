@@ -419,11 +419,6 @@ def compute_evaluation_metrics(
     macro_recall = np.mean(recall)
     macro_f1 = np.mean(f1)
     
-    # Calculate micro F1 (overall)
-    _, _, micro_f1, _ = precision_recall_fscore_support(
-        y_true, y_pred, average="micro", zero_division=0
-    )
-    
     # Baselines
     # Naive majority-class classifier
     majority_class = np.bincount(y_true).argmax()
@@ -458,7 +453,6 @@ def compute_evaluation_metrics(
     print(f"Overall Accuracy: {accuracy:.4f}")
     print(f"Quadratic Weighted Kappa: {qwk:.4f}")
     print(f"Macro F1 Score: {macro_f1:.4f}")
-    print(f"Micro F1 Score: {micro_f1:.4f}")
     print(f"Macro F1 (naive majority): {macro_f1_naive:.4f}")
     print(f"Macro F1 (random label-proportional): {macro_f1_random:.4f}")
     print(f"Weighted F1 Score: {weighted_f1:.4f}")
@@ -492,7 +486,6 @@ def compute_evaluation_metrics(
         "macro_precision": macro_precision,
         "macro_recall": macro_recall,
         "macro_f1": macro_f1,
-        "micro_f1": micro_f1,
         "macro_f1_naive": macro_f1_naive,
         "macro_f1_random": macro_f1_random,
         "weighted_precision": weighted_precision,
@@ -533,7 +526,6 @@ def compute_evaluation_metrics(
             
             if len(topic_indices) == 0:
                 print(f"{topic}: No samples found")
-                evaluation_metrics[f"{topic}_micro_f1"] = 0.0
                 evaluation_metrics[f"{topic}_quadratic_weighted_kappa"] = 0.0
                 evaluation_metrics[f"{topic}_macro_f1"] = 0.0
                 evaluation_metrics[f"{topic}_weighted_f1"] = 0.0
@@ -544,13 +536,6 @@ def compute_evaluation_metrics(
             topic_y_true = np.array([y_true[i] for i in topic_indices])
             topic_y_pred = np.array([y_pred[i] for i in topic_indices])
             topic_support = len(topic_indices)
-            
-            # Calculate micro F1 for this topic
-            topic_precision_micro, topic_recall_micro, topic_f1_micro, _ = (
-                precision_recall_fscore_support(
-                    topic_y_true, topic_y_pred, average="micro", zero_division=0
-                )
-            )
             
             # Calculate quadratic weighted kappa (consistent with overall)
             topic_kappa = cohen_kappa_score(
@@ -572,7 +557,6 @@ def compute_evaluation_metrics(
             )
             
             # Store metrics
-            evaluation_metrics[f"{topic}_micro_f1"] = topic_f1_micro
             evaluation_metrics[f"{topic}_quadratic_weighted_kappa"] = topic_kappa
             evaluation_metrics[f"{topic}_macro_f1"] = topic_f1_macro
             evaluation_metrics[f"{topic}_weighted_f1"] = topic_f1_weighted
@@ -583,8 +567,7 @@ def compute_evaluation_metrics(
             topic_supports.append(topic_support)
             
             print(
-                f"{topic}: micro_f1={topic_f1_micro:.4f}, "
-                f"quadratic_weighted_kappa={topic_kappa:.4f}, "
+                f"{topic}: quadratic_weighted_kappa={topic_kappa:.4f}, "
                 f"macro_f1={topic_f1_macro:.4f}, "
                 f"weighted_f1={topic_f1_weighted:.4f} "
                 f"(support: {topic_support})"
