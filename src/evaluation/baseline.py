@@ -1,7 +1,6 @@
 import logging
 import os
 import sys
-import re
 from pathlib import Path
 
 import dspy
@@ -19,12 +18,6 @@ from sklearn.metrics import (
 )
 from tqdm import tqdm
 import mlflow
-import torch
-from transformers import (
-    AutoModelForCausalLM,
-    AutoModelForSeq2SeqLM,
-    AutoTokenizer,
-)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
@@ -35,225 +28,6 @@ from src.mlflow_config import setup_mlflow  # noqa: E402
 logging.getLogger("dspy").setLevel(logging.ERROR)
 
 
-def should_use_transformers(model_name: str) -> bool:
-    """Determine if a model should use Transformers library directly instead of DSPy."""
-    transformers_models = [
-        "openai-community/gpt2",
-        "openai-community/gpt2-large",
-        "google/flan-t5-base",
-        "meta-llama/Llama-3.2-1B-Instruct",
-        "Qwen/Qwen3-0.6B",
-    ]
-    return model_name in transformers_models
-
-
-def load_transformers_model(model_name: str, cache_dir: str | None = None):
-    """
-    Load model and tokenizer using Transformers library.
-    
-    Args:
-        model_name: Name of the model to load
-        cache_dir: Optional cache directory for model files
-    
-    Returns:
-        model, tokenizer, is_seq2seq (bool indicating if it's a seq2seq model)
-    """
-    print(f"Loading Transformers model: {model_name}")
-    
-    # Determine model type
-    is_seq2seq = "flan-t5" in model_name.lower() or "t5" in model_name.lower()
-    
-    # Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
-    
-    # Set pad token if not present
-    if tokenizer.pad_token is None:
-        if tokenizer.eos_token is not None:
-            tokenizer.pad_token = tokenizer.eos_token
-        else:
-            tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-    
-    # Load model based on architecture
-    if is_seq2seq:
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_name, cache_dir=cache_dir)
-    else:
-        model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=cache_dir)
-    
-    # Move to GPU if available
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
-    model.eval()
-    
-    print(f"Model loaded on device: {device}")
-    print(f"Model type: {'Seq2Seq' if is_seq2seq else 'CausalLM'}")
-    
-    return model, tokenizer, is_seq2seq
-
-
-def format_grading_prompt(
-    question: str, student_answer: str, reference_answer: str | None = None
-) -> str:
-    """
-    Format prompt for grading task.
-    
-    Args:
-        question: The question text
-        student_answer: The student's answer
-        reference_answer: Optional reference answer
-    
-    Returns:
-        Formatted prompt string
-    """
-    prompt_parts = [
-        f"Question: {question}",
-        f"Answer: {student_answer}",
-    ]
-    
-    if reference_answer:
-        prompt_parts.append(f"Reference answer: {reference_answer}")
-    
-    prompt_parts.append(
-        "Grade this answer as 0 (incorrect), 1 (partially correct), or 2 (correct). Label:"
-    )
-    
-    return "\n".join(prompt_parts)
-
-
-def parse_label_from_output(text: str) -> int:
-    """
-    Extract label (0, 1, or 2) from generated text.
-    
-    Args:
-        text: Generated text from model
-    
-    Returns:
-        Label as integer (0, 1, or 2), defaults to 0 if parsing fails
-    """
-    # Try to find first occurrence of 0, 1, or 2
-    # Look for standalone digits or digits after common patterns
-    patterns = [
-        r"\b([0-2])\b",  # Standalone digit 0-2
-        r"label[:\s]*([0-2])",  # After "label:" or "label "
-        r"grade[:\s]*([0-2])",  # After "grade:" or "grade "
-        r"answer[:\s]*([0-2])",  # After "answer:" or "answer "
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, text.lower())
-        if match:
-            label = int(match.group(1))
-            if 0 <= label <= 2:
-                return label
-    
-    # If no pattern matches, default to 0 (incorrect)
-    return 0
-
-
-def evaluate_with_transformers(
-    model,
-    tokenizer,
-    test_df: pd.DataFrame,
-    cfg,
-    is_seq2seq: bool = False,
-    include_reference_answer: bool = False,
-):
-    """
-    Evaluate model using Transformers library directly.
-    
-    Args:
-        model: Loaded Transformers model
-        tokenizer: Loaded tokenizer
-        test_df: DataFrame with test data
-        cfg: Configuration object
-        is_seq2seq: Whether model is seq2seq (FLAN-T5) or causal (GPT2)
-        include_reference_answer: Whether to include reference answer in prompt
-    
-    Returns:
-        Dictionary with evaluation metrics
-    """
-    print("\n" + "=" * 60)
-    print("TRANSFORMERS EVALUATION")
-    print("=" * 60)
-    
-    device = next(model.parameters()).device
-    y_pred = []
-    y_true = []
-    
-    # Get generation parameters from config
-    # Cap max_new_tokens at 10 since we only need a single digit (0, 1, or 2)
-    max_tokens_config = cfg.model.max_tokens if hasattr(cfg.model, "max_tokens") else 50
-    max_new_tokens = min(max_tokens_config, 10)
-    temperature = (
-        cfg.model.temperature if hasattr(cfg.model, "temperature") and cfg.model.temperature is not None else 0.7
-    )
-    
-    print(f"Generation parameters: max_new_tokens={max_new_tokens}, temperature={temperature}")
-    print("Getting predictions from model...")
-    
-    with torch.no_grad():
-        for idx, row in tqdm(test_df.iterrows(), total=len(test_df), desc="Grading examples"):
-            # Get true label
-            true_label = int(row["labels"])
-            y_true.append(true_label)
-            
-            # Format prompt
-            reference_answer = (
-                row["reference_answer"] if include_reference_answer and "reference_answer" in row else None
-            )
-            prompt = format_grading_prompt(
-                question=row["question"],
-                student_answer=row["student_answer"],
-                reference_answer=reference_answer,
-            )
-            
-            # Tokenize
-            inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512).to(device)
-            
-            try:
-                # Generate
-                if is_seq2seq:
-                    # For seq2seq models, generate from inputs
-                    outputs = model.generate(
-                        inputs.input_ids,
-                        max_new_tokens=max_new_tokens,
-                        temperature=temperature,
-                        do_sample=temperature > 0,
-                        pad_token_id=tokenizer.pad_token_id,
-                    )
-                    # Decode only the generated part (remove input)
-                    generated_text = tokenizer.decode(
-                        outputs[0][inputs.input_ids.shape[1] :], skip_special_tokens=True
-                    )
-                else:
-                    # For causal models, generate continuation
-                    outputs = model.generate(
-                        inputs.input_ids,
-                        max_new_tokens=max_new_tokens,
-                        temperature=temperature,
-                        do_sample=temperature > 0,
-                        pad_token_id=tokenizer.pad_token_id,
-                    )
-                    # Decode only the generated part
-                    generated_text = tokenizer.decode(
-                        outputs[0][inputs.input_ids.shape[1] :], skip_special_tokens=True
-                    )
-                
-                # Parse label from generated text
-                pred_label = parse_label_from_output(generated_text)
-                y_pred.append(pred_label)
-                
-            except Exception as e:
-                print(f"Error generating for example {idx}: {e}")
-                # Default to 0 (incorrect) if generation fails
-                y_pred.append(0)
-    
-    y_pred = np.array(y_pred)
-    y_true = np.array(y_true)
-    
-    # Use shared evaluation metrics function
-    return compute_evaluation_metrics(y_true, y_pred, test_df, label_order=["incorrect", "partial", "correct"])
-
-
 def compute_evaluation_metrics(
     y_true: np.ndarray,
     y_pred: np.ndarray,
@@ -262,7 +36,6 @@ def compute_evaluation_metrics(
 ):
     """
     Compute comprehensive evaluation metrics from predictions and true labels.
-    Shared function used by both DSPy and Transformers evaluation paths.
     
     Args:
         y_true: Array of true labels
@@ -621,7 +394,18 @@ setup_mlflow(cfg, PROJECT_ROOT)
 # Get models list from config
 models_list = cfg.model.models if hasattr(cfg.model, "models") else [cfg.model.base]
 
-print(f"Evaluating {len(models_list)} models: {models_list}")
+# Filter to only models available in model_builder.py
+available_models = set(model_configs.keys())
+valid_models = [m for m in models_list if m in available_models]
+invalid_models = [m for m in models_list if m not in available_models]
+
+if invalid_models:
+    print(f"Warning: The following models are not available in model_builder.py and will be skipped: {invalid_models}")
+
+if not valid_models:
+    raise ValueError("No valid models found. Please check that models in baseline.yaml exist in model_builder.py")
+
+print(f"Evaluating {len(valid_models)} models: {valid_models}")
 
 # Load test dataset (always use test.csv)
 test_csv_path = os.path.join(PROJECT_ROOT, cfg.dataset.csv_test)
@@ -639,14 +423,10 @@ testset = convert_df_to_dspy_format(
 mlflow.set_experiment("DSPy-Baseline-Evaluation")
 
 # Evaluate each model
-for i, model_name in enumerate(models_list, 1):
+for i, model_name in enumerate(valid_models, 1):
     print("\n" + "=" * 80)
-    print(f"Evaluating model {i}/{len(models_list)}: {model_name}")
+    print(f"Evaluating model {i}/{len(valid_models)}: {model_name}")
     print("=" * 80)
-
-    # Determine evaluation method
-    use_transformers = should_use_transformers(model_name)
-    evaluation_method = "transformers" if use_transformers else "dspy"
     
     # Create run name based on model
     model_short = model_name.split("/")[-1]
@@ -657,7 +437,7 @@ for i, model_name in enumerate(models_list, 1):
         with mlflow.start_run(run_name=run_name) as run:
             # Log model name and evaluation method as parameters
             mlflow.log_param("model", model_name)
-            mlflow.log_param("evaluation_method", evaluation_method)
+            mlflow.log_param("evaluation_method", "dspy")
             log_config_params_to_mlflow(cfg)
 
             # Log test dataset as MLflow Dataset
@@ -666,88 +446,48 @@ for i, model_name in enumerate(models_list, 1):
             )
             mlflow.log_input(test_ml_dataset, context="evaluation")
 
-            if use_transformers:
-                # Transformers evaluation path
-                print(f"Using Transformers library for {model_name}")
-                
-                # Get cache directory from config
-                cache_dir = None
-                if "paths" in cfg and hasattr(cfg.paths, "hf_cache_dir"):
-                    cache_dir = str(PROJECT_ROOT / cfg.paths.hf_cache_dir) if not os.path.isabs(cfg.paths.hf_cache_dir) else cfg.paths.hf_cache_dir
-                
-                # Load model and tokenizer
-                model, tokenizer, is_seq2seq = load_transformers_model(model_name, cache_dir=cache_dir)
-                
-                # Evaluate with Transformers
-                evaluation_metrics = evaluate_with_transformers(
-                    model=model,
-                    tokenizer=tokenizer,
-                    test_df=test_df,
-                    cfg=cfg,
-                    is_seq2seq=is_seq2seq,
-                    include_reference_answer=cfg.model.pass_reference_answer,
-                )
-                
-                # Log accuracy (same metric name as DSPy path)
-                mlflow.log_metric("evaluation_accuracy", evaluation_metrics["accuracy"])
-                
-                # Log all metrics to MLflow
-                for metric_name, metric_value in evaluation_metrics.items():
-                    mlflow.log_metric(metric_name, metric_value)
-                
-                print(f"\nEvaluation complete for {model_name}. MLflow run ID: {run.info.run_id}")
-                
-            else:
-                # DSPy evaluation path (existing implementation)
-                print(f"Using DSPy for {model_name}")
+            # Build LM and Grader program
+            build_lm_kwargs = {
+                "max_tokens": cfg.model.max_tokens,
+                "cache": cfg.model.cache,
+            }
+            if hasattr(cfg.model, "temperature") and cfg.model.temperature is not None:
+                build_lm_kwargs["temperature"] = cfg.model.temperature
 
-                # Build LM and Grader program
-                build_lm_kwargs = {
-                    "max_tokens": cfg.model.max_tokens,
-                    "cache": cfg.model.cache,
-                }
-                if hasattr(cfg.model, "temperature") and cfg.model.temperature is not None:
-                    build_lm_kwargs["temperature"] = cfg.model.temperature
+            grader_lm = build_lm(model_name, **build_lm_kwargs)
+            print(f"Using DSPy LM {model_name}")
 
-                try:
-                    grader_lm = build_lm(model_name, **build_lm_kwargs)
-                except KeyError:
-                    print(f"Warning: Model {model_name} not found in model_builder.py. Skipping.")
-                    continue
+            grader = dspy.Predict(GraderSingle_without_prompt)
 
-                print(f"Using DSPy LM {model_name}")
+            dspy.configure(lm=grader_lm)
+            grader.set_lm(grader_lm)
 
-                grader = dspy.Predict(GraderSingle_without_prompt)
+            # Create evaluator with batched processing
+            num_threads = cfg.evaluation.num_threads if hasattr(cfg.evaluation, "num_threads") else 16
+            evaluator = Evaluate(
+                devset=testset,
+                num_threads=num_threads,
+                display_progress=True,
+                display_table=False,
+            )
 
-                dspy.configure(lm=grader_lm)
-                grader.set_lm(grader_lm)
+            # Launch evaluation with DSPy (for basic accuracy score)
+            print("Running evaluation...")
+            result = evaluator(grader, metric=metric)
+            
+            # Log basic accuracy from evaluator
+            mlflow.log_metric("evaluation_accuracy", result.score)
 
-                # Create evaluator with batched processing
-                num_threads = cfg.evaluation.num_threads if hasattr(cfg.evaluation, "num_threads") else 16
-                evaluator = Evaluate(
-                    devset=testset,
-                    num_threads=num_threads,
-                    display_progress=True,
-                    display_table=False,
-                )
+            # Get detailed evaluation results by running grader directly
+            evaluation_metrics = detailed_evaluation_dspy(
+                testset, grader, test_df, label_order=["incorrect", "partial", "correct"]
+            )
 
-                # Launch evaluation with DSPy (for basic accuracy score)
-                print("Running evaluation...")
-                result = evaluator(grader, metric=metric)
-                
-                # Log basic accuracy from evaluator
-                mlflow.log_metric("evaluation_accuracy", result.score)
+            # Log all metrics to MLflow
+            for metric_name, metric_value in evaluation_metrics.items():
+                mlflow.log_metric(metric_name, metric_value)
 
-                # Get detailed evaluation results by running grader directly
-                evaluation_metrics = detailed_evaluation_dspy(
-                    testset, grader, test_df, label_order=["incorrect", "partial", "correct"]
-                )
-
-                # Log all metrics to MLflow
-                for metric_name, metric_value in evaluation_metrics.items():
-                    mlflow.log_metric(metric_name, metric_value)
-
-                print(f"\nEvaluation complete for {model_name}. MLflow run ID: {run.info.run_id}")
+            print(f"\nEvaluation complete for {model_name}. MLflow run ID: {run.info.run_id}")
     
     except Exception as e:
         print(f"Error evaluating {model_name}: {e}")
