@@ -1,3 +1,7 @@
+# Configuration for DSPy-based API model evaluation
+# Used by: src/evaluation/evaluate.py
+# Note: This config is merged with base.yaml in the Python code
+
 model:
   # Single model to evaluate
   model: gpt-4o
@@ -20,4 +24,4 @@ evaluation:
 
 
 output:
-  dir: ${paths.output_dir}/baseline
+  dir: ${paths.output_dir}/dspy_eval

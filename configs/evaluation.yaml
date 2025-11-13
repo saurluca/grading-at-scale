@@ -1,36 +1,8 @@
-# Configuration for model evaluation
-# Used by: src/evaluation/evaluate_*.py
+# Configuration for local classifier evaluation
+# Used by: src/evaluation/local.py
 # Note: This config is merged with base.yaml in the Python code
 
-# API-based evaluation (DSPy graders)
-api_eval:
-  # model: llama3.2:1b
-  model: gpt-4o-mini
-  temperature: 0.6
-  cache: true
-  max_tokens: 512
-
-  mode: single # single | per_question | all
-  chain_of_thought: false
-
-  # What to pass to grader
-  pass_reference_answer: false
-
-  # Data source
-  data:
-    infer_path: false # Auto-infer from generation config
-    # manual_path: data/synth/dataset_baseline_3-3-3_gpt-4o.csv # our dataset
-    manual_path: data/gras/test.csv
-
-    # If infer_path=true, uses generation config to build filename
-    # Format: student_answers_c{num_correct}_p{num_partial}_i{num_incorrect}_{model}_{mode}.csv
-    num_correct_answers: 1
-    num_partial_answers: 1
-    num_incorrect_answers: 1
-    generation_model: gpt-4o-mini
-    generation_mode: per_question
-
-# Local classifier evaluation (fine-tuned model on SciEntsBank)
+# Local classifier evaluation (fine-tuned model evaluation)
 classifier_eval:
   # base_model: meta-llama/Llama-3.2-3B-Instruct
   # base_model: google/flan-t5-base

@@ -443,11 +443,11 @@ Main evaluation pipeline
 base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
 
 # Support loading custom config via environment variable
-baseline_config_path = os.environ.get(
-    "BASELINE_CONFIG", str(PROJECT_ROOT / "configs" / "baseline.yaml")
+dspy_eval_config_path = os.environ.get(
+    "DSPY_EVAL_CONFIG", str(PROJECT_ROOT / "configs" / "dspy_eval.yaml")
 )
-baseline_cfg = OmegaConf.load(baseline_config_path)
-cfg = OmegaConf.merge(base_cfg, baseline_cfg)
+dspy_eval_cfg = OmegaConf.load(dspy_eval_config_path)
+cfg = OmegaConf.merge(base_cfg, dspy_eval_cfg)
 output_dir = os.path.join(PROJECT_ROOT, cfg.output.dir)
 os.makedirs(output_dir, exist_ok=True)
 
