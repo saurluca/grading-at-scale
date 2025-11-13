@@ -1,20 +1,42 @@
 # %%
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Dict, List
 
-from datasets import DatasetDict, load_dataset
+# Load config early to check for CPU enforcement before torch imports
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(PROJECT_ROOT))
+
 from omegaconf import OmegaConf
+
+# Check if CPU enforcement is needed (must be before torch imports)
+base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
+eval_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "evaluation.yaml")
+cfg = OmegaConf.merge(base_cfg, eval_cfg)
+
+enforce_cpu = bool(getattr(cfg.classifier_eval, "enforce_cpu", False))
+
+# CRITICAL: Enforce CPU-only execution before any torch imports if needed
+if enforce_cpu:
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+from datasets import DatasetDict, load_dataset
 from peft import PeftModel
+import torch
 from transformers import (
     DataCollatorWithPadding,
     Trainer,
     TrainingArguments,
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.append(str(PROJECT_ROOT))
+# Verify CPU enforcement if enabled
+if enforce_cpu:
+    if torch.cuda.is_available():
+        print("WARNING: CUDA is available but CPU-only mode is enforced.")
+        print("CUDA_VISIBLE_DEVICES is set to empty string.")
+    print(f"Using device: CPU (torch.cuda.is_available()={torch.cuda.is_available()})")
 
 from src.common import (  # noqa: E402
     compute_metrics,
@@ -27,10 +49,11 @@ from src.common import (  # noqa: E402
 
 
 def main() -> None:
-    print("Evaluating Classifier")
-    base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
-    eval_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "evaluation.yaml")
-    cfg = OmegaConf.merge(base_cfg, eval_cfg)
+    # Config already loaded at module level for CPU enforcement check
+    device_mode = "CPU-only" if enforce_cpu else "GPU/CPU"
+    print("=" * 60)
+    print(f"EVALUATING CLASSIFIER ({device_mode})")
+    print("=" * 60)
 
     # Label maps (fixed order)
     label_order: List[str] = ["incorrect", "partial", "correct"]
@@ -79,6 +102,8 @@ def main() -> None:
 
     # Load tokenizer and base model, then optionally attach LoRA adapter
     base_model_name = str(cfg.classifier_eval.base_model)
+    device_info = " (CPU-only)" if enforce_cpu else ""
+    print(f"\nLoading base model: {base_model_name}{device_info}")
 
     output_dir = os.path.normpath(
         os.path.join(
@@ -91,6 +116,11 @@ def main() -> None:
     tokenizer, base_model = setup_model_and_tokenizer(
         base_model_name, label2id, id2label, cache_path
     )
+    
+    # Explicitly move to CPU if CPU enforcement is enabled
+    if enforce_cpu:
+        base_model = base_model.to("cpu")
+        print("Base model loaded and moved to CPU")
 
     # Load LoRA adapter config
     adapter_source = getattr(cfg.classifier_eval.adapter, "source", "local")
@@ -98,13 +128,19 @@ def main() -> None:
 
     if adapter_source == "none":
         # Use base model without any adapter
-        print("Using base model without adapter")
+        print("\nUsing base model without adapter")
         model = base_model
     elif adapter_source == "hub":
         # Load from Hugging Face Hub
-        print(f"Loading LoRA adapter from Hugging Face Hub: {adapter_path_cfg}")
+        print(f"\nLoading LoRA adapter from Hugging Face Hub: {adapter_path_cfg}")
         try:
-            model = PeftModel.from_pretrained(base_model, adapter_path_cfg)
+            # Use device_map="cpu" if CPU enforcement is enabled
+            load_kwargs = {}
+            if enforce_cpu:
+                load_kwargs["device_map"] = "cpu"
+            model = PeftModel.from_pretrained(base_model, adapter_path_cfg, **load_kwargs)
+            if enforce_cpu:
+                model = model.to("cpu")  # Double-check CPU placement
             print(f"Successfully loaded adapter from Hub: {adapter_path_cfg}")
         except Exception as e:
             raise RuntimeError(
@@ -119,27 +155,57 @@ def main() -> None:
             raise FileNotFoundError(
                 f"LoRA adapter directory not found at '{adapter_path}'. Exiting."
             )
-        print(f"Loading LoRA adapter from local path: {adapter_path}")
-        model = PeftModel.from_pretrained(base_model, adapter_path)
+        print(f"\nLoading LoRA adapter from local path: {adapter_path}")
+        # Use device_map="cpu" if CPU enforcement is enabled
+        load_kwargs = {}
+        if enforce_cpu:
+            load_kwargs["device_map"] = "cpu"
+        model = PeftModel.from_pretrained(base_model, adapter_path, **load_kwargs)
+        if enforce_cpu:
+            model = model.to("cpu")  # Double-check CPU placement
         print("Successfully loaded adapter from local path")
     else:
         raise ValueError(
             f"Invalid adapter source '{adapter_source}'. Must be 'local', 'hub', or 'none'."
         )
+    
+    # Verify model is on correct device if CPU enforcement is enabled
+    if enforce_cpu:
+        print(f"\nModel device check:")
+        for name, param in model.named_parameters():
+            if param.device.type != "cpu":
+                print(f"WARNING: Parameter {name} is on {param.device}, expected CPU")
+            break  # Just check first parameter
+        print("Model is on CPU (verified)")
 
     # Tokenize
     include_ref_ans = bool(getattr(cfg.tokenization, "include_reference_answer", False))
+    if enforce_cpu:
+        print(f"\nTokenizing dataset (include_reference_answer={include_ref_ans})...")
     tokenized = tokenize_dataset(raw, tokenizer, include_ref_ans)
 
     # Trainer setup for evaluation only
-    per_device_eval_batch_size = int(getattr(cfg.classifier_eval, "batch_size", 32))
+    # Default batch size: 8 for CPU (CPU-friendly), 32 for GPU
+    default_batch_size = 8 if enforce_cpu else 32
+    per_device_eval_batch_size = int(
+        getattr(cfg.classifier_eval, "batch_size", default_batch_size)
+    )
+    
+    # MLflow reporting: configurable, default to "mlflow" for backward compatibility
+    report_to = str(getattr(cfg.classifier_eval, "report_to", "mlflow"))
+    
+    if enforce_cpu:
+        print(f"\nSetting up Trainer with batch_size={per_device_eval_batch_size} (CPU-friendly)")
+    
     training_args = TrainingArguments(
         output_dir=output_dir,
         per_device_eval_batch_size=per_device_eval_batch_size,
         do_train=False,
         do_eval=True,
-        report_to="mlflow",
+        report_to=report_to,
         logging_strategy="no",
+        fp16=False if enforce_cpu else None,  # Disable mixed precision for CPU
+        bf16=False if enforce_cpu else None,  # Disable bfloat16 for CPU
     )
 
     data_collator = DataCollatorWithPadding(tokenizer)
@@ -153,7 +219,40 @@ def main() -> None:
         compute_metrics=compute_metrics,
     )
 
+    # Run detailed evaluation with optional timing
+    print("\n" + "=" * 60)
+    print("RUNNING DETAILED EVALUATION")
+    print("=" * 60)
+    
+    # Optional timing metrics
+    timing_enabled = bool(getattr(cfg.classifier_eval, "timing", False))
+    num_examples = len(tokenized["test"])
+    
+    if timing_enabled:
+        print(f"Evaluating {num_examples} examples{' on CPU' if enforce_cpu else ''}...")
+        eval_start_time = time.time()
+    
     detailed_evaluation(trainer, tokenized["test"], label_order)
+    
+    if timing_enabled:
+        eval_end_time = time.time()
+        total_eval_time = eval_end_time - eval_start_time
+        examples_per_minute = (num_examples / total_eval_time) * 60 if total_eval_time > 0 else 0
+        avg_time_per_example = total_eval_time / num_examples if num_examples > 0 else 0
+        
+        print("\n" + "=" * 60)
+        print("EVALUATION TIMING METRICS")
+        print("=" * 60)
+        print(f"Total evaluation time: {total_eval_time:.2f} seconds ({total_eval_time/60:.2f} minutes)")
+        print(f"Number of examples evaluated: {num_examples}")
+        print(f"Examples per minute: {examples_per_minute:.2f}")
+        print(f"Average time per example: {avg_time_per_example:.4f} seconds ({avg_time_per_example*1000:.2f} ms)")
+        print("=" * 60)
+    
+    print("\n" + "=" * 60)
+    print("EVALUATION COMPLETE")
+    print("=" * 60)
+    print(f"Results saved to: {output_dir}")
 
 
 if __name__ == "__main__":
