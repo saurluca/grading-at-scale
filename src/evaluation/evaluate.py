@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from omegaconf import OmegaConf
-from signatures import GraderSingle_without_prompt
+from signatures import GraderPerQuestion, GraderSingle_without_prompt
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -27,6 +27,9 @@ from src.model_builder import build_lm, model_configs  # noqa: E402
 from src.mlflow_config import setup_mlflow  # noqa: E402
 
 logging.getLogger("dspy").setLevel(logging.ERROR)
+
+# Enable nice tqdm integration with pandas
+tqdm.pandas(desc="Grading answers")
 
 
 def plot_confusion_matrix(y_true, y_pred, save_path=None):
@@ -282,6 +285,118 @@ def compute_evaluation_metrics(
     return evaluation_metrics
 
 
+def collect_predictions(
+    test_df: pd.DataFrame,
+    grader_single,
+    grader_perq,
+    mode: str,
+    pass_reference_answer: bool,
+):
+    """
+    Collect predictions from grader based on mode.
+    
+    Args:
+        test_df: DataFrame with test data
+        grader_single: Grader for single mode (GraderSingle_without_prompt)
+        grader_perq: Grader for per_question mode (GraderPerQuestion)
+        mode: "single" or "per_question"
+        pass_reference_answer: Whether to pass reference_answer to grader
+    
+    Returns:
+        Tuple of (y_true, y_pred) as numpy arrays
+    """
+    assert mode in {"single", "per_question"}, f"Invalid eval mode: {mode}"
+    print(f"Collecting predictions (mode={mode})...")
+    
+    label_name_to_int = {
+        "incorrect": 0,
+        "partial": 1,
+        "partially correct": 1,
+        "correct": 2,
+    }
+    
+    def compute_labels_list(df: pd.DataFrame):
+        vals = []
+        for _, row in df.iterrows():
+            val = row.get("labels", None)
+            if isinstance(val, str):
+                label = label_name_to_int.get(val.strip().lower(), -1)
+            elif pd.notna(val):
+                label = int(val)
+            else:
+                label = -1
+            vals.append(label)
+        return vals
+    
+    if mode == "single":
+        def grade_row(row):
+            try:
+                kwargs = {
+                    "question": row["question"],
+                    "answer": row["student_answer"],
+                }
+                if pass_reference_answer:
+                    kwargs["reference_answer"] = row["reference_answer"]
+                result = grader_single(**kwargs)
+                predicted = int(result.label)
+            except Exception as e:
+                tqdm.write(f"Error grading answer: {e}")
+                raise e
+            
+            val = row.get("labels", None)
+            if isinstance(val, str):
+                label = label_name_to_int.get(val.strip().lower(), 0)
+            elif pd.notna(val):
+                label = int(val)
+            else:
+                label = 0
+            
+            return {"predicted": predicted, "labels": label}
+        
+        results = test_df.progress_apply(grade_row, axis=1)
+        predicted_labels = results.map(lambda d: d["predicted"]).tolist()
+        labels = results.map(lambda d: d["labels"]).tolist()
+        
+    elif mode == "per_question":
+        # Group by task_id if available, else by question text
+        group_key = "task_id" if "task_id" in test_df.columns else "question"
+        index_to_pos = {idx: pos for pos, idx in enumerate(test_df.index)}
+        predicted_labels = [-1] * len(test_df)
+        
+        for _, group in tqdm(
+            test_df.groupby(group_key), desc="Grading per question"
+        ):
+            group = group.copy()
+            answers = group["student_answer"].astype(str).tolist()
+            question = str(group.iloc[0]["question"])
+            reference_answer = str(group.iloc[0]["reference_answer"])
+            try:
+                kwargs = {
+                    "question": question,
+                    "answers": answers,
+                }
+                if pass_reference_answer:
+                    kwargs["reference_answer"] = reference_answer
+                batch_result = grader_perq(**kwargs)
+                labels_batch = batch_result.predicted_labels
+                
+                # Align labels back to the dataframe rows
+                for k, row_idx in enumerate(group.index):
+                    if k < len(labels_batch):
+                        predicted_labels[index_to_pos[row_idx]] = int(labels_batch[k])
+            except Exception as e:
+                tqdm.write(f"Error grading group: {e}")
+                raise e
+        
+        labels = compute_labels_list(test_df)
+    
+    # Convert to numpy arrays
+    y_true = np.array(labels)
+    y_pred = np.array(predicted_labels)
+    
+    return y_true, y_pred
+
+
 def log_config_params_to_mlflow(cfg):
     """Log configuration parameters to MLflow, excluding paths."""
     # Parameters to exclude
@@ -289,7 +404,7 @@ def log_config_params_to_mlflow(cfg):
         "csv_test",
         "dir",  # file paths and directories
     }
-
+    
     # Flatten the config and log parameters
     def flatten_dict(d, parent_key="", sep="."):
         items = []
@@ -301,11 +416,11 @@ def log_config_params_to_mlflow(cfg):
             else:
                 items.append((new_key, v))
         return dict(items)
-
+    
     # Convert OmegaConf to regular dict first, then flatten
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     flattened_cfg = flatten_dict(cfg_dict)
-
+    
     # Filter out excluded parameters
     params_to_log = {}
     for key, value in flattened_cfg.items():
@@ -314,92 +429,10 @@ def log_config_params_to_mlflow(cfg):
         if not should_exclude:
             # Convert value to string for MLflow logging
             params_to_log[key] = str(value)
-
+    
     # Log parameters to MLflow
     mlflow.log_params(params_to_log)
     print(f"Logged {len(params_to_log)} parameters to MLflow")
-
-
-def convert_df_to_dspy_format(
-    dataframe, include_reference_answer: bool = False
-):
-    """Convert DataFrame rows to DSPy Example objects."""
-    examples = []
-    for _, row in dataframe.iterrows():
-        # Create combined dictionary with inputs and targets
-        example_data = {
-            "question": row["question"],
-            "answer": row["student_answer"],
-            "label": row["labels"],
-        }
-
-        # conditionally include reference and reference answer
-        if include_reference_answer:
-            example_data["reference_answer"] = row["reference_answer"]
-
-        # Define input keys (everything except the target)
-        input_keys = ["question", "answer"]
-        if include_reference_answer:
-            input_keys.append("reference_answer")
-
-        # create example with combined data and specify input keys
-        example = dspy.Example(**example_data).with_inputs(*input_keys)
-        examples.append(example)
-    return examples
-
-
-def detailed_evaluation_dspy(
-    testset, grader, test_df, label_order=["incorrect", "partial", "correct"]
-):
-    """
-    Comprehensive evaluation function for DSPy grader.
-    
-    Args:
-        testset: List of DSPy Examples for testing
-        grader: DSPy Predict module for grading
-        test_df: DataFrame with test data including topics
-        label_order: List of label names in order [incorrect, partial, correct]
-    
-    Returns:
-        Dictionary with evaluation metrics
-    """
-    print("\n" + "=" * 60)
-    print("DSPy EVALUATION")
-    print("=" * 60)
-
-    # Get predictions by running grader on testset
-    print("Getting predictions from grader...")
-    y_pred = []
-    y_true = []
-    
-    for example in tqdm(testset, desc="Grading examples"):
-        # Get true label from the example
-        true_label = int(example.label)
-        y_true.append(true_label)
-        
-        # Get prediction from grader
-        try:
-            # Create input dict for grader
-            kwargs = {
-                "question": example.question,
-                "answer": example.answer,
-            }
-            if hasattr(example, "reference_answer") and example.reference_answer:
-                kwargs["reference_answer"] = example.reference_answer
-            
-            result = grader(**kwargs)
-            pred_label = int(result.label)
-            y_pred.append(pred_label)
-        except Exception as e:
-            print(f"Error grading example: {e}")
-            # Default to 0 (incorrect) if prediction fails
-            y_pred.append(0)
-
-    y_pred = np.array(y_pred)
-    y_true = np.array(y_true)
-
-    # Use shared evaluation metrics function
-    return compute_evaluation_metrics(y_true, y_pred, test_df, label_order=label_order)
 
 
 """
@@ -421,113 +454,120 @@ os.makedirs(output_dir, exist_ok=True)
 # Setup MLflow tracking URI from config
 setup_mlflow(cfg, PROJECT_ROOT)
 
-# Get models list from config
-models_list = cfg.model.models if hasattr(cfg.model, "models") else [cfg.model.base]
+# Get single model from config
+model_name = cfg.model.model if hasattr(cfg.model, "model") else cfg.model.base
 
-# Filter to only models available in model_builder.py
+# Validate model is available
 available_models = set(model_configs.keys())
-valid_models = [m for m in models_list if m in available_models]
-invalid_models = [m for m in models_list if m not in available_models]
+if model_name not in available_models:
+    raise ValueError(
+        f"Model {model_name} is not available in model_builder.py. "
+        f"Available models: {sorted(available_models)}"
+    )
 
-if invalid_models:
-    print(f"Warning: The following models are not available in model_builder.py and will be skipped: {invalid_models}")
+print(f"Evaluating model: {model_name}")
 
-if not valid_models:
-    raise ValueError("No valid models found. Please check that models in baseline.yaml exist in model_builder.py")
+# Get mode from config
+mode = getattr(cfg.model, "mode", "single")
+assert mode in {"single", "per_question"}, f"Invalid mode: {mode}. Must be 'single' or 'per_question'"
+print(f"Evaluation mode: {mode}")
 
-print(f"Evaluating {len(valid_models)} models: {valid_models}")
-
-# Load test dataset (always use test.csv)
+# Load test dataset
 test_csv_path = os.path.join(PROJECT_ROOT, cfg.dataset.csv_test)
 print(f"Loading test set from {test_csv_path}")
 test_df = pd.read_csv(test_csv_path, sep=";")
 print(f"Test set size: {len(test_df)}")
 
-# Convert DataFrame to DSPy format once (reused for all models)
-testset = convert_df_to_dspy_format(
-    test_df,
-    include_reference_answer=cfg.model.pass_reference_answer,
-)
+# Get pass_reference_answer setting
+pass_reference_answer = getattr(cfg.model, "pass_reference_answer", True)
 
 # Configure MLflow experiment
-mlflow.set_experiment("DSPy-Baseline-Evaluation")
+mlflow.set_experiment("DSPy-Evaluation")
 
-# Evaluate each model
-for i, model_name in enumerate(valid_models, 1):
-    print("\n" + "=" * 80)
-    print(f"Evaluating model {i}/{len(valid_models)}: {model_name}")
-    print("=" * 80)
-    
-    # Create run name based on model
-    model_short = model_name.split("/")[-1]
-    run_name = f"baseline_{model_short}"
+# Start MLflow run
+model_short = model_name.split("/")[-1]
+run_name = f"{model_short}_{mode}"
 
-    try:
-        # Start MLflow run for this model
-        with mlflow.start_run(run_name=run_name) as run:
-            # Log model name and evaluation method as parameters
-            mlflow.log_param("model", model_name)
-            mlflow.log_param("evaluation_method", "dspy")
-            log_config_params_to_mlflow(cfg)
+try:
+    with mlflow.start_run(run_name=run_name) as run:
+        # Log model name and evaluation method as parameters
+        mlflow.log_param("model", model_name)
+        mlflow.log_param("mode", mode)
+        mlflow.log_param("evaluation_method", "dspy")
+        log_config_params_to_mlflow(cfg)
+        
+        # Log test dataset as MLflow Dataset
+        test_ml_dataset = mlflow.data.from_pandas(
+            test_df, source=test_csv_path, name="test_dataset"
+        )
+        mlflow.log_input(test_ml_dataset, context="evaluation")
+        
+        # Build LM
+        build_lm_kwargs = {
+            "max_tokens": cfg.model.max_tokens,
+            "cache": cfg.model.cache,
+        }
+        if hasattr(cfg.model, "temperature") and cfg.model.temperature is not None:
+            build_lm_kwargs["temperature"] = cfg.model.temperature
+        
+        grader_lm = build_lm(model_name, **build_lm_kwargs)
+        print(f"Using DSPy LM {model_name}")
+        
+        dspy.configure(lm=grader_lm)
+        
+        # Create graders based on mode
+        grader_single = dspy.Predict(GraderSingle_without_prompt)
+        grader_single.set_lm(grader_lm)
+        
+        grader_perq = dspy.Predict(GraderPerQuestion)
+        grader_perq.set_lm(grader_lm)
+        
+        # Collect predictions
+        print("Running evaluation...")
+        y_true, y_pred = collect_predictions(
+            test_df,
+            grader_single,
+            grader_perq,
+            mode,
+            pass_reference_answer,
+        )
+        
+        # Compute comprehensive metrics
+        evaluation_metrics = compute_evaluation_metrics(
+            y_true, y_pred, test_df, label_order=["incorrect", "partial", "correct"]
+        )
+        
+        # Log all metrics to MLflow
+        for metric_name, metric_value in evaluation_metrics.items():
+            # Skip y_true and y_pred from MLflow metrics (they're arrays, not scalars)
+            if metric_name not in ["y_true", "y_pred"]:
+                mlflow.log_metric(metric_name, metric_value)
+        
+        # Plot and save confusion matrix
+        model_short_safe = model_short.replace("/", "_").replace("-", "_")
+        mode_suffix = {"single": "single", "per_question": "perq"}.get(mode, mode)
+        confusion_matrix_path = os.path.join(
+            output_dir, f"confusion_matrix_{model_short_safe}_{mode_suffix}.png"
+        )
+        plot_confusion_matrix(
+            evaluation_metrics["y_true"],
+            evaluation_metrics["y_pred"],
+            save_path=confusion_matrix_path,
+        )
+        
+        # Log confusion matrix image to MLflow
+        if os.path.exists(confusion_matrix_path):
+            mlflow.log_artifact(confusion_matrix_path, "confusion_matrices")
+        
+        print(f"\nEvaluation complete. MLflow run ID: {run.info.run_id}")
 
-            # Log test dataset as MLflow Dataset
-            test_ml_dataset = mlflow.data.from_pandas(
-                test_df, source=test_csv_path, name="test_dataset"
-            )
-            mlflow.log_input(test_ml_dataset, context="evaluation")
-
-            # Build LM and Grader program
-            build_lm_kwargs = {
-                "max_tokens": cfg.model.max_tokens,
-                "cache": cfg.model.cache,
-            }
-            if hasattr(cfg.model, "temperature") and cfg.model.temperature is not None:
-                build_lm_kwargs["temperature"] = cfg.model.temperature
-
-            grader_lm = build_lm(model_name, **build_lm_kwargs)
-            print(f"Using DSPy LM {model_name}")
-
-            grader = dspy.Predict(GraderSingle_without_prompt)
-
-            dspy.configure(lm=grader_lm)
-            grader.set_lm(grader_lm)
-
-            # Run detailed evaluation
-            print("Running evaluation...")
-            evaluation_metrics = detailed_evaluation_dspy(
-                testset, grader, test_df, label_order=["incorrect", "partial", "correct"]
-            )
-
-            # Log all metrics to MLflow
-            for metric_name, metric_value in evaluation_metrics.items():
-                # Skip y_true and y_pred from MLflow metrics (they're arrays, not scalars)
-                if metric_name not in ["y_true", "y_pred"]:
-                    mlflow.log_metric(metric_name, metric_value)
-
-            # Plot and save confusion matrix
-            model_short_safe = model_short.replace("/", "_").replace("-", "_")
-            confusion_matrix_path = os.path.join(
-                output_dir, f"confusion_matrix_{model_short_safe}.png"
-            )
-            plot_confusion_matrix(
-                evaluation_metrics["y_true"],
-                evaluation_metrics["y_pred"],
-                save_path=confusion_matrix_path,
-            )
-            
-            # Log confusion matrix image to MLflow
-            if os.path.exists(confusion_matrix_path):
-                mlflow.log_artifact(confusion_matrix_path, "confusion_matrices")
-
-            print(f"\nEvaluation complete for {model_name}. MLflow run ID: {run.info.run_id}")
-    
-    except Exception as e:
-        print(f"Error evaluating {model_name}: {e}")
-        import traceback
-        traceback.print_exc()
-        continue
+except Exception as e:
+    print(f"Error during evaluation: {e}")
+    import traceback
+    traceback.print_exc()
+    raise
 
 print("\n" + "=" * 80)
-print("All model evaluations complete!")
+print("Evaluation complete!")
 print("=" * 80)
 
