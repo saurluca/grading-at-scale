@@ -4,9 +4,10 @@ import sys
 from pathlib import Path
 
 import dspy
-from dspy.evaluate import Evaluate
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from omegaconf import OmegaConf
 from signatures import GraderSingle_without_prompt
 from sklearn.metrics import (
@@ -26,6 +27,48 @@ from src.model_builder import build_lm, model_configs  # noqa: E402
 from src.mlflow_config import setup_mlflow  # noqa: E402
 
 logging.getLogger("dspy").setLevel(logging.ERROR)
+
+
+def plot_confusion_matrix(y_true, y_pred, save_path=None):
+    """
+    Plot a confusion matrix using seaborn's heatmap.
+    
+    Parameters:
+    - y_true: List or array of true labels
+    - y_pred: List or array of predicted labels
+    - save_path: Optional path to save the plot
+    """
+    # Only use valid labels (0, 1, 2) for this task
+    valid_labels = [0, 1, 2]
+    
+    # Filter to only include valid labels
+    y_true_array = np.array(y_true)
+    y_pred_array = np.array(y_pred)
+    
+    # Create confusion matrix with only valid labels
+    cm = confusion_matrix(y_true_array, y_pred_array, labels=valid_labels)
+    
+    label_names = {0: "Incorrect", 1: "Partially Correct", 2: "Correct"}
+    label_display_names = [label_names[label] for label in valid_labels]
+    
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        xticklabels=label_display_names,
+        yticklabels=label_display_names,
+    )
+    plt.xlabel("Predicted Labels")
+    plt.ylabel("True Labels")
+    plt.title("Confusion Matrix - Grader Performance")
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"Confusion matrix plot saved to: {save_path}")
+    
+    plt.close()  # Close the figure to free memory
 
 
 def compute_evaluation_metrics(
@@ -232,6 +275,10 @@ def compute_evaluation_metrics(
             "Warning: Topic column not found in test dataset. Skipping per-topic evaluation."
         )
     
+    # Add y_true and y_pred to metrics for confusion matrix plotting
+    evaluation_metrics["y_true"] = y_true.tolist()
+    evaluation_metrics["y_pred"] = y_pred.tolist()
+    
     return evaluation_metrics
 
 
@@ -299,23 +346,6 @@ def convert_df_to_dspy_format(
         example = dspy.Example(**example_data).with_inputs(*input_keys)
         examples.append(example)
     return examples
-
-
-def metric(gold, pred, trace=None):
-    """Metric function for DSPy Evaluate."""
-    # gold is a DSPy Example with targets, pred is the model output
-    generated_answer = int(pred.label)
-    correct_answer = int(gold.label)
-
-    # Check for NaN values first
-    if pd.isna(correct_answer) or pd.isna(generated_answer):
-        return 0.0
-
-    # For single sample comparison, use simple accuracy
-    if generated_answer == correct_answer:
-        return 1.0
-    else:
-        return 0.0
 
 
 def detailed_evaluation_dspy(
@@ -462,30 +492,32 @@ for i, model_name in enumerate(valid_models, 1):
             dspy.configure(lm=grader_lm)
             grader.set_lm(grader_lm)
 
-            # Create evaluator with batched processing
-            num_threads = cfg.evaluation.num_threads if hasattr(cfg.evaluation, "num_threads") else 16
-            evaluator = Evaluate(
-                devset=testset,
-                num_threads=num_threads,
-                display_progress=True,
-                display_table=False,
-            )
-
-            # Launch evaluation with DSPy (for basic accuracy score)
+            # Run detailed evaluation
             print("Running evaluation...")
-            result = evaluator(grader, metric=metric)
-            
-            # Log basic accuracy from evaluator
-            mlflow.log_metric("evaluation_accuracy", result.score)
-
-            # Get detailed evaluation results by running grader directly
             evaluation_metrics = detailed_evaluation_dspy(
                 testset, grader, test_df, label_order=["incorrect", "partial", "correct"]
             )
 
             # Log all metrics to MLflow
             for metric_name, metric_value in evaluation_metrics.items():
-                mlflow.log_metric(metric_name, metric_value)
+                # Skip y_true and y_pred from MLflow metrics (they're arrays, not scalars)
+                if metric_name not in ["y_true", "y_pred"]:
+                    mlflow.log_metric(metric_name, metric_value)
+
+            # Plot and save confusion matrix
+            model_short_safe = model_short.replace("/", "_").replace("-", "_")
+            confusion_matrix_path = os.path.join(
+                output_dir, f"confusion_matrix_{model_short_safe}.png"
+            )
+            plot_confusion_matrix(
+                evaluation_metrics["y_true"],
+                evaluation_metrics["y_pred"],
+                save_path=confusion_matrix_path,
+            )
+            
+            # Log confusion matrix image to MLflow
+            if os.path.exists(confusion_matrix_path):
+                mlflow.log_artifact(confusion_matrix_path, "confusion_matrices")
 
             print(f"\nEvaluation complete for {model_name}. MLflow run ID: {run.info.run_id}")
     

@@ -8,7 +8,7 @@ model:
     # gpt-4o-mini,
     gpt-4o,
   ]
-  cache: true
+  cache: false
   # temperature: 0.6
   max_tokens: 4096
 
@@ -17,8 +17,8 @@ model:
 
 
 dataset:
-  # csv_test: data/gras/test.csv  # Always use test.csv
-  csv_test: data/SciEntsBank_3way/test_ud.csv
+  csv_test: data/gras/test.csv  # Always use test.csv
+  # csv_test: data/SciEntsBank_3way/test_ud.csv
 
 
 evaluation:
@@ -27,17 +27,3 @@ evaluation:
 
 output:
   dir: ${paths.output_dir}/baseline
-
-# SELECT *
-# FROM train
-# WHERE data_source = 'SAF'
-# LIMIT 100;
-
-# SELECT 
-#     data_source,
-#     COUNT(DISTINCT grade) AS num_unique_grades
-# FROM 
-#     train
-# GROUP BY 
-#     data_source
-# LIMIT 100;
