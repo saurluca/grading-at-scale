@@ -8,7 +8,7 @@ model:
   base: Qwen/Qwen3-0.6B
 
 # Task selection for dispatcher
-task_type: lora-classification  # lora-classification | lora-regression | vanilla-classification
+task_type: lora-classification  # lora-classification | lora-classification-gridsearch
 
 # Dispatcher controls
 dispatcher:

@@ -9,15 +9,13 @@ from omegaconf import OmegaConf
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-# Add finetuning directory to path so import_module can find lora, base, etc.
+# Add finetuning directory to path so import_module can find lora, lora_gridsearch, etc.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def select_main(task_type: str):
     mapping = {
         "lora-classification": "lora",
-        "lora-regression": "lora_regression",
-        "vanilla-classification": "base",
         "lora-classification-gridsearch": "lora_gridsearch",
     }
     if task_type not in mapping:
