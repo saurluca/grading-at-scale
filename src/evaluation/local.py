@@ -3,7 +3,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 # Load config early to check for CPU enforcement before torch imports
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -50,6 +50,93 @@ from src.common import (  # noqa: E402
     map_labels,
     sample_dataset,
 )
+
+
+def sanitize_model_name(model_name: str) -> str:
+    """
+    Sanitize model name for adapter path inference.
+    Removes org prefix and special characters.
+    
+    Examples:
+        "Qwen/Qwen3-0.6B" -> "Qwen3-0.6B"
+        "google/flan-t5-base" -> "flan-t5-base"
+    """
+    # Remove org prefix (everything before the last '/')
+    if '/' in model_name:
+        model_name = model_name.split('/')[-1]
+    return model_name
+
+
+def extract_dataset_name(csv_path: str, explicit_name: str = None) -> str:
+    """
+    Extract dataset name from CSV path or use explicit name if provided.
+    
+    Examples:
+        "data/gras/test.csv" -> "gras"
+        "data/SciEntsBank_3way/test_ud.csv" -> "SciEntsBank_3way"
+    """
+    if explicit_name:
+        return explicit_name
+    
+    # Extract dataset name from path
+    # Assumes format: data/{dataset_name}/... or data/{dataset_name}.csv
+    path_parts = Path(csv_path).parts
+    if len(path_parts) >= 2 and path_parts[0] == "data":
+        # Get the directory name or filename without extension
+        dataset_part = path_parts[1]
+        if dataset_part.endswith('.csv'):
+            return dataset_part[:-4]  # Remove .csv extension
+        return dataset_part
+    
+    # Fallback: use filename without extension
+    return Path(csv_path).stem
+
+
+def infer_adapter_path(
+    model_name: str,
+    dataset_name: str,
+    adapter_source: str,
+    hf_username: str = None,
+    project_root: Path = None,
+    paths_output_dir: str = None
+) -> Optional[str]:
+    """
+    Infer adapter path based on model name, dataset name, and adapter source.
+    
+    Parameters:
+    - model_name: Full model name (e.g., "Qwen/Qwen3-0.6B")
+    - dataset_name: Dataset name (e.g., "gras")
+    - adapter_source: "hub", "local", or "none"
+    - hf_username: HuggingFace username (required for "hub")
+    - project_root: Project root path (required for "local")
+    - paths_output_dir: Output directory from paths config (e.g., "results/") (required for "local")
+    
+    Returns:
+    - Adapter path string, or None if adapter_source is "none"
+    """
+    if adapter_source == "none":
+        return None
+    
+    sanitized_model = sanitize_model_name(model_name)
+    
+    if adapter_source == "hub":
+        if not hf_username:
+            raise ValueError("huggingface_username is required when adapter_source is 'hub'")
+        return f"{hf_username}/{sanitized_model}-lora-{dataset_name}"
+    
+    elif adapter_source == "local":
+        if not project_root or not paths_output_dir:
+            raise ValueError("project_root and paths_output_dir are required when adapter_source is 'local'")
+        adapter_path = os.path.join(
+            project_root,
+            paths_output_dir,
+            "peft_output",
+            f"adapter-{sanitized_model}-{dataset_name}"
+        )
+        return adapter_path
+    
+    else:
+        raise ValueError(f"Invalid adapter_source: {adapter_source}. Must be 'hub', 'local', or 'none'.")
 
 
 def plot_confusion_matrix(y_true, y_pred, save_path=None):
@@ -101,6 +188,24 @@ def main() -> None:
     print(f"EVALUATING CLASSIFIER ({device_mode})")
     print("=" * 60)
 
+    # Validate configuration
+    models_list = getattr(cfg.classifier_eval, "models", None)
+    if not models_list:
+        raise ValueError("classifier_eval.models must be set to a list of model names")
+    if not isinstance(models_list, (list, tuple)) or len(models_list) == 0:
+        raise ValueError("classifier_eval.models must be a non-empty list")
+
+    # Get adapter configuration
+    adapter_source = getattr(cfg.classifier_eval.adapter, "source", "local")
+    if adapter_source not in ["hub", "local", "none"]:
+        raise ValueError(f"Invalid adapter_source: {adapter_source}. Must be 'hub', 'local', or 'none'.")
+    
+    hf_username = getattr(cfg.classifier_eval.adapter, "huggingface_username", None)
+    if adapter_source == "hub" and not hf_username:
+        raise ValueError("huggingface_username is required when adapter_source is 'hub'")
+    
+    explicit_dataset_name = getattr(cfg.classifier_eval.adapter, "dataset_name", None)
+
     # Label maps (fixed order)
     label_order: List[str] = ["incorrect", "partial", "correct"]
     label2id: Dict[str, int] = {name: i for i, name in enumerate(label_order)}
@@ -116,6 +221,10 @@ def main() -> None:
         raise FileNotFoundError(f"CSV file not found at: {csv_path}")
 
     print(f"Loading evaluation data from CSV: {csv_path}")
+
+    # Extract dataset name for adapter inference
+    dataset_name = extract_dataset_name(csv_path, explicit_dataset_name)
+    print(f"Dataset name for adapter inference: {dataset_name}")
 
     # Ensure cache directory is at project root
     cache_dir = str(cfg.paths.hf_cache_dir)
@@ -146,191 +255,210 @@ def main() -> None:
     if len(ds) > 0:
         print(ds[0])
 
-    # Load tokenizer and base model, then optionally attach LoRA adapter
-    base_model_name = str(cfg.classifier_eval.base_model)
-    device_info = " (CPU-only)" if enforce_cpu else ""
-    print(f"\nLoading base model: {base_model_name}{device_info}")
+    # Tokenize dataset once (shared across all models)
+    include_ref_ans = bool(getattr(cfg.tokenization, "include_reference_answer", False))
+    print(f"\nTokenizing dataset (include_reference_answer={include_ref_ans})...")
+    # We'll tokenize per model since tokenizers may differ, but prepare the raw dataset here
 
+    # Setup output directory - infer from dataset name
+    paths_output_dir = str(cfg.paths.output_dir)
     output_dir = os.path.normpath(
-        os.path.join(
-            PROJECT_ROOT,
-            str(getattr(cfg.classifier_eval, "output_dir", "data/scientsbank_eval")),
-        )
+        os.path.join(PROJECT_ROOT, paths_output_dir, dataset_name)
     )
     os.makedirs(output_dir, exist_ok=True)
+    print(f"Output directory: {output_dir}")
 
-    tokenizer, base_model = setup_model_and_tokenizer(
-        base_model_name, label2id, id2label, cache_path
-    )
-    
-    # Explicitly move to CPU if CPU enforcement is enabled
-    if enforce_cpu:
-        base_model = base_model.to("cpu")
-        print("Base model loaded and moved to CPU")
-
-    # Load LoRA adapter config
-    adapter_source = getattr(cfg.classifier_eval.adapter, "source", "local")
-    adapter_path_cfg = getattr(cfg.classifier_eval.adapter, "path", None)
-
-    if adapter_source == "none":
-        # Use base model without any adapter
-        print("\nUsing base model without adapter")
-        model = base_model
-    elif adapter_source == "hub":
-        # Load from Hugging Face Hub
-        print(f"\nLoading LoRA adapter from Hugging Face Hub: {adapter_path_cfg}")
-        try:
-            # Use device_map="cpu" if CPU enforcement is enabled
-            load_kwargs = {}
-            if enforce_cpu:
-                load_kwargs["device_map"] = "cpu"
-            model = PeftModel.from_pretrained(base_model, adapter_path_cfg, **load_kwargs)
-            if enforce_cpu:
-                model = model.to("cpu")  # Double-check CPU placement
-            print(f"Successfully loaded adapter from Hub: {adapter_path_cfg}")
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to load adapter from Hugging Face Hub '{adapter_path_cfg}': {e}"
-            )
-    elif adapter_source == "local":
-        # Load from local path
-        adapter_path = os.path.normpath(
-            os.path.join(PROJECT_ROOT, str(adapter_path_cfg))
-        )
-        if not os.path.exists(adapter_path):
-            raise FileNotFoundError(
-                f"LoRA adapter directory not found at '{adapter_path}'. Exiting."
-            )
-        print(f"\nLoading LoRA adapter from local path: {adapter_path}")
-        # Use device_map="cpu" if CPU enforcement is enabled
-        load_kwargs = {}
-        if enforce_cpu:
-            load_kwargs["device_map"] = "cpu"
-        model = PeftModel.from_pretrained(base_model, adapter_path, **load_kwargs)
-        if enforce_cpu:
-            model = model.to("cpu")  # Double-check CPU placement
-        print("Successfully loaded adapter from local path")
-    else:
-        raise ValueError(
-            f"Invalid adapter source '{adapter_source}'. Must be 'local', 'hub', or 'none'."
-        )
-    
-    # Verify model is on correct device if CPU enforcement is enabled
-    if enforce_cpu:
-        print(f"\nModel device check:")
-        for name, param in model.named_parameters():
-            if param.device.type != "cpu":
-                print(f"WARNING: Parameter {name} is on {param.device}, expected CPU")
-            break  # Just check first parameter
-        print("Model is on CPU (verified)")
-
-    # Tokenize
-    include_ref_ans = bool(getattr(cfg.tokenization, "include_reference_answer", False))
-    if enforce_cpu:
-        print(f"\nTokenizing dataset (include_reference_answer={include_ref_ans})...")
-    tokenized = tokenize_dataset(raw, tokenizer, include_ref_ans)
-
-    # Trainer setup for evaluation only
-    # Default batch size: 8 for CPU (CPU-friendly), 32 for GPU
+    # Trainer setup configuration (shared across models)
     default_batch_size = 8 if enforce_cpu else 32
     per_device_eval_batch_size = int(
         getattr(cfg.classifier_eval, "batch_size", default_batch_size)
     )
-    
-    # MLflow reporting: configurable, default to "mlflow" for backward compatibility
     report_to = str(getattr(cfg.classifier_eval, "report_to", "mlflow"))
-    
-    if enforce_cpu:
-        print(f"\nSetting up Trainer with batch_size={per_device_eval_batch_size} (CPU-friendly)")
-    
-    training_args = TrainingArguments(
-        output_dir=output_dir,
-        per_device_eval_batch_size=per_device_eval_batch_size,
-        do_train=False,
-        do_eval=True,
-        report_to=report_to,
-        logging_strategy="no",
-        fp16=False if enforce_cpu else None,  # Disable mixed precision for CPU
-        bf16=False if enforce_cpu else None,  # Disable bfloat16 for CPU
-    )
-
-    data_collator = DataCollatorWithPadding(tokenizer)
-
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        eval_dataset=tokenized["test"],
-        processing_class=tokenizer,
-        data_collator=data_collator,
-        compute_metrics=compute_metrics,
-    )
-
-    # Run detailed evaluation with optional timing
-    print("\n" + "=" * 60)
-    print("RUNNING DETAILED EVALUATION")
-    print("=" * 60)
-    
-    # Optional timing metrics
     timing_enabled = bool(getattr(cfg.classifier_eval, "timing", False))
-    num_examples = len(tokenized["test"])
-    
-    if timing_enabled:
-        print(f"Evaluating {num_examples} examples{' on CPU' if enforce_cpu else ''}...")
-        eval_start_time = time.time()
-    
-    detailed_evaluation(trainer, tokenized["test"], label_order)
-    
-    if timing_enabled:
-        eval_end_time = time.time()
-        total_eval_time = eval_end_time - eval_start_time
-        examples_per_minute = (num_examples / total_eval_time) * 60 if total_eval_time > 0 else 0
-        avg_time_per_example = total_eval_time / num_examples if num_examples > 0 else 0
+    num_examples = len(ds)
+
+    # Loop over each model
+    print(f"\n{'=' * 60}")
+    print(f"EVALUATING {len(models_list)} MODEL(S)")
+    print(f"{'=' * 60}\n")
+
+    for model_idx, base_model_name in enumerate(models_list, 1):
+        base_model_name = str(base_model_name)
+        device_info = " (CPU-only)" if enforce_cpu else ""
+        print(f"\n{'=' * 60}")
+        print(f"MODEL {model_idx}/{len(models_list)}: {base_model_name}{device_info}")
+        print(f"{'=' * 60}")
+
+        # Infer adapter path
+        adapter_path = None
+        if adapter_source != "none":
+            paths_output_dir = str(cfg.paths.output_dir)
+            adapter_path = infer_adapter_path(
+                model_name=base_model_name,
+                dataset_name=dataset_name,
+                adapter_source=adapter_source,
+                hf_username=hf_username,
+                project_root=PROJECT_ROOT,
+                paths_output_dir=paths_output_dir
+            )
+            print(f"Inferred adapter path: {adapter_path}")
+            
+            # For local adapters, check if path exists before proceeding
+            if adapter_source == "local":
+                adapter_path_local = os.path.normpath(adapter_path)
+                if not os.path.exists(adapter_path_local):
+                    print(f"WARNING: LoRA adapter directory not found at '{adapter_path_local}'. Skipping model {base_model_name}.")
+                    continue
+
+        # Load tokenizer and base model
+        tokenizer, base_model = setup_model_and_tokenizer(
+            base_model_name, label2id, id2label, cache_path
+        )
+        
+        # Explicitly move to CPU if CPU enforcement is enabled
+        if enforce_cpu:
+            base_model = base_model.to("cpu")
+            print("Base model loaded and moved to CPU")
+
+        # Load adapter if needed
+        if adapter_source == "none":
+            print("\nUsing base model without adapter")
+            model = base_model
+        elif adapter_source == "hub":
+            print(f"\nLoading LoRA adapter from Hugging Face Hub: {adapter_path}")
+            try:
+                load_kwargs = {}
+                if enforce_cpu:
+                    load_kwargs["device_map"] = "cpu"
+                model = PeftModel.from_pretrained(base_model, adapter_path, **load_kwargs)
+                if enforce_cpu:
+                    model = model.to("cpu")
+                print(f"Successfully loaded adapter from Hub: {adapter_path}")
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to load adapter from Hugging Face Hub '{adapter_path}': {e}"
+                )
+        elif adapter_source == "local":
+            # Path existence already checked above
+            adapter_path_local = os.path.normpath(adapter_path)
+            print(f"\nLoading LoRA adapter from local path: {adapter_path_local}")
+            load_kwargs = {}
+            if enforce_cpu:
+                load_kwargs["device_map"] = "cpu"
+            model = PeftModel.from_pretrained(base_model, adapter_path_local, **load_kwargs)
+            if enforce_cpu:
+                model = model.to("cpu")
+            print("Successfully loaded adapter from local path")
+        
+        # Verify model is on correct device if CPU enforcement is enabled
+        if enforce_cpu:
+            print(f"\nModel device check:")
+            for name, param in model.named_parameters():
+                if param.device.type != "cpu":
+                    print(f"WARNING: Parameter {name} is on {param.device}, expected CPU")
+                break  # Just check first parameter
+            print("Model is on CPU (verified)")
+
+        # Tokenize dataset with this model's tokenizer
+        tokenized = tokenize_dataset(raw, tokenizer, include_ref_ans)
+
+        # Create trainer for this model
+        model_output_dir = os.path.join(output_dir, sanitize_model_name(base_model_name))
+        os.makedirs(model_output_dir, exist_ok=True)
+        
+        if enforce_cpu:
+            print(f"\nSetting up Trainer with batch_size={per_device_eval_batch_size} (CPU-friendly)")
+        
+        training_args = TrainingArguments(
+            output_dir=model_output_dir,
+            per_device_eval_batch_size=per_device_eval_batch_size,
+            do_train=False,
+            do_eval=True,
+            report_to=report_to,
+            logging_strategy="no",
+            fp16=False if enforce_cpu else None,
+            bf16=False if enforce_cpu else None,
+        )
+
+        data_collator = DataCollatorWithPadding(tokenizer)
+
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            eval_dataset=tokenized["test"],
+            processing_class=tokenizer,
+            data_collator=data_collator,
+            compute_metrics=compute_metrics,
+        )
+
+        # Run detailed evaluation with optional timing
+        print("\n" + "=" * 60)
+        print(f"RUNNING DETAILED EVALUATION - {base_model_name}")
+        print("=" * 60)
+        
+        if timing_enabled:
+            print(f"Evaluating {num_examples} examples{' on CPU' if enforce_cpu else ''}...")
+            eval_start_time = time.time()
+        
+        detailed_evaluation(trainer, tokenized["test"], label_order)
+        
+        if timing_enabled:
+            eval_end_time = time.time()
+            total_eval_time = eval_end_time - eval_start_time
+            examples_per_minute = (num_examples / total_eval_time) * 60 if total_eval_time > 0 else 0
+            avg_time_per_example = total_eval_time / num_examples if num_examples > 0 else 0
+            
+            print("\n" + "=" * 60)
+            print("EVALUATION TIMING METRICS")
+            print("=" * 60)
+            print(f"Total evaluation time: {total_eval_time:.2f} seconds ({total_eval_time/60:.2f} minutes)")
+            print(f"Number of examples evaluated: {num_examples}")
+            print(f"Examples per minute: {examples_per_minute:.2f}")
+            print(f"Average time per example: {avg_time_per_example:.4f} seconds ({avg_time_per_example*1000:.2f} ms)")
+            print("=" * 60)
+        
+        # Get predictions for confusion matrix
+        print("\nGenerating confusion matrix...")
+        predictions = trainer.predict(tokenized["test"])
+        
+        # Handle case where predictions.predictions might be a tuple/list
+        logits = predictions.predictions
+        if isinstance(logits, (tuple, list)):
+            logits = logits[0]
+        
+        y_pred = np.argmax(logits, axis=-1)
+        y_true = predictions.label_ids
+        
+        # Create and save confusion matrix with model-specific naming
+        sanitized_model = sanitize_model_name(base_model_name)
+        adapter_suffix = ""
+        if adapter_source == "hub" and adapter_path:
+            adapter_suffix = f"_{adapter_path.split('/')[-1]}"
+        elif adapter_source == "local" and adapter_path:
+            adapter_suffix = f"_{os.path.basename(adapter_path)}"
+        elif adapter_source == "none":
+            adapter_suffix = "_base"
+        
+        confusion_matrix_filename = f"confusion_matrix_{sanitized_model}{adapter_suffix}.png"
+        confusion_matrix_path = os.path.join(model_output_dir, confusion_matrix_filename)
+        
+        plot_confusion_matrix(y_true, y_pred, save_path=confusion_matrix_path)
         
         print("\n" + "=" * 60)
-        print("EVALUATION TIMING METRICS")
+        print(f"EVALUATION COMPLETE - {base_model_name}")
         print("=" * 60)
-        print(f"Total evaluation time: {total_eval_time:.2f} seconds ({total_eval_time/60:.2f} minutes)")
-        print(f"Number of examples evaluated: {num_examples}")
-        print(f"Examples per minute: {examples_per_minute:.2f}")
-        print(f"Average time per example: {avg_time_per_example:.4f} seconds ({avg_time_per_example*1000:.2f} ms)")
-        print("=" * 60)
-    
-    # Get predictions for confusion matrix
-    print("\nGenerating confusion matrix...")
-    predictions = trainer.predict(tokenized["test"])
-    
-    # Handle case where predictions.predictions might be a tuple/list
-    logits = predictions.predictions
-    if isinstance(logits, (tuple, list)):
-        logits = logits[0]
-    
-    y_pred = np.argmax(logits, axis=-1)
-    y_true = predictions.label_ids
-    
-    # Create and save confusion matrix
-    base_model_short = base_model_name.split("/")[-1]
-    adapter_short = ""
-    if adapter_source == "hub" and adapter_path_cfg:
-        adapter_short = f"_{adapter_path_cfg.split('/')[-1]}"
-    elif adapter_source == "local" and adapter_path_cfg:
-        # Extract adapter name from path
-        adapter_path_local = os.path.normpath(
-            os.path.join(PROJECT_ROOT, str(adapter_path_cfg))
-        )
-        adapter_short = f"_{os.path.basename(adapter_path_local)}"
-    elif adapter_source == "none":
-        adapter_short = "_base"
-    
-    confusion_matrix_filename = f"confusion_matrix_{base_model_short}{adapter_short}.png"
-    confusion_matrix_path = os.path.join(output_dir, confusion_matrix_filename)
-    
-    plot_confusion_matrix(y_true, y_pred, save_path=confusion_matrix_path)
+        print(f"Results saved to: {model_output_dir}")
+        print(f"Confusion matrix saved to: {confusion_matrix_path}")
+        
+        # Clean up model from memory before loading next one
+        del model, base_model, tokenizer, trainer
+        if torch.cuda.is_available() and not enforce_cpu:
+            torch.cuda.empty_cache()
     
     print("\n" + "=" * 60)
-    print("EVALUATION COMPLETE")
+    print("ALL MODELS EVALUATED")
     print("=" * 60)
-    print(f"Results saved to: {output_dir}")
-    print(f"Confusion matrix saved to: {confusion_matrix_path}")
+    print(f"All results saved to: {output_dir}")
 
 
 if __name__ == "__main__":

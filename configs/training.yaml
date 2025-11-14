@@ -14,12 +14,11 @@ dispatcher:
   seed_strategy: random  # same | random
   # seeds: [42,43,44]          # optional list; if provided, overrides both above
   # optional list of model base names to run; if empty uses model.base
-  models: [
-    meta-llama/Llama-3.2-1B-Instruct,
-    openai-community/gpt2-large,
-    google/flan-t5-base,
-    Qwen/Qwen3-0.6B,
-  ]             
+  models: 
+    - meta-llama/Llama-3.2-1B-Instruct
+    - openai-community/gpt2-large
+    - google/flan-t5-base
+    - Qwen/Qwen3-0.6B
 
 
 # Dataset
