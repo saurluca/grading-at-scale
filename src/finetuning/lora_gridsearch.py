@@ -32,36 +32,20 @@ def run_single_training(cfg, cache_dir, output_dir_base, combination_idx, total_
     output_dir = os.path.join(output_dir_base, f"combination_{combination_idx}")
     os.makedirs(output_dir, exist_ok=True)
     
-    # Determine if using split files or single file
-    use_split_files = bool(getattr(cfg.dataset, "use_split_files", False))
-    
-    if use_split_files:
-        dataset_base_path = PROJECT_ROOT / "data" / cfg.dataset.dataset_name
-        train_csv = str(
-            dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv")
-        )
-        val_csv = str(dataset_base_path / getattr(cfg.dataset, "val_file", "val.csv"))
-        test_csv = str(
-            dataset_base_path / getattr(cfg.dataset, "test_file", "test.csv")
-        )
-        dataset_csv = train_csv  # For logging purposes
-    else:
-        dataset_csv = str(PROJECT_ROOT / cfg.dataset.csv_path)
-        train_csv = None
-        val_csv = None
-        test_csv = None
-    
-    # Extract topics from config
-    topics = getattr(cfg.dataset, "topics", None)
+    # Use separate train/val/test files
+    dataset_base_path = PROJECT_ROOT / "data" / cfg.dataset.dataset_name
+    train_csv = str(
+        dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv")
+    )
+    val_csv = str(dataset_base_path / getattr(cfg.dataset, "val_file", "val.csv"))
+    test_csv = str(
+        dataset_base_path / getattr(cfg.dataset, "test_file", "test.csv")
+    )
+    dataset_csv = train_csv  # For logging purposes
     
     # Load and preprocess data
     raw_data, label_order, label2id, id2label = load_and_preprocess_data(
-        dataset_csv,
         cache_dir,
-        int(getattr(cfg.project, "seed", 42)),
-        test_size=getattr(cfg.dataset, "test_size", 0.4),
-        topics=topics,
-        use_split_files=use_split_files,
         train_csv=train_csv,
         val_csv=val_csv,
         test_csv=test_csv,

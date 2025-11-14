@@ -26,26 +26,14 @@ dataset:
   # dataset_name: SciEntsBank_3way # gras
   dataset_name: gras
   
-  # Option 1: Separate train/val/test files - set use_split_files: true
-  use_split_files: true  # If true, uses train.csv, val.csv, and test.csv from dataset folder
   train_file: train.csv
-  val_file: val.csv #test_ua.csv #val.csv
-  test_file: test.csv #test_ud.csv #test.csv  # Required when use_split_files: true
-
-  # Option 2: Single CSV file - will be split at runtime
-  csv_file: full.csv  # Single file to split at runtime
-  csv_path: data/${dataset.dataset_name}/${dataset.csv_file}
-  
-  
-  test_size: 0.4  # Only used when use_split_files: false
-  # topics: ["SciEntsBank", "Beetle", "Mohler", "DigiKlausur", "SAF", "Stita", "CU-NLP"]
-  # topics: ["language", "ai", "neuro", "memory"] 
-  topics: [] # null or empty list = all topics
+  val_file: val.csv
+  test_file: test.csv
 
 # Output
 output:
   dir: ${paths.output_dir}/peft_output
-  save_model_locally: false
+  save_model_locally: true
   push_to_hub: false
   save_strategy: steps
 
@@ -58,10 +46,10 @@ lora:
 
 # Training hyperparameters
 training:
-  num_epochs: 4 # 3
+  num_epochs: 5 # 3
   batch_size: 
     train: 16 # 16
-    eval: 64 # 16
+    eval: 128 # 16
   gradient_accumulation_steps: 1  # batch_size * gradient_accumulation_steps = 8
   learning_rate: 0.0005 # 0.0002
   weight_decay: 0.01 # 0.01

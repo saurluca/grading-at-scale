@@ -152,93 +152,68 @@ def compute_metrics(eval_pred):
 
 
 def load_and_preprocess_data(
-    dataset_csv: str,
     cache_dir: str | None,
-    seed: int = 42,
-    test_size: float = 0.5,
-    topics: list[str] | None = None,
-    use_split_files: bool = False,
-    train_csv: str | None = None,
-    val_csv: str | None = None,
-    test_csv: str | None = None,
+    train_csv: str,
+    val_csv: str,
+    test_csv: str,
 ):
     """
-    Load and preprocess dataset.
-    
-    Always splits by questions (task_id) to ensure no question overlap between splits.
-    Questions and their answers will only appear in one split (train, val, or test).
+    Load and preprocess dataset from separate train/val/test CSV files.
 
     Args:
-        dataset_csv: Path to single CSV file (used when use_split_files=False)
         cache_dir: Cache directory for datasets
-        seed: Random seed for reproducibility
-        test_size: Fraction of data for test set (only used when use_split_files=False)
-        topics: List of topics to filter (applies to both modes). If None or empty, uses all topics.
-        use_split_files: If True, use separate train/val/test files instead of splitting
-        train_csv: Path to train.csv (used when use_split_files=True)
-        val_csv: Path to val.csv (used when use_split_files=True)
-        test_csv: Path to test.csv (used when use_split_files=True)
+        train_csv: Path to train.csv
+        val_csv: Path to val.csv
+        test_csv: Path to test.csv
 
     Returns:
-        raw_data: DatasetDict with 'train', 'val', and 'test' splits when use_split_files=True,
-                  or 'train' and 'test' splits when use_split_files=False
+        raw_data: DatasetDict with 'train', 'val', and 'test' splits
         label_order: List of label names in order
         label2id: Dict mapping label names to IDs
         id2label: Dict mapping IDs to label names
     """
 
-    if use_split_files:
-        if train_csv is None or val_csv is None or test_csv is None:
-            raise ValueError(
-                "train_csv, val_csv, and test_csv must all be provided when use_split_files=True"
-            )
+    if train_csv is None or val_csv is None or test_csv is None:
+        raise ValueError(
+            "train_csv, val_csv, and test_csv must all be provided"
+        )
 
-        print(f"Loading pre-split datasets from {train_csv}, {val_csv}, and {test_csv} ...")
+    print(f"Loading pre-split datasets from {train_csv}, {val_csv}, and {test_csv} ...")
 
-        # Load separate train, validation, and test files
-        train_dataset = load_dataset(
-            "csv",
-            data_files={"data": train_csv},
-            cache_dir=cache_dir,
-            sep=";",
-        )["data"]
+    # Load separate train, validation, and test files
+    train_dataset = load_dataset(
+        "csv",
+        data_files={"data": train_csv},
+        cache_dir=cache_dir,
+        sep=";",
+    )["data"]
 
-        val_dataset = load_dataset(
-            "csv",
-            data_files={"data": val_csv},
-            cache_dir=cache_dir,
-            sep=";",
-        )["data"]
+    val_dataset = load_dataset(
+        "csv",
+        data_files={"data": val_csv},
+        cache_dir=cache_dir,
+        sep=";",
+    )["data"]
 
-        test_dataset = load_dataset(
-            "csv",
-            data_files={"data": test_csv},
-            cache_dir=cache_dir,
-            sep=";",
-        )["data"]
+    test_dataset = load_dataset(
+        "csv",
+        data_files={"data": test_csv},
+        cache_dir=cache_dir,
+        sep=";",
+    )["data"]
 
-        print(f"Loaded train dataset: {len(train_dataset)} samples")
-        print(f"Loaded validation dataset: {len(val_dataset)} samples")
-        print(f"Loaded test dataset: {len(test_dataset)} samples")
+    print(f"Loaded train dataset: {len(train_dataset)} samples")
+    print(f"Loaded validation dataset: {len(val_dataset)} samples")
+    print(f"Loaded test dataset: {len(test_dataset)} samples")
 
-        # Combine for topic counting and filtering if needed
-        full_dataset = concatenate_datasets([train_dataset, val_dataset, test_dataset])
-    else:
-        print(f"Loading dataset from {dataset_csv} ...")
-        full_dataset = load_dataset(
-            "csv",
-            data_files={"data": dataset_csv},
-            cache_dir=cache_dir,
-            sep=";",
-        )["data"]
-        train_dataset = None
-        val_dataset = None
+    # Combine for topic counting
+    full_dataset = concatenate_datasets([train_dataset, val_dataset, test_dataset])
 
-    # Count samples per topic before any filtering
+    # Count samples per topic
     topic_counts = {}
     for topic in full_dataset["topic"]:
         topic_counts[topic] = topic_counts.get(topic, 0) + 1
-    print(f"\nOriginal dataset topic distribution: {topic_counts}")
+    print(f"\nDataset topic distribution: {topic_counts}")
 
     # Labels mapping (order matters)
     label_order = ["incorrect", "partial", "correct"]
@@ -246,238 +221,24 @@ def load_and_preprocess_data(
     id2label: Dict[int, str] = {i: name for name, i in label2id.items()}
 
     # Map labels on datasets
-    if use_split_files:
-        train_dataset = train_dataset.map(lambda x: map_labels(x, label2id))
-        val_dataset = val_dataset.map(lambda x: map_labels(x, label2id))
-        test_dataset = test_dataset.map(lambda x: map_labels(x, label2id))
-        # Ensure 'labels' is a ClassLabel feature
-        train_dataset = train_dataset.cast_column(
-            "labels", ClassLabel(names=label_order)
-        )
-        val_dataset = val_dataset.cast_column("labels", ClassLabel(names=label_order))
-        test_dataset = test_dataset.cast_column("labels", ClassLabel(names=label_order))
-    else:
-        # Map labels on the full dataset (before splitting)
-        full_dataset = full_dataset.map(lambda x: map_labels(x, label2id))
-        # Ensure 'labels' is a ClassLabel feature to support stratified splitting
-        full_dataset = full_dataset.cast_column("labels", ClassLabel(names=label_order))
+    train_dataset = train_dataset.map(lambda x: map_labels(x, label2id))
+    val_dataset = val_dataset.map(lambda x: map_labels(x, label2id))
+    test_dataset = test_dataset.map(lambda x: map_labels(x, label2id))
+    # Ensure 'labels' is a ClassLabel feature
+    train_dataset = train_dataset.cast_column(
+        "labels", ClassLabel(names=label_order)
+    )
+    val_dataset = val_dataset.cast_column("labels", ClassLabel(names=label_order))
+    test_dataset = test_dataset.cast_column("labels", ClassLabel(names=label_order))
 
-    # Handle topic filtering and train/test split
-    if use_split_files:
-        # When using pre-split files, apply topic filtering to each split separately
-        if topics is not None and len(topics) > 0:
-            print(f"Applying topic filter to pre-split datasets: {topics}")
-
-            # Filter train dataset
-            train_indices = [
-                i for i, ex in enumerate(train_dataset) if ex["topic"] in topics
-            ]
-            train_dataset = train_dataset.select(train_indices)
-
-            # Filter validation dataset
-            val_indices = [
-                i for i, ex in enumerate(val_dataset) if ex["topic"] in topics
-            ]
-            val_dataset = val_dataset.select(val_indices)
-
-            # Filter test dataset
-            test_indices = [
-                i for i, ex in enumerate(test_dataset) if ex["topic"] in topics
-            ]
-            test_dataset = test_dataset.select(test_indices)
-            print(
-                f"After topic filtering: train={len(train_dataset)}, val={len(val_dataset)}, test={len(test_dataset)} samples"
-            )
-
-        # Use pre-split data directly - always have train, val, and test
-        raw = DatasetDict(
-            {
-                "train": train_dataset,
-                "val": val_dataset,
-                "test": test_dataset,
-            }
-        )
-
-    elif topics is not None and len(topics) > 0:
-        print(f"Topic filtering enabled for topics: {topics}")
-
-        # Separate data into in-topic and out-of-topic groups
-        def _is_in_topic(example):
-            return example["topic"] in topics
-
-        in_topic_indices = [
-            i for i, example in enumerate(full_dataset) if _is_in_topic(example)
-        ]
-        out_of_topic_indices = [
-            i for i, example in enumerate(full_dataset) if not _is_in_topic(example)
-        ]
-
-        in_topic_data = full_dataset.select(in_topic_indices)
-        out_of_topic_data = full_dataset.select(out_of_topic_indices)
-
-        print(
-            f"Topic separation: {len(in_topic_data)} in-topic samples, {len(out_of_topic_data)} out-of-topic samples"
-        )
-        print("Out-of-topic samples will be added to test set")
-
-        # Apply split logic to in-topic data - always split by questions (task_id)
-        # Split stratified by topic to maintain topic proportions
-        print("Splitting in-topic data by questions (task_id) with topic stratification...")
-        
-        # Group task_ids by topic for stratified splitting
-        in_topic_df = in_topic_data.to_pandas()
-        task_id_to_topic = in_topic_df.groupby("task_id")["topic"].first().to_dict()
-        topics_to_task_ids = {}
-        for task_id, topic in task_id_to_topic.items():
-            if topic not in topics_to_task_ids:
-                topics_to_task_ids[topic] = []
-            topics_to_task_ids[topic].append(task_id)
-        
-        # Split task_ids by topic to maintain topic proportions
-        rng = np.random.default_rng(seed)
-        train_task_ids = []
-        test_task_ids = []
-        
-        for topic, task_ids in sorted(topics_to_task_ids.items()):
-            # Shuffle task_ids for this topic
-            shuffled_task_ids = task_ids.copy()
-            rng.shuffle(shuffled_task_ids)
-            
-            # Calculate split sizes for this topic
-            n_total = len(shuffled_task_ids)
-            
-            # For very small topics, ensure at least one question in test if possible
-            if n_total == 1:
-                # Only 1 question: put in train (can't split)
-                n_train = 1
-                n_test = 0
-            else:
-                # For 2+ questions, use proportional split
-                n_test = max(1, round(n_total * test_size))  # Round for better distribution
-                n_train = n_total - n_test
-            
-            topic_train = shuffled_task_ids[:n_train]
-            topic_test = shuffled_task_ids[n_train:] if n_test > 0 else []
-            
-            train_task_ids.extend(topic_train)
-            if topic_test:
-                test_task_ids.extend(topic_test)
-            
-            print(
-                f"  Topic '{topic}': {n_total} questions -> train={len(topic_train)}, test={len(topic_test)}"
-            )
-        
-        train_task_ids = set(train_task_ids)
-        test_task_ids = set(test_task_ids)
-        
-        print(
-            f"Total task_ids: train={len(train_task_ids)}, test={len(test_task_ids)}"
-        )
-
-        # Filter the in-topic dataset based on task_id assignment
-        train_indices = [
-            i
-            for i, task_id in enumerate(in_topic_data["task_id"])
-            if task_id in train_task_ids
-        ]
-        test_indices = [
-            i
-            for i, task_id in enumerate(in_topic_data["task_id"])
-            if task_id in test_task_ids
-        ]
-
-        in_topic_split = DatasetDict(
-            {
-                "train": in_topic_data.select(train_indices),
-                "test": in_topic_data.select(test_indices),
-            }
-        )
-
-        # Combine test sets: out-of-topic data + test portion from in-topic split
-        combined_test = concatenate_datasets(
-            [out_of_topic_data, in_topic_split["test"]]
-        )
-
-        raw = DatasetDict(
-            {
-                "train": in_topic_split["train"],
-                "test": combined_test,
-            }
-        )
-
-    else:
-        # No topic filtering - apply split logic to full dataset
-        # Always split by questions (task_id) with topic stratification
-        print("Splitting by questions (task_id) with topic stratification...")
-        
-        # Group task_ids by topic for stratified splitting
-        full_df = full_dataset.to_pandas()
-        task_id_to_topic = full_df.groupby("task_id")["topic"].first().to_dict()
-        topics_to_task_ids = {}
-        for task_id, topic in task_id_to_topic.items():
-            if topic not in topics_to_task_ids:
-                topics_to_task_ids[topic] = []
-            topics_to_task_ids[topic].append(task_id)
-        
-        print(f"Topics found: {sorted(topics_to_task_ids.keys())}")
-        
-        # Split task_ids by topic to maintain topic proportions
-        rng = np.random.default_rng(seed)
-        train_task_ids = []
-        test_task_ids = []
-        
-        for topic, task_ids in sorted(topics_to_task_ids.items()):
-            # Shuffle task_ids for this topic
-            shuffled_task_ids = task_ids.copy()
-            rng.shuffle(shuffled_task_ids)
-            
-            # Calculate split sizes for this topic
-            n_total = len(shuffled_task_ids)
-            
-            # For very small topics, ensure at least one question in test if possible
-            if n_total == 1:
-                # Only 1 question: put in train (can't split)
-                n_train = 1
-                n_test = 0
-            else:
-                # For 2+ questions, use proportional split
-                n_test = max(1, round(n_total * test_size))  # Round for better distribution
-                n_train = n_total - n_test
-            
-            topic_train = shuffled_task_ids[:n_train]
-            topic_test = shuffled_task_ids[n_train:] if n_test > 0 else []
-            
-            train_task_ids.extend(topic_train)
-            if topic_test:
-                test_task_ids.extend(topic_test)
-            
-            print(
-                f"  Topic '{topic}': {n_total} questions -> train={len(topic_train)}, test={len(topic_test)}"
-            )
-        
-        train_task_ids = set(train_task_ids)
-        test_task_ids = set(test_task_ids)
-        
-        print(
-            f"Total task_ids: train={len(train_task_ids)}, test={len(test_task_ids)}"
-        )
-
-        # Filter the full dataset based on task_id assignment
-        train_indices = [
-            i
-            for i, task_id in enumerate(full_dataset["task_id"])
-            if task_id in train_task_ids
-        ]
-        test_indices = [
-            i for i, task_id in enumerate(full_dataset["task_id"]) if task_id in test_task_ids
-        ]
-
-        raw = DatasetDict(
-            {
-                "train": full_dataset.select(train_indices),
-                "test": full_dataset.select(test_indices),
-            }
-        )
+    # Use pre-split data directly - always have train, val, and test
+    raw = DatasetDict(
+        {
+            "train": train_dataset,
+            "val": val_dataset,
+            "test": test_dataset,
+        }
+    )
 
     print(f"Number of training samples: {len(raw['train'])}")
     if "val" in raw:

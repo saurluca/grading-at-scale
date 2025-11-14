@@ -33,28 +33,17 @@ def main() -> None:
     training_cfg = OmegaConf.load(training_cfg_path)
     cfg = OmegaConf.merge(base_cfg, training_cfg)
 
-    # Determine if using split files or single file
-    use_split_files = bool(getattr(cfg.dataset, "use_split_files", False))
-
-    if use_split_files:
-        # Use separate train/val/test files
-        dataset_base_path = PROJECT_ROOT / "data" / cfg.dataset.dataset_name
-        train_csv = str(
-            dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv")
-        )
-        val_csv = str(dataset_base_path / getattr(cfg.dataset, "val_file", "val.csv"))
-        test_csv = str(
-            dataset_base_path / getattr(cfg.dataset, "test_file", "test.csv")
-        )
-        dataset_csv = train_csv  # For logging purposes
-        print(f"Using split files - train: {train_csv}, val: {val_csv}, test: {test_csv}")
-    else:
-        # Use single file to split at runtime
-        dataset_csv = str(PROJECT_ROOT / cfg.dataset.csv_path)
-        train_csv = None
-        val_csv = None
-        test_csv = None
-        print(f"Using single file to split at runtime: {dataset_csv}")
+    # Use separate train/val/test files
+    dataset_base_path = PROJECT_ROOT / "data" / cfg.dataset.dataset_name
+    train_csv = str(
+        dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv")
+    )
+    val_csv = str(dataset_base_path / getattr(cfg.dataset, "val_file", "val.csv"))
+    test_csv = str(
+        dataset_base_path / getattr(cfg.dataset, "test_file", "test.csv")
+    )
+    dataset_csv = train_csv  # For logging purposes
+    print(f"Loading datasets - train: {train_csv}, val: {val_csv}, test: {test_csv}")
 
     model_name: str = str(cfg.model.base)
     output_dir: str = str(PROJECT_ROOT / cfg.output.dir)
@@ -99,17 +88,14 @@ def main() -> None:
         except Exception as e:
             print(f"Warning: Failed to log MLflow Dataset input: {e}")
 
-        # Extract topics from config
-        topics = getattr(cfg.dataset, "topics", None)
-
         # Log parameters
-        # TODO simplify this
         mlflow.log_params(
             {
                 "model_name": model_name,
                 "dataset_name": str(cfg.dataset.dataset_name),
-                "dataset_csv": dataset_csv,
-                "use_split_files": use_split_files,
+                "train_csv": train_csv,
+                "val_csv": val_csv,
+                "test_csv": test_csv,
                 "output_dir": output_dir,
                 "lora_r": int(cfg.lora.r),
                 "lora_alpha": int(cfg.lora.alpha),
@@ -124,11 +110,7 @@ def main() -> None:
                     getattr(cfg.training, "gradient_accumulation_steps", 1)
                 ),
                 "seed": int(getattr(cfg.project, "seed", 42)),
-                "use_unseen_questions": bool(
-                    getattr(cfg.dataset, "use_unseen_questions", False)
-                ),
                 "save_model": bool(getattr(cfg.output, "save_model", True)),
-                "topics": str(topics) if topics is not None else "all",
                 "include_reference_answer": bool(
                     getattr(cfg.tokenization, "include_reference_answer", False)
                 ),
@@ -137,12 +119,7 @@ def main() -> None:
 
         # Load and preprocess data
         raw_data, label_order, label2id, id2label = load_and_preprocess_data(
-            dataset_csv,
             cache_dir,
-            int(getattr(cfg.project, "seed", 42)),
-            test_size=cfg.dataset.test_size,
-            topics=topics,
-            use_split_files=use_split_files,
             train_csv=train_csv,
             val_csv=val_csv,
             test_csv=test_csv,
