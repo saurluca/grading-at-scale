@@ -231,7 +231,14 @@ def main() -> None:
             "huggingface_username is required when adapter_source is 'hub'"
         )
 
-    explicit_dataset_name = getattr(cfg.classifier_eval.adapter, "dataset_name", None)
+    # Get dataset name the model was trained on (for adapter inference)
+    dataset_trained_on_name = getattr(
+        cfg.classifier_eval.adapter, "dataset_trained_on_name", None
+    )
+    if adapter_source != "none" and not dataset_trained_on_name:
+        raise ValueError(
+            "adapter.dataset_trained_on_name is required when adapter_source is not 'none'"
+        )
 
     # Label maps (fixed order)
     label_order: List[str] = ["incorrect", "partial", "correct"]
@@ -249,9 +256,10 @@ def main() -> None:
 
     print(f"Loading evaluation data from CSV: {csv_path}")
 
-    # Extract dataset name for adapter inference
-    dataset_name = extract_dataset_name(csv_path, explicit_dataset_name)
-    print(f"Dataset name for adapter inference: {dataset_name}")
+    # Infer dataset name being tested on from CSV path
+    dataset_test_on_name = extract_dataset_name(csv_path, None)
+    print(f"Dataset trained on: {dataset_trained_on_name}")
+    print(f"Dataset tested on: {dataset_test_on_name}")
 
     # Ensure cache directory is at project root
     cache_dir = str(cfg.paths.hf_cache_dir)
@@ -287,10 +295,10 @@ def main() -> None:
     print(f"\nTokenizing dataset (include_reference_answer={include_ref_ans})...")
     # We'll tokenize per model since tokenizers may differ, but prepare the raw dataset here
 
-    # Setup output directory - infer from dataset name
+    # Setup output directory - infer from test dataset name
     paths_output_dir = str(cfg.paths.output_dir)
     output_dir = os.path.normpath(
-        os.path.join(PROJECT_ROOT, paths_output_dir, dataset_name)
+        os.path.join(PROJECT_ROOT, paths_output_dir, dataset_test_on_name)
     )
     os.makedirs(output_dir, exist_ok=True)
     print(f"Output directory: {output_dir}")
@@ -316,13 +324,13 @@ def main() -> None:
         print(f"MODEL {model_idx}/{len(models_list)}: {base_model_name}{device_info}")
         print(f"{'=' * 60}")
 
-        # Infer adapter path
+        # Infer adapter path using dataset_trained_on_name
         adapter_path = None
         if adapter_source != "none":
             paths_output_dir = str(cfg.paths.output_dir)
             adapter_path = infer_adapter_path(
                 model_name=base_model_name,
-                dataset_name=dataset_name,
+                dataset_name=dataset_trained_on_name,
                 adapter_source=adapter_source,
                 hf_username=hf_username,
                 project_root=PROJECT_ROOT,
@@ -359,7 +367,8 @@ def main() -> None:
                     "model_name": base_model_name,
                     "adapter_source": adapter_source,
                     "adapter_path": str(adapter_path) if adapter_path else "none",
-                    "dataset_name": dataset_name,
+                    "dataset_trained_on_name": dataset_trained_on_name if dataset_trained_on_name else "none",
+                    "dataset_test_on_name": dataset_test_on_name,
                     "dataset_csv_path": csv_path,
                     "batch_size": per_device_eval_batch_size,
                     "sample_fraction": sample_fraction,

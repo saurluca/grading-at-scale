@@ -16,10 +16,10 @@ classifier_eval:
     source: local # Options: 'local', 'hub', or 'none' (for base model only)
     # HuggingFace username for hub adapters (required if source is 'hub')
     huggingface_username: saurluca
-    # Dataset name for adapter inference (optional, will be inferred from csv_path if not provided)
-    dataset_name: gras
-    # For 'hub': adapter path will be inferred as {huggingface_username}/{sanitized_model_name}-lora-{dataset_name}
-    # For 'local': adapter path will be inferred as ${paths.output_dir}/peft_output/adapter-{sanitized_model_name}-{dataset_name}
+    # Dataset name the model was trained on (required for adapter inference)
+    dataset_trained_on_name: gras
+    # For 'hub': adapter path will be inferred as {huggingface_username}/{sanitized_model_name}-lora-{dataset_trained_on_name}
+    # For 'local': adapter path will be inferred as ${paths.output_dir}/peft_output/adapter-{sanitized_model_name}-{dataset_trained_on_name}
     # For 'none': no adapter will be loaded, base model will be used directly
 
   dataset:
@@ -30,7 +30,7 @@ classifier_eval:
     sample_fraction: 1.0 # Use 100% of data by default (0.0-1.0)
     sample_seed: 24 # Seed for reproducible sampling
 
-  batch_size: 512
+  batch_size: 256
   
   # CPU enforcement and evaluation options
   enforce_cpu: false  # Set to true to force CPU-only execution (useful for CPU-only environments)
