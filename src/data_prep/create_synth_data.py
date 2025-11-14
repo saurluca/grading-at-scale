@@ -63,6 +63,7 @@ DEFAULT_PASS_REFERENCE_ANSWER = {
     "incorrect": False,
 }
 
+
 def _should_pass_reference_answer(label: str) -> bool:
     return bool(
         getattr(
@@ -73,18 +74,14 @@ def _should_pass_reference_answer(label: str) -> bool:
     )
 
 
-def _build_kwargs_single(
-    label: str, question: str, reference_answer: str
-):
+def _build_kwargs_single(label: str, question: str, reference_answer: str):
     kwargs = {"question": question}
     if _should_pass_reference_answer(label):
         kwargs["reference_answer"] = reference_answer
     return kwargs
 
 
-def _build_kwargs_perq(
-    label: str, question: str, reference_answer: str, count: int
-):
+def _build_kwargs_perq(label: str, question: str, reference_answer: str, count: int):
     kwargs = _build_kwargs_single(label, question, reference_answer)
     kwargs["number_of_answers_per_question"] = count
     return kwargs
@@ -156,9 +153,7 @@ def generate_student_answers_df(
             predictor = models.get(label)
             for i in range(count):
                 try:
-                    kwargs = _build_kwargs_single(
-                        label, question, reference_answer
-                    )
+                    kwargs = _build_kwargs_single(label, question, reference_answer)
                     result = predictor(**kwargs)
                     ans = getattr(result, "answer", None)
                 except Exception as e:
@@ -194,9 +189,7 @@ def generate_student_answers_df_per_question(
                 continue
             predictor = models.get(label)
             try:
-                kwargs = _build_kwargs_perq(
-                    label, question, reference_answer, count
-                )
+                kwargs = _build_kwargs_perq(label, question, reference_answer, count)
                 res = predictor(**kwargs)
                 answers = res.answers
                 if len(answers) >= count:

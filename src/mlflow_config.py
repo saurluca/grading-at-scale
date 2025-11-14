@@ -54,7 +54,9 @@ def setup_mlflow(cfg: DictConfig, project_root: Optional[Path] = None) -> None:
         default_db = str(project_root / "mlflow.db")
         default_uri = f"sqlite:///{default_db}"
         mlflow.set_tracking_uri(default_uri)
-        print(f"MLflow tracking URI not specified in config, using default: {default_uri}")
+        print(
+            f"MLflow tracking URI not specified in config, using default: {default_uri}"
+        )
 
 
 def get_tracking_uri(cfg: DictConfig, project_root: Optional[Path] = None) -> str:
@@ -84,4 +86,3 @@ def get_tracking_uri(cfg: DictConfig, project_root: Optional[Path] = None) -> st
         tracking_uri = f"sqlite:///{db_path}"
 
     return tracking_uri or f"sqlite:///{project_root / 'mlflow.db'}"
-

@@ -109,16 +109,15 @@ def tokenize_fn(
     reference_answers = batch.get("reference_answer", [""] * batch_size)
 
     texts = []
-    for q, a, ref_ans in zip(
-        questions, student_answers, reference_answers
-    ):
+    for q, a, ref_ans in zip(questions, student_answers, reference_answers):
         parts = [f"Question: {q}", f"Answer: {a}"]
         if include_reference_answer and isinstance(ref_ans, str) and ref_ans.strip():
             parts.append(f"Reference answer: {ref_ans}")
         texts.append("\n".join(parts))
 
     return tokenizer(texts, truncation=True, max_length=1024)
- 
+
+
 def compute_metrics(eval_pred):
     """Compute accuracy, macro_f1, and weighted_f1 using logits and labels from EvalPrediction or tuple."""
     # Support both (logits, labels) tuple and EvalPrediction object
@@ -133,17 +132,17 @@ def compute_metrics(eval_pred):
 
     predictions = np.argmax(logits, axis=-1)
     accuracy = (predictions == labels).astype(np.float32).mean().item()
-    
+
     # Calculate F1 scores
     _, _, f1, _ = precision_recall_fscore_support(
         labels, predictions, average=None, zero_division=0
     )
     macro_f1 = np.mean(f1).item()
-    
+
     _, _, weighted_f1, _ = precision_recall_fscore_support(
         labels, predictions, average="weighted", zero_division=0
     )
-    
+
     return {
         "accuracy": accuracy,
         "macro_f1": macro_f1,
@@ -220,9 +219,7 @@ def load_and_preprocess_data(
     val_dataset = val_dataset.map(lambda x: map_labels(x, label2id))
     test_dataset = test_dataset.map(lambda x: map_labels(x, label2id))
     # Ensure 'labels' is a ClassLabel feature
-    train_dataset = train_dataset.cast_column(
-        "labels", ClassLabel(names=label_order)
-    )
+    train_dataset = train_dataset.cast_column("labels", ClassLabel(names=label_order))
     val_dataset = val_dataset.cast_column("labels", ClassLabel(names=label_order))
     test_dataset = test_dataset.cast_column("labels", ClassLabel(names=label_order))
 
@@ -239,9 +236,9 @@ def load_and_preprocess_data(
     if "val" in raw:
         print(f"Number of validation samples: {len(raw['val'])}")
     print(f"Number of test samples: {len(raw['test'])}")
-    total_samples = len(raw['train']) + len(raw['test'])
+    total_samples = len(raw["train"]) + len(raw["test"])
     if "val" in raw:
-        total_samples += len(raw['val'])
+        total_samples += len(raw["val"])
     print(f"Total samples: {total_samples}")
 
     # Show per-class counts in test set for verification
@@ -306,7 +303,7 @@ def setup_model_and_tokenizer(
 def setup_training_args(cfg, output_dir: str):
     """Setup training arguments."""
     # IT IS EVAL_STRATEGY, NOT EVALUATION_STRATEGY
-    
+
     # Check if eval_steps is configured for step-based evaluation
     eval_steps = getattr(cfg.training, "eval_steps", None)
     if eval_steps is not None:
@@ -316,7 +313,7 @@ def setup_training_args(cfg, output_dir: str):
     else:
         eval_strategy = str(getattr(cfg.training, "eval_strategy", "epoch"))
         save_strategy = str(getattr(cfg.output, "save_strategy", "epoch"))
-    
+
     training_args_dict = {
         "output_dir": output_dir,
         "num_train_epochs": float(cfg.training.num_epochs),
@@ -337,30 +334,32 @@ def setup_training_args(cfg, output_dir: str):
         "save_total_limit": 1,  # Only keep best checkpoint
         "gradient_accumulation_steps": int(cfg.training.gradient_accumulation_steps),
     }
-    
+
     # Add eval_steps if using step-based evaluation
     if eval_steps is not None:
         training_args_dict["eval_steps"] = eval_steps
-    
+
     return TrainingArguments(**training_args_dict)
 
 
 def setup_trainer(model, training_args, tokenized_data, tokenizer, cfg=None):
     print("Setting up trainer...")
     data_collator = DataCollatorWithPadding(tokenizer)
-    
+
     # Use validation set if available, otherwise fallback to test set
     eval_dataset = tokenized_data.get("val", tokenized_data.get("test"))
-    
+
     # Setup early stopping callback if patience is configured
     callbacks = []
     if cfg is not None:
         early_stopping_patience = getattr(cfg.training, "early_stopping_patience", None)
         if early_stopping_patience is not None:
             early_stopping_patience = int(early_stopping_patience)
-            callbacks.append(EarlyStoppingCallback(early_stopping_patience=early_stopping_patience))
+            callbacks.append(
+                EarlyStoppingCallback(early_stopping_patience=early_stopping_patience)
+            )
             print(f"Early stopping enabled with patience={early_stopping_patience}")
-    
+
     return Trainer(
         model=model,
         args=training_args,
@@ -381,9 +380,7 @@ def tokenize_dataset(
     print("Tokenizing dataset...")
 
     def tokenize_batch(batch: Dict[str, Any]) -> Dict[str, Any]:
-        return tokenize_fn(
-            batch, tokenizer, include_reference_answer
-        )
+        return tokenize_fn(batch, tokenizer, include_reference_answer)
 
     # Get column names from any available split (e.g., "train" or "test")
     first_split = next(iter(raw_data.keys()))
@@ -548,20 +545,18 @@ def detailed_evaluation(trainer, test_dataset, label_order):
             topic_support = len(topic_indices)
 
             # Calculate quadratic weighted kappa (consistent with overall)
-            topic_kappa = cohen_kappa_score(topic_y_true, topic_y_pred, weights="quadratic")
+            topic_kappa = cohen_kappa_score(
+                topic_y_true, topic_y_pred, weights="quadratic"
+            )
 
             # Calculate macro F1 for this topic
-            _, _, topic_f1_macro, _ = (
-                precision_recall_fscore_support(
-                    topic_y_true, topic_y_pred, average="macro", zero_division=0
-                )
+            _, _, topic_f1_macro, _ = precision_recall_fscore_support(
+                topic_y_true, topic_y_pred, average="macro", zero_division=0
             )
 
             # Calculate weighted F1 for this topic
-            _, _, topic_f1_weighted, _ = (
-                precision_recall_fscore_support(
-                    topic_y_true, topic_y_pred, average="weighted", zero_division=0
-                )
+            _, _, topic_f1_weighted, _ = precision_recall_fscore_support(
+                topic_y_true, topic_y_pred, average="weighted", zero_division=0
             )
 
             # Store metrics

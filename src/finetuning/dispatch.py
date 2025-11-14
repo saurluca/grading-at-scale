@@ -13,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 def main() -> None:
     base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
-    
+
     # Check if TRAINING_CONFIG_PATH is set (for direct runs)
     training_cfg_path = os.environ.get("TRAINING_CONFIG_PATH")
     if training_cfg_path and Path(training_cfg_path).exists():
@@ -22,7 +22,7 @@ def main() -> None:
         # Default to training.yaml
         training_path = PROJECT_ROOT / "configs" / "training.yaml"
         training_cfg = OmegaConf.load(training_path)
-    
+
     cfg = OmegaConf.merge(base_cfg, training_cfg)
 
     dispatcher = getattr(cfg, "dispatcher", {})

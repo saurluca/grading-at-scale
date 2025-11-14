@@ -91,23 +91,29 @@ for topic, task_ids in sorted(topics_to_task_ids.items()):
     shuffled_task_ids = task_ids.copy()
     rng.shuffle(shuffled_task_ids)
     n_total = len(shuffled_task_ids)
-    
+
     # Calculate total label counts for this topic
     topic_label_counts = np.array([0, 0, 0])
     for task_id in shuffled_task_ids:
-        topic_label_counts += np.array([task_id_label_counts[task_id][i] for i in range(3)])
-    
+        topic_label_counts += np.array(
+            [task_id_label_counts[task_id][i] for i in range(3)]
+        )
+
     # Calculate target label counts per split (60/20/20)
     target_counts = {
-        'train': np.round(topic_label_counts * 0.6).astype(int),
-        'val': np.round(topic_label_counts * 0.2).astype(int),
-        'test': np.round(topic_label_counts * 0.2).astype(int),
+        "train": np.round(topic_label_counts * 0.6).astype(int),
+        "val": np.round(topic_label_counts * 0.2).astype(int),
+        "test": np.round(topic_label_counts * 0.2).astype(int),
     }
     # Adjust for rounding errors - add remainder to train
     for i in range(3):
-        diff = topic_label_counts[i] - (target_counts['train'][i] + target_counts['val'][i] + target_counts['test'][i])
-        target_counts['train'][i] += diff
-    
+        diff = topic_label_counts[i] - (
+            target_counts["train"][i]
+            + target_counts["val"][i]
+            + target_counts["test"][i]
+        )
+        target_counts["train"][i] += diff
+
     # Calculate number of questions per split
     if n_total <= 2:
         n_train, n_val, n_test = n_total, 0, 0
@@ -117,24 +123,24 @@ for topic, task_ids in sorted(topics_to_task_ids.items()):
         n_test = max(1, round(n_total * 0.2))
         n_val = max(1, round(n_total * 0.2))
         n_train = n_total - n_test - n_val
-    
+
     # Initialize splits: (task_ids list, current label counts, max questions)
     splits = {
-        'train': ([], np.array([0, 0, 0]), n_train),
-        'val': ([], np.array([0, 0, 0]), n_val),
-        'test': ([], np.array([0, 0, 0]), n_test),
+        "train": ([], np.array([0, 0, 0]), n_train),
+        "val": ([], np.array([0, 0, 0]), n_val),
+        "test": ([], np.array([0, 0, 0]), n_test),
     }
-    
+
     # Greedy assignment: assign each task_id to minimize label imbalance
     for task_id in shuffled_task_ids:
         task_labels = np.array([task_id_label_counts[task_id][i] for i in range(3)])
-        
+
         if n_total <= 2:
-            best_split = 'train'
+            best_split = "train"
         else:
             # Find split with space that minimizes distance to target
-            best_split = 'train'
-            best_distance = float('inf')
+            best_split = "train"
+            best_distance = float("inf")
             for split_name, (task_list, label_counts, max_q) in splits.items():
                 if len(task_list) >= max_q:
                     continue
@@ -143,25 +149,29 @@ for topic, task_ids in sorted(topics_to_task_ids.items()):
                 if distance < best_distance:
                     best_distance = distance
                     best_split = split_name
-        
+
         # Assign to chosen split
         task_list, label_counts, _ = splits[best_split]
         task_list.append(task_id)
-        splits[best_split] = (task_list, label_counts + task_labels, splits[best_split][2])
-    
+        splits[best_split] = (
+            task_list,
+            label_counts + task_labels,
+            splits[best_split][2],
+        )
+
     # Extract results
-    topic_train = splits['train'][0]
-    topic_val = splits['val'][0]
-    topic_test = splits['test'][0]
-    
+    topic_train = splits["train"][0]
+    topic_val = splits["val"][0]
+    topic_test = splits["test"][0]
+
     train_task_ids.extend(topic_train)
     val_task_ids.extend(topic_val)
     test_task_ids.extend(topic_test)
-    
+
     # Print assignment with label distribution
-    train_labels = splits['train'][1]
-    val_labels = splits['val'][1]
-    test_labels = splits['test'][1]
+    train_labels = splits["train"][1]
+    val_labels = splits["val"][1]
+    test_labels = splits["test"][1]
     print(
         f"Topic '{topic}': {n_total} questions -> "
         f"train={len(topic_train)}, val={len(topic_val)}, test={len(topic_test)} | "
@@ -185,18 +195,24 @@ print("=" * 80)
 
 # Calculate label counts for each split using numpy arrays
 split_label_counts = {
-    'train': np.array([0, 0, 0]),
-    'val': np.array([0, 0, 0]),
-    'test': np.array([0, 0, 0]),
+    "train": np.array([0, 0, 0]),
+    "val": np.array([0, 0, 0]),
+    "test": np.array([0, 0, 0]),
 }
 
-for split_name, task_ids in [('train', train_task_ids), ('val', val_task_ids), ('test', test_task_ids)]:
+for split_name, task_ids in [
+    ("train", train_task_ids),
+    ("val", val_task_ids),
+    ("test", test_task_ids),
+]:
     for task_id in task_ids:
-        split_label_counts[split_name] += np.array([task_id_label_counts[task_id][i] for i in range(3)])
+        split_label_counts[split_name] += np.array(
+            [task_id_label_counts[task_id][i] for i in range(3)]
+        )
 
 # Print label distribution
-label_names = ['incorrect', 'partial', 'correct']
-for split_name in ['train', 'val', 'test']:
+label_names = ["incorrect", "partial", "correct"]
+for split_name in ["train", "val", "test"]:
     counts = split_label_counts[split_name]
     total = counts.sum()
     print(f"\n{split_name.upper()}:")
@@ -214,18 +230,20 @@ print("=" * 80)
 for topic in sorted(topics_to_task_ids.keys()):
     print(f"\nTopic: {topic}")
     topic_splits = {
-        'train': [tid for tid in train_task_ids if task_id_to_topic.get(tid) == topic],
-        'val': [tid for tid in val_task_ids if task_id_to_topic.get(tid) == topic],
-        'test': [tid for tid in test_task_ids if task_id_to_topic.get(tid) == topic],
+        "train": [tid for tid in train_task_ids if task_id_to_topic.get(tid) == topic],
+        "val": [tid for tid in val_task_ids if task_id_to_topic.get(tid) == topic],
+        "test": [tid for tid in test_task_ids if task_id_to_topic.get(tid) == topic],
     }
-    
+
     for split_name, topic_task_ids in topic_splits.items():
         if not topic_task_ids:
             continue
         counts = np.array([0, 0, 0])
         for task_id in topic_task_ids:
             counts += np.array([task_id_label_counts[task_id][i] for i in range(3)])
-        print(f"  {split_name:6}: incorrect={counts[0]:4}, partial={counts[1]:4}, correct={counts[2]:4} (total={counts.sum()})")
+        print(
+            f"  {split_name:6}: incorrect={counts[0]:4}, partial={counts[1]:4}, correct={counts[2]:4} (total={counts.sum()})"
+        )
 
 print("=" * 80 + "\n")
 
@@ -241,9 +259,13 @@ test_indices = [
 ]
 
 # Convert back to datasets
-train_dataset = Dataset.from_pandas(df_combined.iloc[train_indices].reset_index(drop=True))
+train_dataset = Dataset.from_pandas(
+    df_combined.iloc[train_indices].reset_index(drop=True)
+)
 val_dataset = Dataset.from_pandas(df_combined.iloc[val_indices].reset_index(drop=True))
-test_dataset = Dataset.from_pandas(df_combined.iloc[test_indices].reset_index(drop=True))
+test_dataset = Dataset.from_pandas(
+    df_combined.iloc[test_indices].reset_index(drop=True)
+)
 
 # Create final dataset with 6/2/2 split (60% train, 20% val, 20% test)
 final_dataset = DatasetDict(

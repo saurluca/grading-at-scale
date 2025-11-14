@@ -35,13 +35,9 @@ def main() -> None:
 
     # Use separate train/val/test files
     dataset_base_path = PROJECT_ROOT / "data" / cfg.dataset.dataset_name
-    train_csv = str(
-        dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv")
-    )
+    train_csv = str(dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv"))
     val_csv = str(dataset_base_path / getattr(cfg.dataset, "val_file", "val.csv"))
-    test_csv = str(
-        dataset_base_path / getattr(cfg.dataset, "test_file", "test.csv")
-    )
+    test_csv = str(dataset_base_path / getattr(cfg.dataset, "test_file", "test.csv"))
     dataset_csv = train_csv  # For logging purposes
     print(f"Loading datasets - train: {train_csv}, val: {val_csv}, test: {test_csv}")
 
@@ -133,7 +129,9 @@ def main() -> None:
         }
         if "val" in raw_data:
             dataset_info["val_size"] = len(raw_data["val"])
-            dataset_info["total_size"] = len(raw_data["train"]) + len(raw_data["val"]) + len(raw_data["test"])
+            dataset_info["total_size"] = (
+                len(raw_data["train"]) + len(raw_data["val"]) + len(raw_data["test"])
+            )
         mlflow.log_params(dataset_info)
 
         # Setup model and tokenizer
@@ -164,19 +162,17 @@ def main() -> None:
         include_ref_ans = bool(
             getattr(cfg.tokenization, "include_reference_answer", False)
         )
-        tokenized_data = tokenize_dataset(
-            raw_data, tokenizer, include_ref_ans
-        )
+        tokenized_data = tokenize_dataset(raw_data, tokenizer, include_ref_ans)
 
         # Setup training arguments and trainer
         training_args = setup_training_args(cfg, output_dir)
-        
+
         # Log eval_strategy and eval_steps after setup (since they may be overridden)
         eval_strategy_to_log = training_args.eval_strategy
         mlflow.log_param("eval_strategy", eval_strategy_to_log)
         if eval_strategy_to_log == "steps":
             mlflow.log_param("eval_steps", training_args.eval_steps)
-        
+
         trainer = setup_trainer(model, training_args, tokenized_data, tokenizer, cfg)
 
         # Training
