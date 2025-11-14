@@ -10,7 +10,7 @@ from pathlib import Path
 
 # Set style
 # sns.set_style("whitegrid")
-plt.rcParams["figure.figsize"] = (12, 8)
+plt.rcParams["figure.figsize"] = (12, 3)
 plt.rcParams["font.size"] = 11
 
 # Paths
@@ -100,7 +100,7 @@ def main():
     df_sorted = pd.concat([gpt4o_row, other_rows], ignore_index=True)
 
     # Create the plot
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(12, 3 ))
 
     # Create color palette - highlight GPT-4o
     colors = [
