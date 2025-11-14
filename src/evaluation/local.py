@@ -416,7 +416,7 @@ def main() -> None:
 
             # Verify model is on correct device if CPU enforcement is enabled
             if enforce_cpu:
-                print(f"\nModel device check:")
+                print("\nModel device check:")
                 for name, param in model.named_parameters():
                     if param.device.type != "cpu":
                         print(

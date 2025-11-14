@@ -160,7 +160,7 @@ def split_by_topics(
     elif not val_indices:
         # If train is too small, use train as val (trainer will handle this)
         val_indices = train_indices.copy()
-        print(f"Warning: Train set too small, using train as validation set")
+        print("Warning: Train set too small, using train as validation set")
 
     # Test data uses all task_ids from test topics
     test_indices = list(range(len(test_data)))
@@ -254,7 +254,7 @@ def split_by_topics(
             }
         )
 
-    print(f"\nFinal split sizes:")
+    print("\nFinal split sizes:")
     print(
         f"  Train: {len(raw['train'])} samples"
         + (
@@ -393,7 +393,7 @@ def main() -> None:
             f"Out-of-fold samples: {out_of_fold_samples} samples from test topics will be included in training"
         )
     else:
-        print(f"Out-of-fold samples: Disabled (0)")
+        print("Out-of-fold samples: Disabled (0)")
 
     # Generate all combinations of train_topics_count topics for training
     train_topic_combinations = list(

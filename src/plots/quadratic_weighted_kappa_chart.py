@@ -6,7 +6,6 @@ Includes error bars based on aggregated model performance.
 
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 from pathlib import Path
 
 # Set style

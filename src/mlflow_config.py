@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 import mlflow
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
 
 def setup_mlflow(cfg: DictConfig, project_root: Optional[Path] = None) -> None:

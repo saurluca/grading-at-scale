@@ -276,7 +276,7 @@ final_dataset = DatasetDict(
     }
 )
 
-print(f"Final split sizes:")
+print("Final split sizes:")
 print(f"Train: {len(final_dataset['train'])} samples")
 print(f"Validation: {len(final_dataset['val'])} samples")
 print(f"Test: {len(final_dataset['test'])} samples")
