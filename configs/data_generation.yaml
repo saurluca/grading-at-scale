@@ -4,7 +4,7 @@
 
 # Model selection for generation and evaluation
 generation_model: gpt-4o
-teacher_model: gpt-4o-mini
+teacher_model: gpt-4o
 
 # Input/Output paths
 input:
@@ -43,9 +43,3 @@ lm:
   temp_evaluation: 0.6
   cache: true
   max_tokens: 512 # Overridden based on mode
-
-# External dataset configuration
-external_datasets:
-  scientsbank:
-    dataset_dir: data/SciEntsBank_3way
-    eval_split: test_ua
