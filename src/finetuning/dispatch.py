@@ -49,31 +49,25 @@ def main() -> None:
     models_list = dispatcher.get("models")
     seeds_list = dispatcher.get("seeds")
 
+    if not models_list:
+        raise ValueError("dispatcher.models must be provided (list of model names)")
+
     if seeds_list:
         seeds = [int(s) for s in seeds_list]
         num_runs = len(seeds)
     else:
         num_runs = int(dispatcher.get("num_runs", 1))
-        seed_strategy = str(dispatcher.get("seed_strategy", "same"))
-        base_seed = int(getattr(cfg.project, "seed", 42))
-
-        if seed_strategy == "random":
-            random.seed(int(time.time()))
-            seeds = [random.randint(0, 2**31 - 1) for _ in range(num_runs)]
-        else:
-            seeds = [base_seed for _ in range(num_runs)]
+        # Always use random seeds if seeds not provided
+        random.seed(int(time.time()))
+        seeds = [random.randint(0, 2**31 - 1) for _ in range(num_runs)]
 
     run_dir = PROJECT_ROOT / "configs" / ".runs"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     runner = select_main(task_type)
 
-    # Determine which model names to run: either an explicit list from dispatcher.models
-    # or fall back to the single base model in cfg.model.base
-    if models_list:
-        model_names = [str(m) for m in models_list]
-    else:
-        model_names = [str(cfg.model.base)]
+    # Always use models list from dispatcher
+    model_names = [str(m) for m in models_list]
 
     for model_name in model_names:
         safe_model = model_name.replace("/", "_").replace(":", "_")

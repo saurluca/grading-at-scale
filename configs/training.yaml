@@ -1,19 +1,10 @@
-# Model selection
-model:
-  # base: meta-llama/Llama-3.2-1B-Instruct
-  # base: openai-community/gpt2-large
-  # base: google/flan-t5-base
-  base: Qwen/Qwen3-0.6B
-
 # Task selection for dispatcher
 task_type: lora-classification  # lora-classification | lora-classification-gridsearch
 
 # Dispatcher controls
 dispatcher:
   num_runs: 5
-  seed_strategy: random  # same | random
-  # seeds: [42,43,44]          # optional list; if provided, overrides both above
-  # optional list of model base names to run; if empty uses model.base
+  # seeds: [42,43,44]  # optional list; if not provided, random seeds will be used
   models: 
     - meta-llama/Llama-3.2-1B-Instruct
     - openai-community/gpt2-large
