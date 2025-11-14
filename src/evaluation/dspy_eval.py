@@ -396,7 +396,6 @@ def log_config_params_to_mlflow(cfg):
     """Log configuration parameters to MLflow, excluding paths."""
     # Parameters to exclude
     exclude_keys = {
-        "csv_test",
         "dir",  # file paths and directories
     }
 
@@ -470,7 +469,7 @@ assert mode in {"single", "per_question"}, (
 print(f"Evaluation mode: {mode}")
 
 # Load test dataset
-test_csv_path = os.path.join(PROJECT_ROOT, cfg.dataset.csv_test)
+test_csv_path = os.path.join(PROJECT_ROOT, cfg.dataset.test_csv)
 print(f"Loading test set from {test_csv_path}")
 test_df = pd.read_csv(test_csv_path, sep=";")
 print(f"Test set size: {len(test_df)}")
@@ -479,92 +478,110 @@ print(f"Test set size: {len(test_df)}")
 pass_reference_answer = getattr(cfg.model, "pass_reference_answer", True)
 
 # Configure MLflow experiment
-mlflow.set_experiment("DSPy-Evaluation")
+experiment_name = OmegaConf.select(cfg, "mlflow.experiment_name", default="DSPy-Evaluation")
+mlflow.set_experiment(experiment_name)
 
-# Start MLflow run
+# Get number of runs from config
+num_runs = OmegaConf.select(cfg, "evaluation.num_runs", default=1)
+print(f"Running evaluation {num_runs} time(s)")
+
+# Start MLflow runs
 model_short = model_name.split("/")[-1]
-run_name = f"{model_short}_{mode}"
+base_run_name = f"{model_short}_{mode}"
 
-try:
-    with mlflow.start_run(run_name=run_name) as run:
-        # Log model name and evaluation method as parameters
-        mlflow.log_param("model", model_name)
-        mlflow.log_param("mode", mode)
-        mlflow.log_param("evaluation_method", "dspy")
-        log_config_params_to_mlflow(cfg)
+for run_idx in range(num_runs):
+    run_name = f"{base_run_name}_run{run_idx + 1}" if num_runs > 1 else base_run_name
+    print(f"\n{'=' * 80}")
+    print(f"Starting run {run_idx + 1}/{num_runs}: {run_name}")
+    print(f"{'=' * 80}")
 
-        # Log test dataset as MLflow Dataset
-        test_ml_dataset = mlflow.data.from_pandas(
-            test_df, source=test_csv_path, name="test_dataset"
-        )
-        mlflow.log_input(test_ml_dataset, context="evaluation")
+    try:
+        with mlflow.start_run(run_name=run_name) as run:
+            # Log model name and evaluation method as parameters
+            mlflow.log_param("model", model_name)
+            mlflow.log_param("mode", mode)
+            mlflow.log_param("evaluation_method", "dspy")
+            mlflow.log_param("run_number", run_idx + 1)
+            mlflow.log_param("test_csv", cfg.dataset.test_csv)
+            log_config_params_to_mlflow(cfg)
 
-        # Build LM
-        build_lm_kwargs = {
-            "max_tokens": cfg.model.max_tokens,
-            "cache": cfg.model.cache,
-        }
-        if hasattr(cfg.model, "temperature") and cfg.model.temperature is not None:
-            build_lm_kwargs["temperature"] = cfg.model.temperature
+            # Log test dataset as MLflow Dataset
+            test_ml_dataset = mlflow.data.from_pandas(
+                test_df, source=test_csv_path, name="test_dataset"
+            )
+            mlflow.log_input(test_ml_dataset, context="evaluation")
 
-        grader_lm = build_lm(model_name, **build_lm_kwargs)
-        print(f"Using DSPy LM {model_name}")
+            # Build LM
+            build_lm_kwargs = {
+                "max_tokens": cfg.model.max_tokens,
+                "cache": cfg.model.cache,
+            }
+            if hasattr(cfg.model, "temperature") and cfg.model.temperature is not None:
+                build_lm_kwargs["temperature"] = cfg.model.temperature
 
-        dspy.configure(lm=grader_lm)
+            grader_lm = build_lm(model_name, **build_lm_kwargs)
+            print(f"Using DSPy LM {model_name}")
 
-        # Create graders based on mode
-        grader_single = dspy.Predict(GraderSingle_without_prompt)
-        grader_single.set_lm(grader_lm)
+            dspy.configure(lm=grader_lm)
 
-        grader_perq = dspy.Predict(GraderPerQuestion)
-        grader_perq.set_lm(grader_lm)
+            # Create graders based on mode
+            grader_single = dspy.Predict(GraderSingle_without_prompt)
+            grader_single.set_lm(grader_lm)
 
-        # Collect predictions
-        print("Running evaluation...")
-        y_true, y_pred = collect_predictions(
-            test_df,
-            grader_single,
-            grader_perq,
-            mode,
-            pass_reference_answer,
-        )
+            grader_perq = dspy.Predict(GraderPerQuestion)
+            grader_perq.set_lm(grader_lm)
 
-        # Compute comprehensive metrics
-        evaluation_metrics = compute_evaluation_metrics(
-            y_true, y_pred, test_df, label_order=["incorrect", "partial", "correct"]
-        )
+            # Collect predictions
+            print("Running evaluation...")
+            y_true, y_pred = collect_predictions(
+                test_df,
+                grader_single,
+                grader_perq,
+                mode,
+                pass_reference_answer,
+            )
 
-        # Log all metrics to MLflow
-        for metric_name, metric_value in evaluation_metrics.items():
-            # Skip y_true and y_pred from MLflow metrics (they're arrays, not scalars)
-            if metric_name not in ["y_true", "y_pred"]:
-                mlflow.log_metric(metric_name, metric_value)
+            # Compute comprehensive metrics
+            evaluation_metrics = compute_evaluation_metrics(
+                y_true, y_pred, test_df, label_order=["incorrect", "partial", "correct"]
+            )
 
-        # Plot and save confusion matrix
-        model_short_safe = model_short.replace("/", "_").replace("-", "_")
-        mode_suffix = {"single": "single", "per_question": "perq"}.get(mode, mode)
-        confusion_matrix_path = os.path.join(
-            output_dir, f"confusion_matrix_{model_short_safe}_{mode_suffix}.png"
-        )
-        plot_confusion_matrix(
-            evaluation_metrics["y_true"],
-            evaluation_metrics["y_pred"],
-            save_path=confusion_matrix_path,
-        )
+            # Log all metrics to MLflow
+            for metric_name, metric_value in evaluation_metrics.items():
+                # Skip y_true and y_pred from MLflow metrics (they're arrays, not scalars)
+                if metric_name not in ["y_true", "y_pred"]:
+                    mlflow.log_metric(metric_name, metric_value)
 
-        # Log confusion matrix image to MLflow
-        if os.path.exists(confusion_matrix_path):
-            mlflow.log_artifact(confusion_matrix_path, "confusion_matrices")
+            # Plot and save confusion matrix
+            model_short_safe = model_short.replace("/", "_").replace("-", "_")
+            mode_suffix = {"single": "single", "per_question": "perq"}.get(mode, mode)
+            run_suffix = f"_run{run_idx + 1}" if num_runs > 1 else ""
+            confusion_matrix_path = os.path.join(
+                output_dir, f"confusion_matrix_{model_short_safe}_{mode_suffix}{run_suffix}.png"
+            )
+            plot_confusion_matrix(
+                evaluation_metrics["y_true"],
+                evaluation_metrics["y_pred"],
+                save_path=confusion_matrix_path,
+            )
 
-        print(f"\nEvaluation complete. MLflow run ID: {run.info.run_id}")
+            # Log confusion matrix image to MLflow
+            if os.path.exists(confusion_matrix_path):
+                mlflow.log_artifact(confusion_matrix_path, "confusion_matrices")
 
-except Exception as e:
-    print(f"Error during evaluation: {e}")
-    import traceback
+            print(f"\nRun {run_idx + 1}/{num_runs} complete. MLflow run ID: {run.info.run_id}")
 
-    traceback.print_exc()
-    raise
+    except Exception as e:
+        print(f"Error during run {run_idx + 1}/{num_runs}: {e}")
+        import traceback
+
+        traceback.print_exc()
+        if num_runs > 1:
+            print(f"Continuing to next run...")
+            continue
+        else:
+            raise
 
 print("\n" + "=" * 80)
-print("Evaluation complete!")
+print(f"All {num_runs} evaluation run(s) complete!")
 print("=" * 80)

@@ -6,8 +6,8 @@ model:
   # Single model to evaluate
   model: gpt-4o
   # mode: single | per_question
-  mode: per_question
-  cache: true
+  mode: single
+  cache: false
   max_tokens: 4096
 
   with_prompt: false
@@ -15,12 +15,17 @@ model:
 
 
 dataset:
-  csv_test: data/gras/test.csv  # Always use test.csv
-  # csv_test: data/SciEntsBank_3way/test_ud.csv
+  # test_csv: data/gras/test.csv  # Always use test.csv
+  test_csv: data/SciEntsBank_3way/test_ud.csv
 
 
 evaluation:
   num_threads: 16  # For DSPy batched processing
+  num_runs: 4  # Number of times to run the evaluation (useful for stochastic models)
+
+
+mlflow:
+  experiment_name: lora_training_comparison_results_final  # MLflow experiment name
 
 
 output:
