@@ -2,6 +2,7 @@
 dispatcher:
   num_runs: 1
   # seeds: [42,43,44]  # optional list; if not provided, random seeds will be used
+  seeds: [42]
   models: 
     - meta-llama/Llama-3.2-1B-Instruct
     - openai-community/gpt2-large
@@ -14,13 +15,13 @@ dataset:
   dataset_name: gras
   
   train_file: train.csv
-  val_file: val.csv
-  test_file: test.csv
+  val_file: val_sci_bank.csv
+  test_file: test_sci_bank.csv
 
 # Output
 output:
   dir: ${paths.output_dir}/peft_output
-  save_model_locally: true
+  save_model_locally: false
   push_to_hub: false
   save_strategy: steps
 
@@ -28,12 +29,12 @@ output:
 lora:
   r: 8
   alpha: 16
-  dropout: 0.05
+  dropout: 0.1
   target_modules: "all-linear"
 
 # Training hyperparameters
 training:
-  num_epochs: 5 # 3
+  num_epochs: 3 # 3
   batch_size: 
     train: 16 # 16
     eval: 128 # 16
