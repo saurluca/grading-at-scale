@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 import sys
 import mlflow
+import random
+import time
 from itertools import product
 from peft import LoraConfig, get_peft_model, TaskType
 from omegaconf import OmegaConf
@@ -104,17 +106,10 @@ def run_single_training(
     }
 
 
-def main() -> None:
-    print("Loading grid search config...")
-    base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
-    training_cfg_path = os.environ.get(
-        "TRAINING_CONFIG_PATH",
-        str(PROJECT_ROOT / "configs" / "hyperparameter_search.yaml"),
-    )
-    grid_search_cfg = OmegaConf.load(training_cfg_path)
-
-    # Merge configs
-    cfg = OmegaConf.merge(base_cfg, grid_search_cfg)
+def run_grid_search_with_seed(cfg, seed: int) -> dict:
+    """Run a single grid search with a specific seed."""
+    # Set seed in config
+    cfg.project.seed = seed
 
     # Extract grid search parameters
     grid_search = cfg.grid_search
@@ -124,10 +119,6 @@ def main() -> None:
     lora_dropouts = list(grid_search.lora_dropout)
     gradient_accumulation_steps_list = list(grid_search.gradient_accumulation_steps)
     optimization_metric = str(grid_search.optimization_metric)
-    seed = int(grid_search.seed)
-
-    # Set seed in config
-    cfg.project.seed = seed
 
     # Generate all combinations
     combinations = list(
@@ -142,7 +133,7 @@ def main() -> None:
 
     total_combinations = len(combinations)
     print(f"\n{'=' * 60}")
-    print(f"Grid Search: {total_combinations} combinations to evaluate")
+    print(f"Grid Search (Seed: {seed}): {total_combinations} combinations to evaluate")
     print(f"{'=' * 60}")
     print(f"Learning rates: {learning_rates}")
     print(f"LoRA r: {lora_rs}")
@@ -154,7 +145,9 @@ def main() -> None:
     print(f"{'=' * 60}\n")
 
     model_name: str = str(cfg.model.base)
-    output_dir_base: str = str(PROJECT_ROOT / cfg.output.dir)
+    # Make output directory unique per seed
+    base_output_dir = str(PROJECT_ROOT / cfg.output.dir)
+    output_dir_base = os.path.join(base_output_dir, f"seed_{seed}")
     cache_dir: str | None = str(cfg.paths.hf_cache_dir) if "paths" in cfg else None
 
     os.makedirs(output_dir_base, exist_ok=True)
@@ -168,19 +161,14 @@ def main() -> None:
     else:
         cache_path = None
 
-    # Setup MLflow tracking URI from config
-    setup_mlflow(cfg, PROJECT_ROOT)
-
-    # Start MLflow experiment with parent run
-    experiment_name = getattr(cfg.mlflow, "experiment_name", "lora_gridsearch")
-    mlflow.set_experiment(experiment_name)
-
     best_combination = None
     best_metric_value = None
     all_results = []
 
-    with mlflow.start_run(run_name=f"gridsearch_{model_name.split('/')[-1]}"):
-        # Log grid search parameters
+    # Create nested MLflow run for this seed
+    run_name = f"gridsearch_seed_{seed}_{model_name.split('/')[-1]}"
+    with mlflow.start_run(run_name=run_name, nested=True):
+        # Log grid search parameters for this seed
         mlflow.log_params(
             {
                 "model_name": model_name,
@@ -368,7 +356,160 @@ def main() -> None:
                 }
             )
 
-        print("\n\nGrid search completed")
+        print(f"\n\nGrid search completed for seed {seed}")
+        print(f"MLflow run ID: {mlflow.active_run().info.run_id}")
+
+    return {
+        "seed": seed,
+        "best_combination": best_combination,
+        "best_metric_value": best_metric_value,
+        "all_results": all_results,
+        "total_combinations": total_combinations,
+    }
+
+
+def main() -> None:
+    print("Loading grid search config...")
+    base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
+    training_cfg_path = os.environ.get(
+        "TRAINING_CONFIG_PATH",
+        str(PROJECT_ROOT / "configs" / "hyperparameter_search.yaml"),
+    )
+    grid_search_cfg = OmegaConf.load(training_cfg_path)
+
+    # Merge configs
+    cfg = OmegaConf.merge(base_cfg, grid_search_cfg)
+
+    # Extract dispatcher configuration
+    dispatcher = getattr(cfg, "dispatcher", {})
+    seeds_list = dispatcher.get("seeds")
+    
+    if seeds_list:
+        seeds = [int(s) for s in seeds_list]
+        num_runs = len(seeds)
+    else:
+        num_runs = int(dispatcher.get("num_runs", 1))
+        # Always use random seeds if seeds not provided
+        random.seed(int(time.time()))
+        seeds = [random.randint(0, 2**31 - 1) for _ in range(num_runs)]
+
+    print(f"\n{'=' * 60}")
+    print(f"MULTI-RUN GRID SEARCH")
+    print(f"{'=' * 60}")
+    print(f"Number of runs: {num_runs}")
+    print(f"Seeds: {seeds}")
+    print(f"{'=' * 60}\n")
+
+    # Setup MLflow tracking URI from config
+    setup_mlflow(cfg, PROJECT_ROOT)
+
+    # Start MLflow experiment with parent run
+    experiment_name = getattr(cfg.mlflow, "experiment_name", "lora_gridsearch")
+    mlflow.set_experiment(experiment_name)
+
+    model_name: str = str(cfg.model.base)
+    optimization_metric = str(cfg.grid_search.optimization_metric)
+    
+    all_run_results = []
+    overall_best_combination = None
+    overall_best_metric_value = None
+
+    with mlflow.start_run(run_name=f"gridsearch_multi_{model_name.split('/')[-1]}"):
+        # Log overall grid search parameters
+        mlflow.log_params(
+            {
+                "model_name": model_name,
+                "dataset_name": str(cfg.dataset.dataset_name),
+                "optimization_metric": optimization_metric,
+                "num_runs": num_runs,
+                "seeds": str(seeds),
+            }
+        )
+
+        # Run grid search for each seed
+        for run_idx, seed in enumerate(seeds):
+            print(f"\n{'#' * 60}")
+            print(f"RUN {run_idx + 1}/{num_runs} - Seed: {seed}")
+            print(f"{'#' * 60}\n")
+
+            try:
+                # Create a copy of config for this seed run to avoid side effects
+                seed_cfg = OmegaConf.create(OmegaConf.to_container(cfg))
+                run_result = run_grid_search_with_seed(seed_cfg, seed)
+                all_run_results.append(run_result)
+
+                # Track overall best combination across all seeds
+                if run_result["best_combination"]:
+                    metric_value = run_result["best_metric_value"]
+                    if overall_best_metric_value is None or metric_value > overall_best_metric_value:
+                        overall_best_metric_value = metric_value
+                        overall_best_combination = {
+                            **run_result["best_combination"],
+                            "seed": seed,
+                            "run_idx": run_idx + 1,
+                        }
+
+                print(f"\n✓ Run {run_idx + 1}/{num_runs} (seed {seed}) completed")
+
+            except Exception as e:
+                print(f"\n✗ Error in run {run_idx + 1}/{num_runs} (seed {seed}): {e}")
+                import traceback
+                traceback.print_exc()
+                mlflow.log_param(f"error_run_{run_idx + 1}", str(e))
+
+        # Log overall summary
+        if overall_best_combination:
+            print(f"\n{'=' * 60}")
+            print("OVERALL GRID SEARCH SUMMARY (ACROSS ALL SEEDS)")
+            print(f"{'=' * 60}")
+            print(f"Total runs: {num_runs}")
+            print(f"Seeds used: {seeds}")
+            print(f"\nBest combination overall (based on {optimization_metric}):")
+            print(f"  Run index: {overall_best_combination['run_idx']}")
+            print(f"  Seed: {overall_best_combination['seed']}")
+            print(f"  Combination index: {overall_best_combination['idx']}")
+            print(f"  Learning rate: {overall_best_combination['learning_rate']}")
+            print(f"  LoRA r: {overall_best_combination['lora_r']}")
+            print(f"  LoRA alpha ratio: {overall_best_combination['lora_alpha_ratio']}")
+            print(f"  LoRA alpha: {overall_best_combination['lora_alpha']}")
+            print(f"  LoRA dropout: {overall_best_combination['lora_dropout']}")
+            print(f"  Gradient accumulation steps: {overall_best_combination['gradient_accumulation_steps']}")
+            print(f"  Effective batch size: {overall_best_combination['effective_batch_size']}")
+            print(f"  {optimization_metric}: {overall_best_combination['metric_value']:.4f}")
+            print(f"  MLflow run ID: {overall_best_combination['run_id']}")
+            print(f"{'=' * 60}\n")
+
+            # Log overall best combination to parent run
+            mlflow.log_params(
+                {
+                    "overall_best_seed": overall_best_combination["seed"],
+                    "overall_best_run_idx": overall_best_combination["run_idx"],
+                    "overall_best_learning_rate": overall_best_combination["learning_rate"],
+                    "overall_best_lora_r": overall_best_combination["lora_r"],
+                    "overall_best_lora_alpha_ratio": overall_best_combination["lora_alpha_ratio"],
+                    "overall_best_lora_alpha": overall_best_combination["lora_alpha"],
+                    "overall_best_lora_dropout": overall_best_combination["lora_dropout"],
+                    "overall_best_gradient_accumulation_steps": overall_best_combination["gradient_accumulation_steps"],
+                    "overall_best_effective_batch_size": overall_best_combination["effective_batch_size"],
+                    f"overall_best_{optimization_metric}": overall_best_combination["metric_value"],
+                    "overall_best_combination_idx": overall_best_combination["idx"],
+                    "overall_best_run_id": overall_best_combination["run_id"],
+                }
+            )
+
+            # Log best results per seed
+            for run_result in all_run_results:
+                if run_result["best_combination"]:
+                    seed = run_result["seed"]
+                    mlflow.log_params(
+                        {
+                            f"seed_{seed}_best_{optimization_metric}": run_result["best_metric_value"],
+                            f"seed_{seed}_best_learning_rate": run_result["best_combination"]["learning_rate"],
+                            f"seed_{seed}_best_lora_r": run_result["best_combination"]["lora_r"],
+                        }
+                    )
+
+        print("\n\nMulti-run grid search completed")
         print(f"Parent MLflow run ID: {mlflow.active_run().info.run_id}")
 
 

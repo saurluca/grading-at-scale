@@ -5,9 +5,9 @@ dispatcher:
   # seeds: [42]
   models: 
     - meta-llama/Llama-3.2-1B-Instruct
-    - openai-community/gpt2-large
-    - google/flan-t5-large
-    - Qwen/Qwen3-0.6B
+    # - openai-community/gpt2-large
+    # - google/flan-t5-large
+    # - Qwen/Qwen3-0.6B
 
 # Dataset
 dataset:
@@ -15,7 +15,13 @@ dataset:
   dataset_name: gras
   
   train_file: train.csv
+<<<<<<< Updated upstream
   val_file: val.csv
+=======
+  # val_file: val_sci_bank.csv
+  val_file: val.csv
+  # test_file: test_sci_bank.csv
+>>>>>>> Stashed changes
   test_file: test.csv
 
 # Output
@@ -39,11 +45,15 @@ training:
     train: 8 # 16
     eval: 128 # 16
   gradient_accumulation_steps: 1  # batch_size * gradient_accumulation_steps = 8
+<<<<<<< Updated upstream
   learning_rate: 0.001 # 0.001
+=======
+  learning_rate: 0.0001 # 0.0002
+>>>>>>> Stashed changes
   weight_decay: 0.01 # 0.01
   eval_strategy: steps # epoch | steps
   eval_steps: 100  # Evaluation frequency in steps (only used when eval_strategy is overridden to steps)
-  early_stopping_patience: 3  # Number of evaluations to wait before early stopping
+  early_stopping_patience: 6  # Number of evaluations to wait before early stopping
   logging_steps: 20 # 20
 
 # Tokenization settings

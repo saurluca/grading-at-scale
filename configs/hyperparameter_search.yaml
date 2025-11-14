@@ -1,33 +1,37 @@
 # Hyperparameter Grid Search Configuration
 # This config extends training.yaml and defines grid search parameters
 
+# Dispatcher controls (for multiple runs with different seeds)
+dispatcher:
+  num_runs: 3  # Number of grid search runs to perform
+  # seeds: [42, 43, 44]  # optional list; if not provided, random seeds will be used
+  # If seeds is not specified, random seeds will be generated based on num_runs
+
 # Model selection (single model only for grid search)
 model:
-  base: Qwen/Qwen3-0.6B
+  # base: Qwen/Qwen3-0.6B
+  base: meta-llama/Llama-3.2-1B-Instruct
 
 # Grid search parameters
 grid_search:
   # Optimization metric to use for selecting best combination
   optimization_metric: macro_f1  # weighted_f1 | macro_f1 | accuracy | eval_loss
   
-  # Seed to use for all grid search runs
-  seed: 43
-  
   # Learning rate values to explore
-  learning_rate: [0.0001, 0.0005, 0.001, 0.01]
+  learning_rate: [0.00001, 0.0001, 0.0002, 0.0005, 0.001, 0.01]
   
   # LoRA rank (r) values to explore
-  lora_r: [8, 16, 32]
+  lora_r: [8]
   
   # LoRA alpha ratios (alpha will be computed as r * ratio)
-  lora_alpha_ratios: [0.5, 1.0, 2.0]
+  lora_alpha_ratios: [2.0]
   
   # LoRA dropout values to explore
-  lora_dropout: [0.05, 0.1, 0.2]
+  lora_dropout: [0.2]
   
   # Gradient accumulation steps (effective batch size = batch_size * gradient_accumulation_steps)
   # Keep per_device_batch_size fixed at 8, so effective batch sizes: 8, 16, 24, ...
-  gradient_accumulation_steps: [1, 2, 4]
+  gradient_accumulation_steps: [1]
 
 # Dataset (inherits from training.yaml if not specified)
 dataset:
@@ -45,16 +49,16 @@ output:
 
 # LoRA configuration (base values, will be overridden by grid_search)
 lora:
-  r: 16
+  r: 8
   alpha: 16
-  dropout: 0.1
+  dropout: 0.2
   target_modules: "all-linear"
 
 # Training hyperparameters (base values, will be overridden by grid_search)
 training:
   num_epochs: 4
   batch_size: 
-    train: 16
+    train: 32
     eval: 128
   weight_decay: 0.01
   eval_strategy: epoch
@@ -67,5 +71,5 @@ tokenization:
 
 # MLflow tracking
 mlflow:
-  experiment_name: lora_gridsearch
+  experiment_name: lora_gridsearch_v2
 
