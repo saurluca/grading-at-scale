@@ -1,16 +1,12 @@
-# Task selection for dispatcher
-task_type: lora-classification  # lora-classification | lora-classification-gridsearch
-
 # Dispatcher controls
 dispatcher:
-  num_runs: 5
+  num_runs: 1
   # seeds: [42,43,44]  # optional list; if not provided, random seeds will be used
   models: 
     - meta-llama/Llama-3.2-1B-Instruct
     - openai-community/gpt2-large
     - google/flan-t5-base
     - Qwen/Qwen3-0.6B
-
 
 # Dataset
 dataset:
@@ -55,7 +51,7 @@ tokenization:
 
 # MLflow tracking
 mlflow:
-  experiment_name: lora_training_comparison_results
+  experiment_name: lora_training_comparison_v3
 
 # Topic k-fold cross-validation settings
 kfold:

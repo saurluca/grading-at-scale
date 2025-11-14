@@ -1,32 +1,20 @@
 import os
 import time
 import random
-import sys
-from importlib import import_module
 from pathlib import Path
 
 from omegaconf import OmegaConf
 
+from src.finetuning import lora
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-# Add finetuning directory to path so import_module can find lora, lora_gridsearch, etc.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-
-def select_main(task_type: str):
-    mapping = {
-        "lora-classification": "lora",
-        "lora-classification-gridsearch": "lora_gridsearch",
-    }
-    if task_type not in mapping:
-        raise ValueError(f"Unknown task_type: {task_type}")
-    return import_module(mapping[task_type]).main
 
 
 def main() -> None:
     base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
     
-    # Check if TRAINING_CONFIG_PATH is set (for direct runs or grid search)
+    # Check if TRAINING_CONFIG_PATH is set (for direct runs)
     training_cfg_path = os.environ.get("TRAINING_CONFIG_PATH")
     if training_cfg_path and Path(training_cfg_path).exists():
         training_cfg = OmegaConf.load(training_cfg_path)
@@ -36,14 +24,6 @@ def main() -> None:
         training_cfg = OmegaConf.load(training_path)
     
     cfg = OmegaConf.merge(base_cfg, training_cfg)
-
-    task_type = str(getattr(cfg, "task_type", "lora-classification"))
-    
-    # For grid search, skip dispatcher logic and run directly
-    if task_type == "lora-classification-gridsearch":
-        runner = select_main(task_type)
-        runner()
-        return
 
     dispatcher = getattr(cfg, "dispatcher", {})
     models_list = dispatcher.get("models")
@@ -63,8 +43,6 @@ def main() -> None:
 
     run_dir = PROJECT_ROOT / "configs" / ".runs"
     run_dir.mkdir(parents=True, exist_ok=True)
-
-    runner = select_main(task_type)
 
     # Always use models list from dispatcher
     model_names = [str(m) for m in models_list]
@@ -86,9 +64,9 @@ def main() -> None:
 
             os.environ["TRAINING_CONFIG_PATH"] = str(out_path)
             print(
-                f"[dispatcher] Model={model_name} | Run {i + 1}/{len(seeds)}: seed={seed}, task={task_type}, cfg={out_path}"
+                f"[dispatcher] Model={model_name} | Run {i + 1}/{len(seeds)}: seed={seed}, cfg={out_path}"
             )
-            runner()
+            lora.main()
 
 
 if __name__ == "__main__":

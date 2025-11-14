@@ -5,9 +5,6 @@
 model:
   base: Qwen/Qwen3-0.6B
 
-# Task selection for dispatcher
-task_type: lora-classification-gridsearch
-
 # Grid search parameters
 grid_search:
   # Optimization metric to use for selecting best combination
@@ -35,11 +32,9 @@ grid_search:
 # Dataset (inherits from training.yaml if not specified)
 dataset:
   dataset_name: gras
-  use_split_files: true
   train_file: train.csv
   val_file: val.csv
   test_file: test.csv
-  topics: []
 
 # Output
 output:
