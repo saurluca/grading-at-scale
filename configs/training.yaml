@@ -53,12 +53,3 @@ tokenization:
 # MLflow tracking
 mlflow:
   experiment_name: lora_training_comparison_v3
-
-# Topic k-fold cross-validation settings
-kfold:
-  train_topics: 3  # Number of topics to use for training (remaining topics used for testing)
-                   # Options: 2 (train on 2, test on 2) or 3 (train on 3, test on 1)
-                   # Default: 3
-  out_of_fold_samples: 5  # Number of samples from test topics to include in training set
-                          # Set to 0 to disable (default: 0)
-                          # Useful for few-shot learning experiments
