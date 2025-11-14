@@ -192,7 +192,14 @@ def main() -> None:
     models_list = getattr(cfg.classifier_eval, "models", None)
     if not models_list:
         raise ValueError("classifier_eval.models must be set to a list of model names")
-    if not isinstance(models_list, (list, tuple)) or len(models_list) == 0:
+    
+    # Convert OmegaConf ListConfig to Python list if needed
+    try:
+        models_list = list(models_list)
+    except (TypeError, ValueError):
+        raise ValueError("classifier_eval.models must be a list of model names")
+    
+    if len(models_list) == 0:
         raise ValueError("classifier_eval.models must be a non-empty list")
 
     # Get adapter configuration
