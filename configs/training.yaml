@@ -15,13 +15,9 @@ dataset:
   dataset_name: gras
   
   train_file: train.csv
-<<<<<<< Updated upstream
-  val_file: val.csv
-=======
   # val_file: val_sci_bank.csv
   val_file: val.csv
   # test_file: test_sci_bank.csv
->>>>>>> Stashed changes
   test_file: test.csv
 
 # Output
@@ -45,11 +41,7 @@ training:
     train: 8 # 16
     eval: 128 # 16
   gradient_accumulation_steps: 1  # batch_size * gradient_accumulation_steps = 8
-<<<<<<< Updated upstream
-  learning_rate: 0.001 # 0.001
-=======
   learning_rate: 0.0001 # 0.0002
->>>>>>> Stashed changes
   weight_decay: 0.01 # 0.01
   eval_strategy: steps # epoch | steps
   eval_steps: 100  # Evaluation frequency in steps (only used when eval_strategy is overridden to steps)
