@@ -173,11 +173,6 @@ def load_and_preprocess_data(
         id2label: Dict mapping IDs to label names
     """
 
-    if train_csv is None or val_csv is None or test_csv is None:
-        raise ValueError(
-            "train_csv, val_csv, and test_csv must all be provided"
-        )
-
     print(f"Loading pre-split datasets from {train_csv}, {val_csv}, and {test_csv} ...")
 
     # Load separate train, validation, and test files
