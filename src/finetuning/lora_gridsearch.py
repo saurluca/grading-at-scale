@@ -117,7 +117,7 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
     lora_rs = list(grid_search.lora_r)
     lora_alpha_ratios = list(grid_search.lora_alpha_ratios)
     lora_dropouts = list(grid_search.lora_dropout)
-    gradient_accumulation_steps_list = list(grid_search.gradient_accumulation_steps)
+    batch_sizes = list(grid_search.batch_size)
     optimization_metric = str(grid_search.optimization_metric)
 
     # Generate all combinations
@@ -127,7 +127,7 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
             lora_rs,
             lora_alpha_ratios,
             lora_dropouts,
-            gradient_accumulation_steps_list,
+            batch_sizes,
         )
     )
 
@@ -139,7 +139,7 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
     print(f"LoRA r: {lora_rs}")
     print(f"LoRA alpha ratios: {lora_alpha_ratios}")
     print(f"LoRA dropout: {lora_dropouts}")
-    print(f"Gradient accumulation steps: {gradient_accumulation_steps_list}")
+    print(f"Training batch sizes: {batch_sizes}")
     print(f"Optimization metric: {optimization_metric}")
     print(f"Seed: {seed}")
     print(f"{'=' * 60}\n")
@@ -180,12 +180,12 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
                 "lora_rs": str(lora_rs),
                 "lora_alpha_ratios": str(lora_alpha_ratios),
                 "lora_dropouts": str(lora_dropouts),
-                "gradient_accumulation_steps": str(gradient_accumulation_steps_list),
+                "batch_sizes": str(batch_sizes),
             }
         )
 
         # Run each combination
-        for idx, (lr, r, alpha_ratio, dropout, grad_acc_steps) in enumerate(
+        for idx, (lr, r, alpha_ratio, dropout, batch_size) in enumerate(
             combinations
         ):
             print(f"\n{'=' * 60}")
@@ -196,8 +196,7 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
             print(f"LoRA alpha ratio: {alpha_ratio}")
             print(f"LoRA alpha: {r * alpha_ratio}")
             print(f"LoRA dropout: {dropout}")
-            print(f"Gradient accumulation steps: {grad_acc_steps}")
-            print(f"Effective batch size: {8 * grad_acc_steps}")
+            print(f"Training batch size: {batch_size}")
             print(f"{'=' * 60}\n")
 
             # Create modified config for this combination
@@ -206,10 +205,10 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
             combination_cfg.lora.r = int(r)
             combination_cfg.lora.alpha = int(r * alpha_ratio)
             combination_cfg.lora.dropout = float(dropout)
-            combination_cfg.training.gradient_accumulation_steps = int(grad_acc_steps)
+            combination_cfg.training.batch_size.train = int(batch_size)
 
             # Create nested MLflow run for this combination
-            run_name = f"lr_{lr}_r_{r}_alpha_{r * alpha_ratio:.1f}_drop_{dropout}_gradacc_{grad_acc_steps}"
+            run_name = f"lr_{lr}_r_{r}_alpha_{r * alpha_ratio:.1f}_drop_{dropout}_bs_{batch_size}"
             with mlflow.start_run(run_name=run_name, nested=True):
                 try:
                     # Log hyperparameters
@@ -220,8 +219,7 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
                             "lora_alpha_ratio": alpha_ratio,
                             "lora_alpha": int(r * alpha_ratio),
                             "lora_dropout": dropout,
-                            "gradient_accumulation_steps": grad_acc_steps,
-                            "effective_batch_size": 8 * grad_acc_steps,
+                            "batch_size": batch_size,
                             "combination_idx": idx + 1,
                             "seed": seed,
                         }
@@ -282,8 +280,7 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
                             "lora_alpha_ratio": alpha_ratio,
                             "lora_alpha": int(r * alpha_ratio),
                             "lora_dropout": dropout,
-                            "gradient_accumulation_steps": grad_acc_steps,
-                            "effective_batch_size": 8 * grad_acc_steps,
+                            "batch_size": batch_size,
                             "metric_value": metric_value,
                             "run_id": mlflow.active_run().info.run_id,
                         }
@@ -298,7 +295,7 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
                             "lora_r": r,
                             "lora_alpha": int(r * alpha_ratio),
                             "lora_dropout": dropout,
-                            "gradient_accumulation_steps": grad_acc_steps,
+                            "batch_size": batch_size,
                             "metric_value": metric_value,
                         }
                     )
@@ -328,10 +325,7 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
             print(f"  LoRA alpha ratio: {best_combination['lora_alpha_ratio']}")
             print(f"  LoRA alpha: {best_combination['lora_alpha']}")
             print(f"  LoRA dropout: {best_combination['lora_dropout']}")
-            print(
-                f"  Gradient accumulation steps: {best_combination['gradient_accumulation_steps']}"
-            )
-            print(f"  Effective batch size: {best_combination['effective_batch_size']}")
+            print(f"  Training batch size: {best_combination['batch_size']}")
             print(f"  {optimization_metric}: {best_combination['metric_value']:.4f}")
             print(f"  MLflow run ID: {best_combination['run_id']}")
             print(f"{'=' * 60}\n")
@@ -344,12 +338,7 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
                     "best_lora_alpha_ratio": best_combination["lora_alpha_ratio"],
                     "best_lora_alpha": best_combination["lora_alpha"],
                     "best_lora_dropout": best_combination["lora_dropout"],
-                    "best_gradient_accumulation_steps": best_combination[
-                        "gradient_accumulation_steps"
-                    ],
-                    "best_effective_batch_size": best_combination[
-                        "effective_batch_size"
-                    ],
+                    "best_batch_size": best_combination["batch_size"],
                     f"best_{optimization_metric}": best_combination["metric_value"],
                     "best_combination_idx": best_combination["idx"],
                     "best_run_id": best_combination["run_id"],
@@ -473,8 +462,7 @@ def main() -> None:
             print(f"  LoRA alpha ratio: {overall_best_combination['lora_alpha_ratio']}")
             print(f"  LoRA alpha: {overall_best_combination['lora_alpha']}")
             print(f"  LoRA dropout: {overall_best_combination['lora_dropout']}")
-            print(f"  Gradient accumulation steps: {overall_best_combination['gradient_accumulation_steps']}")
-            print(f"  Effective batch size: {overall_best_combination['effective_batch_size']}")
+            print(f"  Training batch size: {overall_best_combination['batch_size']}")
             print(f"  {optimization_metric}: {overall_best_combination['metric_value']:.4f}")
             print(f"  MLflow run ID: {overall_best_combination['run_id']}")
             print(f"{'=' * 60}\n")
@@ -489,8 +477,7 @@ def main() -> None:
                     "overall_best_lora_alpha_ratio": overall_best_combination["lora_alpha_ratio"],
                     "overall_best_lora_alpha": overall_best_combination["lora_alpha"],
                     "overall_best_lora_dropout": overall_best_combination["lora_dropout"],
-                    "overall_best_gradient_accumulation_steps": overall_best_combination["gradient_accumulation_steps"],
-                    "overall_best_effective_batch_size": overall_best_combination["effective_batch_size"],
+                    "overall_best_batch_size": overall_best_combination["batch_size"],
                     f"overall_best_{optimization_metric}": overall_best_combination["metric_value"],
                     "overall_best_combination_idx": overall_best_combination["idx"],
                     "overall_best_run_id": overall_best_combination["run_id"],

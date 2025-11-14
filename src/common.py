@@ -341,7 +341,7 @@ def setup_training_args(cfg, output_dir: str):
         "seed": int(getattr(cfg.project, "seed", 42)),
         "bf16": True,
         "save_total_limit": 1,  # Only keep best checkpoint
-        "gradient_accumulation_steps": int(cfg.training.gradient_accumulation_steps),
+        "gradient_accumulation_steps": int(getattr(cfg.training, "gradient_accumulation_steps", 1)),
     }
 
     # Add eval_steps if using step-based evaluation
