@@ -1,8 +1,8 @@
 # Dispatcher controls
 dispatcher:
-  num_runs: 1
+  num_runs: 5
   # seeds: [42,43,44]  # optional list; if not provided, random seeds will be used
-  seeds: [42]
+  # seeds: [42]
   models: 
     - meta-llama/Llama-3.2-1B-Instruct
     - openai-community/gpt2-large
@@ -15,8 +15,8 @@ dataset:
   dataset_name: gras
   
   train_file: train.csv
-  val_file: val_sci_bank.csv
-  test_file: test_sci_bank.csv
+  val_file: val.csv
+  test_file: test.csv
 
 # Output
 output:
@@ -34,12 +34,12 @@ lora:
 
 # Training hyperparameters
 training:
-  num_epochs: 3 # 3
+  num_epochs: 4 # 4
   batch_size: 
-    train: 16 # 16
+    train: 8 # 16
     eval: 128 # 16
   gradient_accumulation_steps: 1  # batch_size * gradient_accumulation_steps = 8
-  learning_rate: 0.0005 # 0.0002
+  learning_rate: 0.001 # 0.001
   weight_decay: 0.01 # 0.01
   eval_strategy: steps # epoch | steps
   eval_steps: 100  # Evaluation frequency in steps (only used when eval_strategy is overridden to steps)
@@ -52,4 +52,4 @@ tokenization:
 
 # MLflow tracking
 mlflow:
-  experiment_name: lora_training_comparison_v3
+  experiment_name: lora_training_comparison_results_final
