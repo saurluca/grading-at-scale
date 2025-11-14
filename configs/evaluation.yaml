@@ -30,7 +30,7 @@ classifier_eval:
     sample_fraction: 1.0 # Use 100% of data by default (0.0-1.0)
     sample_seed: 24 # Seed for reproducible sampling
 
-  batch_size: 256
+  batch_size: 512
   
   # CPU enforcement and evaluation options
   enforce_cpu: false  # Set to true to force CPU-only execution (useful for CPU-only environments)
@@ -44,3 +44,7 @@ tokenization:
 # Output settings
 output:
   dir: ${paths.results_dir}
+
+# MLflow settings
+mlflow:
+  experiment_name: classifier_evaluation
