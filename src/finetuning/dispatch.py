@@ -1,14 +1,15 @@
 import os
+import sys
 import time
 import random
 from pathlib import Path
 
 from omegaconf import OmegaConf
 
-from src.finetuning import lora
-
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(PROJECT_ROOT))
+
+from src.finetuning import lora  # noqa: E402
 
 
 def main() -> None:
