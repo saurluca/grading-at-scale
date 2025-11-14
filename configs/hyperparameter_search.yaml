@@ -52,10 +52,10 @@ lora:
 
 # Training hyperparameters (base values, will be overridden by grid_search)
 training:
-  num_epochs: 4
+  num_epochs: 3
   batch_size: 
     train: 16
-    eval: 16
+    eval: 128
   weight_decay: 0.01
   eval_strategy: epoch
   early_stopping_patience: 3

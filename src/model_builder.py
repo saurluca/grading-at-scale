@@ -48,8 +48,8 @@ model_configs = {
         "api_key": "",
         "api_base": os.getenv("VLLM_API_BASE"),
     },
-    "google/flan-t5-base": {
-        "model": "hosted_vllm/google/flan-t5-base",
+    "google/flan-t5-large": {
+        "model": "hosted_vllm/google/flan-t5-large",
         "api_key": "",
         "api_base": os.getenv("VLLM_API_BASE"),
     },

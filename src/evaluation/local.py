@@ -61,7 +61,7 @@ def sanitize_model_name(model_name: str) -> str:
 
     Examples:
         "Qwen/Qwen3-0.6B" -> "Qwen3-0.6B"
-        "google/flan-t5-base" -> "flan-t5-base"
+        "google/flan-t5-large" -> "flan-t5-large"
     """
     # Remove org prefix (everything before the last '/')
     if "/" in model_name:

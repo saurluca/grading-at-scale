@@ -27,7 +27,7 @@ MODEL_NAME_MAPPING = {
     "meta-llama/llama-3.2-1b-instruct": "Llama 3.2 1B Instruct",
     "qwen/qwen3-0.6b": "Qwen3 0.6B",
     "openai-community/gpt2-large": "GPT-2 Large",
-    "google/flan-t5-base": "Flan-T5 Base",
+    "google/flan-t5-large": "Flan-T5 Large",
 }
 
 # Mapping from aggregated CSV model names to original CSV model names
@@ -35,7 +35,7 @@ AGGREGATED_TO_ORIGINAL_MAPPING = {
     "lora_Llama-3.2-1B-Instruct": "meta-llama/llama-3.2-1b-instruct",
     "lora_Qwen3-0.6B": "qwen/qwen3-0.6b",
     "lora_gpt2-large": "openai-community/gpt2-large",
-    "lora_flan-t5-base": "google/flan-t5-base",
+    "lora_flan-t5-large": "google/flan-t5-large",
     "openai/chatgpt-4o": "openai/chatgpt-4o",
 }
 
