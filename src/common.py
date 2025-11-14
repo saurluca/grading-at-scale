@@ -4,7 +4,7 @@ import os
 
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
 
-from datasets import load_dataset, ClassLabel, DatasetDict
+from datasets import load_dataset, ClassLabel, DatasetDict, Value
 from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,
@@ -199,6 +199,15 @@ def load_and_preprocess_data(
     print(f"Loaded train dataset: {len(train_dataset)} samples")
     print(f"Loaded validation dataset: {len(val_dataset)} samples")
     print(f"Loaded test dataset: {len(test_dataset)} samples")
+
+    # Ensure consistent feature types across datasets before concatenation
+    # Cast task_id to string to handle cases where different datasets have different types
+    if "task_id" in train_dataset.column_names:
+        train_dataset = train_dataset.cast_column("task_id", Value("string"))
+    if "task_id" in val_dataset.column_names:
+        val_dataset = val_dataset.cast_column("task_id", Value("string"))
+    if "task_id" in test_dataset.column_names:
+        test_dataset = test_dataset.cast_column("task_id", Value("string"))
 
     # Combine for topic counting
     full_dataset = concatenate_datasets([train_dataset, val_dataset, test_dataset])
