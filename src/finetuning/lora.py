@@ -92,6 +92,7 @@ def main() -> None:
                 "train_csv": train_csv,
                 "val_csv": val_csv,
                 "test_csv": test_csv,
+                "test_set_name": str(getattr(cfg.dataset, "test_set_name", "")),
                 "output_dir": output_dir,
                 "lora_r": int(cfg.lora.r),
                 "lora_alpha": int(cfg.lora.alpha),

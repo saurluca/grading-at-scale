@@ -1,24 +1,28 @@
 # Dispatcher controls
 dispatcher:
-  num_runs: 5
+  num_runs: 1
   # seeds: [42,43,44]  # optional list; if not provided, random seeds will be used
   # seeds: [42]
   models: 
     # - meta-llama/Llama-3.2-1B-Instruct
-    # - Qwen/Qwen3-0.6B
+    - Qwen/Qwen3-0.6B
     # - openai-community/gpt2-large
-    - google/flan-t5-large
+    # - google/flan-t5-large
 
 # Dataset
 dataset:
-  # dataset_name: SciEntsBank_3way # gras
-  dataset_name: gras
+  dataset_name: SciEntsBank_3way
+  # dataset_name: gras
+  test_set_name: gras  # Name identifier for the test set
+
   
   train_file: train.csv
   # val_file: val_sci_bank.csv
-  val_file: val.csv
+  # val_file: val.csv
+  val_file: val_gras.csv
   # test_file: test_sci_bank.csv
-  test_file: test.csv
+  # test_file: test.csv
+  test_file: test_gras.csv
 
 # Output
 output:
@@ -34,19 +38,33 @@ lora:
   dropout: 0.2
   target_modules: "all-linear"
 
+# Model-specific training hyperparameters
+# Maps model names to their specific batch_size and learning_rate
+model_specific_params:
+  meta-llama/Llama-3.2-1B-Instruct:
+    batch_size:
+      train: 16
+    learning_rate: 0.0002
+  Qwen/Qwen3-0.6B:
+    batch_size:
+      train: 16
+    learning_rate: 0.0005
+  openai-community/gpt2-large:
+    batch_size:
+      train: 8
+    learning_rate: 0.0005
+  google/flan-t5-large:
+    batch_size:
+      train: 8
+    learning_rate: 0.0005
 
-# - llama - batchsize: 16 - lr: 0.0002
-# - qwen - batchsize: 16 - lr: 0.0005
-# - gpt - batchsize 8 - lr: 0.0005
-# - flan - batchsize 8 - lr: 0.0005
-
-# Training hyperparameters
+# Training hyperparameters (defaults, overridden by model_specific_params if available)
 training:
   num_epochs: 4 # 4
   batch_size: 
     train: 16 # 16
     eval: 128 # 16
-  gradient_accumulation_steps: 1  # batch_size * gradient_accumulation_steps = 8
+  gradient_accumulation_steps: 1 
   learning_rate: 0.0005 # 0.0002
   weight_decay: 0.01 # 0.01
   eval_strategy: steps # epoch | steps

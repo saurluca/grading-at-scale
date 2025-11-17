@@ -48,16 +48,38 @@ def main() -> None:
     # Always use models list from dispatcher
     model_names = [str(m) for m in models_list]
 
+    # Get model-specific parameters if available
+    model_specific_params = getattr(cfg, "model_specific_params", {})
+
     for model_name in model_names:
         safe_model = model_name.replace("/", "_").replace(":", "_")
         for i, seed in enumerate(seeds):
-            per_run_cfg = OmegaConf.merge(
-                cfg,
-                {
-                    "project": {"seed": int(seed)},
-                    "model": {"base": model_name},
-                },
-            )
+            # Start with base config updates
+            per_run_updates = {
+                "project": {"seed": int(seed)},
+                "model": {"base": model_name},
+            }
+            
+            # Apply model-specific parameters if available
+            if model_name in model_specific_params:
+                model_params = model_specific_params[model_name]
+                # Initialize training updates dict
+                training_updates = {}
+                
+                if "batch_size" in model_params:
+                    training_updates["batch_size"] = model_params["batch_size"]
+                if "learning_rate" in model_params:
+                    training_updates["learning_rate"] = model_params["learning_rate"]
+                
+                if training_updates:
+                    per_run_updates["training"] = training_updates
+                    print(
+                        f"[dispatcher] Using model-specific params for {model_name}: "
+                        f"batch_size={model_params.get('batch_size', {}).get('train', 'default')}, "
+                        f"lr={model_params.get('learning_rate', 'default')}"
+                    )
+            
+            per_run_cfg = OmegaConf.merge(cfg, per_run_updates)
             out_path = (
                 run_dir / f"dispatcher_run_{safe_model}_{int(time.time())}_{i}.yaml"
             )
