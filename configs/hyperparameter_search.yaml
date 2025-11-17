@@ -62,7 +62,8 @@ training:
     eval: 128
   gradient_accumulation_steps: 1  # Fixed at 1, batch_size is varied instead
   weight_decay: 0.01
-  eval_strategy: epoch
+  eval_strategy: steps
+  eval_steps: 100
   early_stopping_patience: 3
   logging_steps: 20
 

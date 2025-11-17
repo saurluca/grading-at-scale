@@ -154,7 +154,7 @@ def load_and_preprocess_data(
     cache_dir: str | None,
     train_csv: str,
     val_csv: str,
-    test_csv: str,
+    test_csv: str | None = None,
 ):
     """
     Load and preprocess dataset from separate train/val/test CSV files.
@@ -163,16 +163,19 @@ def load_and_preprocess_data(
         cache_dir: Cache directory for datasets
         train_csv: Path to train.csv
         val_csv: Path to val.csv
-        test_csv: Path to test.csv
+        test_csv: Path to test.csv (optional, for grid search can be None)
 
     Returns:
-        raw_data: DatasetDict with 'train', 'val', and 'test' splits
+        raw_data: DatasetDict with 'train', 'val', and optionally 'test' splits
         label_order: List of label names in order
         label2id: Dict mapping label names to IDs
         id2label: Dict mapping IDs to label names
     """
 
-    print(f"Loading pre-split datasets from {train_csv}, {val_csv}, and {test_csv} ...")
+    if test_csv:
+        print(f"Loading pre-split datasets from {train_csv}, {val_csv}, and {test_csv} ...")
+    else:
+        print(f"Loading pre-split datasets from {train_csv} and {val_csv} (test set skipped)...")
 
     # Load separate train, validation, and test files
     train_dataset = load_dataset(
@@ -189,16 +192,20 @@ def load_and_preprocess_data(
         sep=";",
     )["data"]
 
-    test_dataset = load_dataset(
-        "csv",
-        data_files={"data": test_csv},
-        cache_dir=cache_dir,
-        sep=";",
-    )["data"]
-
     print(f"Loaded train dataset: {len(train_dataset)} samples")
     print(f"Loaded validation dataset: {len(val_dataset)} samples")
-    print(f"Loaded test dataset: {len(test_dataset)} samples")
+
+    # Load test dataset only if provided
+    if test_csv:
+        test_dataset = load_dataset(
+            "csv",
+            data_files={"data": test_csv},
+            cache_dir=cache_dir,
+            sep=";",
+        )["data"]
+        print(f"Loaded test dataset: {len(test_dataset)} samples")
+    else:
+        test_dataset = None
 
     # Ensure consistent feature types across datasets before concatenation
     # Cast task_id to string to handle cases where different datasets have different types
@@ -206,11 +213,14 @@ def load_and_preprocess_data(
         train_dataset = train_dataset.cast_column("task_id", Value("string"))
     if "task_id" in val_dataset.column_names:
         val_dataset = val_dataset.cast_column("task_id", Value("string"))
-    if "task_id" in test_dataset.column_names:
+    if test_dataset and "task_id" in test_dataset.column_names:
         test_dataset = test_dataset.cast_column("task_id", Value("string"))
 
-    # Combine for topic counting
-    full_dataset = concatenate_datasets([train_dataset, val_dataset, test_dataset])
+    # Combine for topic counting (only if test dataset exists)
+    if test_dataset:
+        full_dataset = concatenate_datasets([train_dataset, val_dataset, test_dataset])
+    else:
+        full_dataset = concatenate_datasets([train_dataset, val_dataset])
 
     # Count samples per topic
     topic_counts = {}
@@ -226,36 +236,42 @@ def load_and_preprocess_data(
     # Map labels on datasets
     train_dataset = train_dataset.map(lambda x: map_labels(x, label2id))
     val_dataset = val_dataset.map(lambda x: map_labels(x, label2id))
-    test_dataset = test_dataset.map(lambda x: map_labels(x, label2id))
+    if test_dataset:
+        test_dataset = test_dataset.map(lambda x: map_labels(x, label2id))
     # Ensure 'labels' is a ClassLabel feature
     train_dataset = train_dataset.cast_column("labels", ClassLabel(names=label_order))
     val_dataset = val_dataset.cast_column("labels", ClassLabel(names=label_order))
-    test_dataset = test_dataset.cast_column("labels", ClassLabel(names=label_order))
+    if test_dataset:
+        test_dataset = test_dataset.cast_column("labels", ClassLabel(names=label_order))
 
-    # Use pre-split data directly - always have train, val, and test
-    raw = DatasetDict(
-        {
-            "train": train_dataset,
-            "val": val_dataset,
-            "test": test_dataset,
-        }
-    )
+    # Use pre-split data directly - include test only if provided
+    raw_dict = {
+        "train": train_dataset,
+        "val": val_dataset,
+    }
+    if test_dataset:
+        raw_dict["test"] = test_dataset
+    raw = DatasetDict(raw_dict)
 
     print(f"Number of training samples: {len(raw['train'])}")
     if "val" in raw:
         print(f"Number of validation samples: {len(raw['val'])}")
-    print(f"Number of test samples: {len(raw['test'])}")
-    total_samples = len(raw["train"]) + len(raw["test"])
+    if "test" in raw:
+        print(f"Number of test samples: {len(raw['test'])}")
+    total_samples = len(raw["train"])
     if "val" in raw:
         total_samples += len(raw["val"])
+    if "test" in raw:
+        total_samples += len(raw["test"])
     print(f"Total samples: {total_samples}")
 
-    # Show per-class counts in test set for verification
-    test_labels = raw["test"]["labels"]
-    counts = {name: 0 for name in label_order}
-    for v in test_labels:
-        counts[id2label[int(v)]] += 1
-    print("Test set per-class counts:", counts)
+    # Show per-class counts in test set for verification (only if test set exists)
+    if "test" in raw:
+        test_labels = raw["test"]["labels"]
+        counts = {name: 0 for name in label_order}
+        for v in test_labels:
+            counts[id2label[int(v)]] += 1
+        print("Test set per-class counts:", counts)
 
     return raw, label_order, label2id, id2label
 

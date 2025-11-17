@@ -34,19 +34,17 @@ def run_single_training(
     output_dir = os.path.join(output_dir_base, f"combination_{combination_idx}")
     os.makedirs(output_dir, exist_ok=True)
 
-    # Use separate train/val/test files
+    # Use separate train/val files only (NO test set during grid search)
     dataset_base_path = PROJECT_ROOT / "data" / cfg.dataset.dataset_name
     train_csv = str(dataset_base_path / getattr(cfg.dataset, "train_file", "train.csv"))
     val_csv = str(dataset_base_path / getattr(cfg.dataset, "val_file", "val.csv"))
-    test_csv = str(dataset_base_path / getattr(cfg.dataset, "test_file", "test.csv"))
-    dataset_csv = train_csv  # For logging purposes
 
-    # Load and preprocess data
+    # Load and preprocess data (only train and validation sets)
     raw_data, label_order, label2id, id2label = load_and_preprocess_data(
         cache_dir,
         train_csv=train_csv,
         val_csv=val_csv,
-        test_csv=test_csv,
+        test_csv=None,
     )
 
     # Setup model and tokenizer
@@ -93,9 +91,12 @@ def run_single_training(
     # Evaluate on validation set to get final metrics
     final_eval_metrics = trainer.evaluate()
 
-    # Perform detailed evaluation on test set
-    print("\nPerforming detailed evaluation on test dataset...")
-    detailed_metrics = detailed_evaluation(trainer, tokenized_data["test"], label_order)
+    # Perform detailed evaluation on validation set ONLY (NOT test set during grid search)
+    # Test set should only be used for final evaluation after hyperparameters are selected
+    if "val" not in tokenized_data:
+        raise ValueError("Validation set is required for grid search but was not found in tokenized_data")
+    print(f"\nPerforming detailed evaluation on validation dataset...")
+    detailed_metrics = detailed_evaluation(trainer, tokenized_data["val"], label_order)
 
     return {
         "initial_metrics": initial_metrics,
@@ -243,32 +244,34 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
                     )
 
                     # Log final evaluation metrics
-                    mlflow.log_metrics(
-                        {
-                            f"eval_{k}": v
-                            for k, v in result["final_eval_metrics"].items()
-                        }
-                    )
+                    # Note: trainer.evaluate() already returns keys with "eval_" prefix
+                    # So we use keys as-is to avoid double prefixing (e.g., eval_eval_loss)
+                    mlflow.log_metrics(result["final_eval_metrics"])
 
-                    # Log detailed metrics
+                    # Log detailed metrics (from validation set during grid search)
                     mlflow.log_metrics(result["detailed_metrics"])
 
-                    # Extract optimization metric from evaluation metrics
-                    metric_key = f"eval_{optimization_metric}"
-                    if metric_key in result["final_eval_metrics"]:
-                        metric_value = result["final_eval_metrics"][metric_key]
+                    # Extract optimization metric from VALIDATION SET metrics only
+                    # trainer.evaluate() returns keys with "eval_" prefix (e.g., "eval_macro_f1", "eval_loss")
+                    # Try with eval_ prefix first, then without
+                    eval_metric_key = f"eval_{optimization_metric}"
+                    if eval_metric_key in result["final_eval_metrics"]:
+                        # Use validation set metric with eval_ prefix (preferred)
+                        metric_value = result["final_eval_metrics"][eval_metric_key]
+                    elif optimization_metric in result["final_eval_metrics"]:
+                        # Try without prefix (fallback)
+                        metric_value = result["final_eval_metrics"][optimization_metric]
+                    elif optimization_metric in result["detailed_metrics"]:
+                        # Fallback to detailed metrics from validation set
+                        metric_value = result["detailed_metrics"][optimization_metric]
                     else:
-                        # Fallback to detailed metrics
-                        metric_key = optimization_metric
-                        if metric_key in result["detailed_metrics"]:
-                            metric_value = result["detailed_metrics"][metric_key]
-                        else:
-                            print(
-                                f"Warning: Optimization metric '{optimization_metric}' not found. Using eval_loss."
-                            )
-                            metric_value = result["final_eval_metrics"].get(
-                                "eval_loss", 0.0
-                            )
+                        # Last resort: use eval_loss from validation set
+                        print(
+                            f"Warning: Optimization metric '{optimization_metric}' not found. Using eval_loss from validation set."
+                        )
+                        metric_value = result["final_eval_metrics"].get(
+                            "eval_loss", 0.0
+                        )
 
                     # Track best combination
                     if best_metric_value is None or metric_value > best_metric_value:
