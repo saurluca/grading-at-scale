@@ -340,7 +340,7 @@ def setup_training_args(cfg, output_dir: str):
         "report_to": "mlflow",
         "seed": int(getattr(cfg.project, "seed", 42)),
         "bf16": True,
-        "save_total_limit": 1,  # Only keep best checkpoint
+        "save_total_limit": 2,  # Keep best checkpoint and latest checkpoint
         "gradient_accumulation_steps": int(getattr(cfg.training, "gradient_accumulation_steps", 1)),
     }
 

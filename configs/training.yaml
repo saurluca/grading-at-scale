@@ -4,10 +4,10 @@ dispatcher:
   # seeds: [42,43,44]  # optional list; if not provided, random seeds will be used
   # seeds: [42]
   models: 
-    - meta-llama/Llama-3.2-1B-Instruct
-    # - openai-community/gpt2-large
-    # - google/flan-t5-large
+    # - meta-llama/Llama-3.2-1B-Instruct
     # - Qwen/Qwen3-0.6B
+    # - openai-community/gpt2-large
+    - google/flan-t5-large
 
 # Dataset
 dataset:
@@ -31,21 +31,27 @@ output:
 lora:
   r: 8
   alpha: 16
-  dropout: 0.1
+  dropout: 0.2
   target_modules: "all-linear"
+
+
+# - llama - batchsize: 16 - lr: 0.0002
+# - qwen - batchsize: 16 - lr: 0.0005
+# - gpt - batchsize 8 - lr: 0.0005
+# - flan - batchsize 8 - lr: 0.0005
 
 # Training hyperparameters
 training:
   num_epochs: 4 # 4
   batch_size: 
-    train: 8 # 16
+    train: 16 # 16
     eval: 128 # 16
   gradient_accumulation_steps: 1  # batch_size * gradient_accumulation_steps = 8
-  learning_rate: 0.0001 # 0.0002
+  learning_rate: 0.0005 # 0.0002
   weight_decay: 0.01 # 0.01
   eval_strategy: steps # epoch | steps
   eval_steps: 100  # Evaluation frequency in steps (only used when eval_strategy is overridden to steps)
-  early_stopping_patience: 6  # Number of evaluations to wait before early stopping
+  early_stopping_patience: 3  # Number of evaluations to wait before early stopping
   logging_steps: 20 # 20
 
 # Tokenization settings
@@ -54,4 +60,4 @@ tokenization:
 
 # MLflow tracking
 mlflow:
-  experiment_name: lora_training_comparison_results_final
+  experiment_name: lora_training_comparison_results_final_1
