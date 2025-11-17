@@ -9,17 +9,21 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 # Set style
-# sns.set_style("whitegrid")
 plt.rcParams["figure.figsize"] = (12, 3)
 plt.rcParams["font.size"] = 11
 
 # Paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-CSV_PATH = PROJECT_ROOT / "results" / "gras_eval" / "quadratic_weighted_kappa (1).csv"
-AGGREGATED_CSV_PATH = (
-    PROJECT_ROOT / "results" / "gras_eval" / "quadratic_weighted_kappa (3).csv"
-)
+CSV_PATH = PROJECT_ROOT / "results" / "gras_eval" / "quadratic_weighted_kappa (5).csv"
 OUTPUT_PATH = PROJECT_ROOT / "results" / "quadratic_weighted_kappa_chart.png"
+
+# Mapping from CSV Run column values to standardized model groups
+RUN_TO_MODEL_GROUP = {
+    "lora_Llama-3.2-1B-Instruct": "meta-llama/llama-3.2-1b-instruct",
+    "lora_Qwen3-0.6B": "qwen/qwen3-0.6b",
+    "lora_gpt2-large": "openai-community/gpt2-large",
+    "lora_flan-t5-large": "google/flan-t5-large",
+}
 
 # Model name mapping for proper display
 MODEL_NAME_MAPPING = {
@@ -30,14 +34,14 @@ MODEL_NAME_MAPPING = {
     "google/flan-t5-large": "Flan-T5 Large",
 }
 
-# Mapping from aggregated CSV model names to original CSV model names
-AGGREGATED_TO_ORIGINAL_MAPPING = {
-    "lora_Llama-3.2-1B-Instruct": "meta-llama/llama-3.2-1b-instruct",
-    "lora_Qwen3-0.6B": "qwen/qwen3-0.6b",
-    "lora_gpt2-large": "openai-community/gpt2-large",
-    "lora_flan-t5-large": "google/flan-t5-large",
-    "openai/chatgpt-4o": "openai/chatgpt-4o",
-}
+
+def get_model_group(run_name: str) -> str:
+    """Map Run column value to standardized model group."""
+    # Handle GPT-4o runs (all start with "gpt-4o")
+    if run_name.startswith("gpt-4o"):
+        return "openai/chatgpt-4o"
+    # Handle other models
+    return RUN_TO_MODEL_GROUP.get(run_name, run_name)
 
 
 def format_model_name(model_id: str) -> str:
@@ -45,13 +49,8 @@ def format_model_name(model_id: str) -> str:
     return MODEL_NAME_MAPPING.get(model_id, model_id.replace("/", " ").title())
 
 
-def map_aggregated_to_original(aggregated_name: str) -> str:
-    """Map aggregated CSV model name to original CSV model name."""
-    return AGGREGATED_TO_ORIGINAL_MAPPING.get(aggregated_name, aggregated_name)
-
-
 def main():
-    # Read main CSV
+    # Read CSV
     df = pd.read_csv(CSV_PATH)
 
     # Filter out empty rows
@@ -60,41 +59,27 @@ def main():
     # Convert kappa to float
     df["quadratic_weighted_kappa"] = df["quadratic_weighted_kappa"].astype(float)
 
-    # Read aggregated CSV for error bars
-    df_agg = pd.read_csv(AGGREGATED_CSV_PATH)
-    df_agg = df_agg.dropna(subset=["quadratic_weighted_kappa"])
-    df_agg["quadratic_weighted_kappa"] = df_agg["quadratic_weighted_kappa"].astype(
-        float
-    )
+    # Map Run column to standardized model groups
+    df["model_group"] = df["Run"].apply(get_model_group)
 
-    # Map aggregated model names to original model names
-    df_agg["group"] = df_agg["Run"].apply(map_aggregated_to_original)
-
-    # Calculate statistics (mean and std) for each model from aggregated data
-    agg_stats = (
-        df_agg.groupby("group")["quadratic_weighted_kappa"]
+    # Calculate statistics (mean and std) for each model group
+    stats = (
+        df.groupby("model_group")["quadratic_weighted_kappa"]
         .agg(["mean", "std"])
         .reset_index()
     )
-    agg_stats.columns = ["group", "mean_kappa", "std_kappa"]
+    stats.columns = ["model_group", "mean_kappa", "std_kappa"]
+    stats["std_kappa"] = stats["std_kappa"].fillna(0)  # Fill NaN std with 0
 
-    # Merge with main dataframe
-    df = df.merge(agg_stats, on="group", how="left")
-
-    # Use mean from aggregated data if available, otherwise use original value
-    df["kappa_value"] = df["mean_kappa"].fillna(df["quadratic_weighted_kappa"])
-    # Fill NaN std with 0 (no error bar for single values)
-    df["std_kappa"] = df["std_kappa"].fillna(0)
-
-    # Format model names
-    df["model_display"] = df["group"].apply(format_model_name)
+    # Format model names for display
+    stats["model_display"] = stats["model_group"].apply(format_model_name)
 
     # Separate GPT-4o from others
-    gpt4o_row = df[df["group"] == "openai/chatgpt-4o"].copy()
-    other_rows = df[df["group"] != "openai/chatgpt-4o"].copy()
+    gpt4o_row = stats[stats["model_group"] == "openai/chatgpt-4o"].copy()
+    other_rows = stats[stats["model_group"] != "openai/chatgpt-4o"].copy()
 
     # Sort others by kappa score (best to worst)
-    other_rows = other_rows.sort_values("kappa_value", ascending=False)
+    other_rows = other_rows.sort_values("mean_kappa", ascending=False)
 
     # Combine: GPT-4o first, then others sorted best to worst
     df_sorted = pd.concat([gpt4o_row, other_rows], ignore_index=True)
@@ -111,7 +96,7 @@ def main():
     # Create bar chart with error bars
     bars = ax.barh(
         df_sorted["model_display"],
-        df_sorted["kappa_value"],
+        df_sorted["mean_kappa"],
         xerr=df_sorted["std_kappa"],
         color=colors,
         edgecolor="black",
@@ -121,7 +106,7 @@ def main():
     )
 
     # Add value labels on bars
-    for i, (bar, value) in enumerate(zip(bars, df_sorted["kappa_value"])):
+    for i, (bar, value) in enumerate(zip(bars, df_sorted["mean_kappa"])):
         width = bar.get_width()
         # Position label after error bar if present
         error_offset = (
@@ -133,7 +118,6 @@ def main():
             f"{value:.4f}",
             ha="left",
             va="center",
-            # fontweight="bold",
             fontsize=10,
         )
 
@@ -142,7 +126,7 @@ def main():
     ax.set_ylabel("Model", fontsize=12, fontweight="bold")
 
     # Set x-axis limits with some padding (accounting for error bars)
-    x_max_with_error = (df_sorted["kappa_value"] + df_sorted["std_kappa"]).max()
+    x_max_with_error = (df_sorted["mean_kappa"] + df_sorted["std_kappa"]).max()
     ax.set_xlim(0, min(1, x_max_with_error + 0.05))
 
     # Invert y-axis so GPT-4o is at the top
