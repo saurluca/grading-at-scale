@@ -1,5 +1,5 @@
 # Base configuration shared across all pipeline modules
-# This file contains common settings used by data preparation, training, and evaluation
+# This file contains common settings used by data preparation, finetuning, and evaluation
 
 project:
   name: grading-at-scale
@@ -29,4 +29,4 @@ labels:
 
 # MLflow tracking configuration
 mlflow:
-  tracking_uri: sqlite:///mlflow.db  # SQLite database path relative to project root
+  tracking_uri: sqlite:///mlflow.db # SQLite database path relative to project root

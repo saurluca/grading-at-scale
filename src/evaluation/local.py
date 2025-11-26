@@ -17,7 +17,7 @@ from sklearn.metrics import confusion_matrix
 
 # Check if CPU enforcement is needed (must be before torch imports)
 base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
-eval_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "evaluation.yaml")
+eval_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "evaluation_local.yaml")
 cfg = OmegaConf.merge(base_cfg, eval_cfg)
 
 enforce_cpu = bool(getattr(cfg.classifier_eval, "enforce_cpu", False))
@@ -367,7 +367,9 @@ def main() -> None:
                     "model_name": base_model_name,
                     "adapter_source": adapter_source,
                     "adapter_path": str(adapter_path) if adapter_path else "none",
-                    "dataset_trained_on_name": dataset_trained_on_name if dataset_trained_on_name else "none",
+                    "dataset_trained_on_name": dataset_trained_on_name
+                    if dataset_trained_on_name
+                    else "none",
                     "dataset_test_on_name": dataset_test_on_name,
                     "dataset_csv_path": csv_path,
                     "batch_size": per_device_eval_batch_size,

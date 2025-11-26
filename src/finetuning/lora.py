@@ -28,7 +28,7 @@ def main() -> None:
     base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
     training_cfg_path = os.environ.get(
         "TRAINING_CONFIG_PATH",
-        str(PROJECT_ROOT / "configs" / "training.yaml"),
+        str(PROJECT_ROOT / "configs" / "finetuning.yaml"),
     )
     training_cfg = OmegaConf.load(training_cfg_path)
     cfg = OmegaConf.merge(base_cfg, training_cfg)
@@ -198,7 +198,7 @@ def main() -> None:
         mlflow.log_metrics(detailed_metrics)
 
         # Log the full training configuration as an artifact
-        mlflow.log_artifact(PROJECT_ROOT / "configs" / "training.yaml", "config")
+        mlflow.log_artifact(PROJECT_ROOT / "configs" / "finetuning.yaml", "config")
 
         # Log the LoRA adapter using MLflow transformers integration
         if cfg.output.save_model_locally:

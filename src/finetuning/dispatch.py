@@ -20,8 +20,8 @@ def main() -> None:
     if training_cfg_path and Path(training_cfg_path).exists():
         training_cfg = OmegaConf.load(training_cfg_path)
     else:
-        # Default to training.yaml
-        training_path = PROJECT_ROOT / "configs" / "training.yaml"
+        # Default to finetuning.yaml
+        training_path = PROJECT_ROOT / "configs" / "finetuning.yaml"
         training_cfg = OmegaConf.load(training_path)
 
     cfg = OmegaConf.merge(base_cfg, training_cfg)
@@ -59,18 +59,18 @@ def main() -> None:
                 "project": {"seed": int(seed)},
                 "model": {"base": model_name},
             }
-            
+
             # Apply model-specific parameters if available
             if model_name in model_specific_params:
                 model_params = model_specific_params[model_name]
                 # Initialize training updates dict
                 training_updates = {}
-                
+
                 if "batch_size" in model_params:
                     training_updates["batch_size"] = model_params["batch_size"]
                 if "learning_rate" in model_params:
                     training_updates["learning_rate"] = model_params["learning_rate"]
-                
+
                 if training_updates:
                     per_run_updates["training"] = training_updates
                     print(
@@ -78,7 +78,7 @@ def main() -> None:
                         f"batch_size={model_params.get('batch_size', {}).get('train', 'default')}, "
                         f"lr={model_params.get('learning_rate', 'default')}"
                     )
-            
+
             per_run_cfg = OmegaConf.merge(cfg, per_run_updates)
             out_path = (
                 run_dir / f"dispatcher_run_{safe_model}_{int(time.time())}_{i}.yaml"

@@ -94,7 +94,9 @@ def run_single_training(
     # Perform detailed evaluation on validation set ONLY (NOT test set during grid search)
     # Test set should only be used for final evaluation after hyperparameters are selected
     if "val" not in tokenized_data:
-        raise ValueError("Validation set is required for grid search but was not found in tokenized_data")
+        raise ValueError(
+            "Validation set is required for grid search but was not found in tokenized_data"
+        )
     print(f"\nPerforming detailed evaluation on validation dataset...")
     detailed_metrics = detailed_evaluation(trainer, tokenized_data["val"], label_order)
 
@@ -186,9 +188,7 @@ def run_grid_search_with_seed(cfg, seed: int) -> dict:
         )
 
         # Run each combination
-        for idx, (lr, r, alpha_ratio, dropout, batch_size) in enumerate(
-            combinations
-        ):
+        for idx, (lr, r, alpha_ratio, dropout, batch_size) in enumerate(combinations):
             print(f"\n{'=' * 60}")
             print(f"Combination {idx + 1}/{total_combinations}")
             print(f"{'=' * 60}")
@@ -365,7 +365,7 @@ def main() -> None:
     base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
     training_cfg_path = os.environ.get(
         "TRAINING_CONFIG_PATH",
-        str(PROJECT_ROOT / "configs" / "hyperparameter_search.yaml"),
+        str(PROJECT_ROOT / "configs" / "lora_gridsearch.yaml"),
     )
     grid_search_cfg = OmegaConf.load(training_cfg_path)
 
@@ -375,7 +375,7 @@ def main() -> None:
     # Extract dispatcher configuration
     dispatcher = getattr(cfg, "dispatcher", {})
     seeds_list = dispatcher.get("seeds")
-    
+
     if seeds_list:
         seeds = [int(s) for s in seeds_list]
         num_runs = len(seeds)
@@ -401,7 +401,7 @@ def main() -> None:
 
     model_name: str = str(cfg.model.base)
     optimization_metric = str(cfg.grid_search.optimization_metric)
-    
+
     all_run_results = []
     overall_best_combination = None
     overall_best_metric_value = None
@@ -433,7 +433,10 @@ def main() -> None:
                 # Track overall best combination across all seeds
                 if run_result["best_combination"]:
                     metric_value = run_result["best_metric_value"]
-                    if overall_best_metric_value is None or metric_value > overall_best_metric_value:
+                    if (
+                        overall_best_metric_value is None
+                        or metric_value > overall_best_metric_value
+                    ):
                         overall_best_metric_value = metric_value
                         overall_best_combination = {
                             **run_result["best_combination"],
@@ -446,6 +449,7 @@ def main() -> None:
             except Exception as e:
                 print(f"\n✗ Error in run {run_idx + 1}/{num_runs} (seed {seed}): {e}")
                 import traceback
+
                 traceback.print_exc()
                 mlflow.log_param(f"error_run_{run_idx + 1}", str(e))
 
@@ -466,7 +470,9 @@ def main() -> None:
             print(f"  LoRA alpha: {overall_best_combination['lora_alpha']}")
             print(f"  LoRA dropout: {overall_best_combination['lora_dropout']}")
             print(f"  Training batch size: {overall_best_combination['batch_size']}")
-            print(f"  {optimization_metric}: {overall_best_combination['metric_value']:.4f}")
+            print(
+                f"  {optimization_metric}: {overall_best_combination['metric_value']:.4f}"
+            )
             print(f"  MLflow run ID: {overall_best_combination['run_id']}")
             print(f"{'=' * 60}\n")
 
@@ -475,13 +481,21 @@ def main() -> None:
                 {
                     "overall_best_seed": overall_best_combination["seed"],
                     "overall_best_run_idx": overall_best_combination["run_idx"],
-                    "overall_best_learning_rate": overall_best_combination["learning_rate"],
+                    "overall_best_learning_rate": overall_best_combination[
+                        "learning_rate"
+                    ],
                     "overall_best_lora_r": overall_best_combination["lora_r"],
-                    "overall_best_lora_alpha_ratio": overall_best_combination["lora_alpha_ratio"],
+                    "overall_best_lora_alpha_ratio": overall_best_combination[
+                        "lora_alpha_ratio"
+                    ],
                     "overall_best_lora_alpha": overall_best_combination["lora_alpha"],
-                    "overall_best_lora_dropout": overall_best_combination["lora_dropout"],
+                    "overall_best_lora_dropout": overall_best_combination[
+                        "lora_dropout"
+                    ],
                     "overall_best_batch_size": overall_best_combination["batch_size"],
-                    f"overall_best_{optimization_metric}": overall_best_combination["metric_value"],
+                    f"overall_best_{optimization_metric}": overall_best_combination[
+                        "metric_value"
+                    ],
                     "overall_best_combination_idx": overall_best_combination["idx"],
                     "overall_best_run_id": overall_best_combination["run_id"],
                 }
@@ -493,9 +507,15 @@ def main() -> None:
                     seed = run_result["seed"]
                     mlflow.log_params(
                         {
-                            f"seed_{seed}_best_{optimization_metric}": run_result["best_metric_value"],
-                            f"seed_{seed}_best_learning_rate": run_result["best_combination"]["learning_rate"],
-                            f"seed_{seed}_best_lora_r": run_result["best_combination"]["lora_r"],
+                            f"seed_{seed}_best_{optimization_metric}": run_result[
+                                "best_metric_value"
+                            ],
+                            f"seed_{seed}_best_learning_rate": run_result[
+                                "best_combination"
+                            ]["learning_rate"],
+                            f"seed_{seed}_best_lora_r": run_result["best_combination"][
+                                "lora_r"
+                            ],
                         }
                     )
 

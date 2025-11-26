@@ -1,7 +1,3 @@
-# Configuration for synthetic data generation
-# Used by: src/data_prep/create_synth_data.py
-# Note: This config is merged with base.yaml in the Python code
-
 # Model selection for generation and evaluation
 generation_model: gpt-4o
 teacher_model: gpt-4o

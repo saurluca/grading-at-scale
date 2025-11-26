@@ -1,9 +1,6 @@
-# Hyperparameter Grid Search Configuration
-# This config extends training.yaml and defines grid search parameters
-
 # Dispatcher controls (for multiple runs with different seeds)
 dispatcher:
-  num_runs: 1  # Number of grid search runs to perform
+  num_runs: 1 # Number of grid search runs to perform
   # seeds: [42, 43, 44]  # optional list; if not provided, random seeds will be used
   # If seeds is not specified, random seeds will be generated based on num_runs
 
@@ -17,23 +14,23 @@ model:
 # Grid search parameters
 grid_search:
   # Optimization metric to use for selecting best combination
-  optimization_metric: macro_f1  # weighted_f1 | macro_f1 | accuracy | eval_loss
-  
+  optimization_metric: macro_f1 # weighted_f1 | macro_f1 | accuracy | eval_loss
+
   # Learning rate values to explore
   learning_rate: [0.0001, 0.0002, 0.0005, 0.001]
-  
+
   # LoRA rank (r) values to explore
   lora_r: [8]
-  
+
   # LoRA alpha ratios (alpha will be computed as r * ratio)
   lora_alpha_ratios: [2.0]
-  
+
   # LoRA dropout values to explore
   lora_dropout: [0.2]
-  
+
   batch_size: [8, 16, 32]
 
-# Dataset (inherits from training.yaml if not specified)
+# Dataset
 dataset:
   dataset_name: gras
   train_file: train.csv
@@ -57,10 +54,10 @@ lora:
 # Training hyperparameters (base values, will be overridden by grid_search)
 training:
   num_epochs: 4
-  batch_size: 
+  batch_size:
     train: 16
     eval: 128
-  gradient_accumulation_steps: 1  # Fixed at 1, batch_size is varied instead
+  gradient_accumulation_steps: 1 # Fixed at 1, batch_size is varied instead
   weight_decay: 0.01
   eval_strategy: steps
   eval_steps: 100
@@ -74,4 +71,3 @@ tokenization:
 # MLflow tracking
 mlflow:
   experiment_name: lora_gridsearch_v3
-
