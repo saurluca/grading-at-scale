@@ -6,18 +6,18 @@
 classifier_eval:
   # List of models to evaluate
   models:
-    - meta-llama/Llama-3.2-1B-Instruct
-    - openai-community/gpt2-large
-    - google/flan-t5-large
+ #   - meta-llama/Llama-3.2-1B-Instruct
+#    - openai-community/gpt2-large
+#    - google/flan-t5-large
     - Qwen/Qwen3-0.6B
 
   # Adapter configuration (applies to all models)
   adapter:
-    source: local # Options: 'local', 'hub', or 'none' (for base model only)
+    source: hub # Options: 'local', 'hub', or 'none' (for base model only)
     # HuggingFace username for hub adapters (required if source is 'hub')
     huggingface_username: saurluca
     # Dataset name the model was trained on (required for adapter inference)
-    dataset_trained_on_name: SciEntsBank_3way
+    dataset_trained_on_name: gras
     # For 'hub': adapter path will be inferred as {huggingface_username}/{sanitized_model_name}-lora-{dataset_trained_on_name}
     # For 'local': adapter path will be inferred as ${paths.output_dir}/peft_output/adapter-{sanitized_model_name}-{dataset_trained_on_name}
     # For 'none': no adapter will be loaded, base model will be used directly
@@ -30,11 +30,11 @@ classifier_eval:
     sample_fraction: 1.0 # Use 100% of data by default (0.0-1.0)
     sample_seed: 24 # Seed for reproducible sampling
 
-  batch_size: 256
+  batch_size: 1
   
   # CPU enforcement and evaluation options
-  enforce_cpu: false  # Set to true to force CPU-only execution (useful for CPU-only environments)
-  timing: false  # Set to true to enable timing metrics (examples/min, time per example)
+  enforce_cpu: true # Set to true to force CPU-only execution (useful for CPU-only environments)
+  timing: true # Set to true to enable timing metrics (examples/min, time per example)
   report_to: mlflow  # MLflow reporting: "mlflow" or "none" (set to "none" for CPU-only evaluation if MLflow is unavailable)
 
 # Tokenization settings
