@@ -1,11 +1,8 @@
 # Base configuration shared across all pipeline modules
-# This file contains common settings used by data preparation, finetuning, and evaluation
-
 project:
   name: grading-at-scale
   seed: 42
 
-# Common paths used across modules
 paths:
   data_dir: data
   raw_dir: data/raw
@@ -14,7 +11,6 @@ paths:
   results_dir: results/
   hf_cache_dir: .hf_cache
 
-# Common label configuration for classification tasks
 labels:
   order: [incorrect, partial, correct]
   num_classes: 3
@@ -27,6 +23,5 @@ labels:
     1: partial
     2: correct
 
-# MLflow tracking configuration
 mlflow:
-  tracking_uri: sqlite:///mlflow.db # SQLite database path relative to project root
+  tracking_uri: sqlite:///mlflow.db

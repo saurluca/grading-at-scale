@@ -52,17 +52,6 @@ def map_labels(example: Dict[str, Any], label2id: Dict[str, int]) -> Dict[str, A
 
 
 def sample_dataset(dataset, sample_fraction: float, seed: int = 42):
-    """
-    Sample a fraction of the dataset using random sampling with a fixed seed.
-
-    Args:
-        dataset: The dataset to sample from
-        sample_fraction: Fraction of data to use (0.0-1.0)
-        seed: Random seed for reproducibility
-
-    Returns:
-        Sampled dataset if fraction < 1.0, otherwise original dataset
-    """
     if sample_fraction < 0.0 or sample_fraction > 1.0:
         raise ValueError(
             f"sample_fraction must be between 0.0 and 1.0, got {sample_fraction}"
@@ -100,7 +89,6 @@ def tokenize_fn(
     tokenizer,
     include_reference_answer: bool = False,
 ) -> Dict[str, Any]:
-    """Tokenize text data for model input."""
     # Determine batch size from any available field
     batch_size = len(next(iter(batch.values())))
 
@@ -119,8 +107,6 @@ def tokenize_fn(
 
 
 def compute_metrics(eval_pred):
-    """Compute accuracy, macro_f1, and weighted_f1 using logits and labels from EvalPrediction or tuple."""
-    # Support both (logits, labels) tuple and EvalPrediction object
     if hasattr(eval_pred, "predictions"):
         logits = eval_pred.predictions
         labels = eval_pred.label_ids
@@ -156,26 +142,14 @@ def load_and_preprocess_data(
     val_csv: str,
     test_csv: str | None = None,
 ):
-    """
-    Load and preprocess dataset from separate train/val/test CSV files.
-
-    Args:
-        cache_dir: Cache directory for datasets
-        train_csv: Path to train.csv
-        val_csv: Path to val.csv
-        test_csv: Path to test.csv (optional, for grid search can be None)
-
-    Returns:
-        raw_data: DatasetDict with 'train', 'val', and optionally 'test' splits
-        label_order: List of label names in order
-        label2id: Dict mapping label names to IDs
-        id2label: Dict mapping IDs to label names
-    """
-
     if test_csv:
-        print(f"Loading pre-split datasets from {train_csv}, {val_csv}, and {test_csv} ...")
+        print(
+            f"Loading pre-split datasets from {train_csv}, {val_csv}, and {test_csv} ..."
+        )
     else:
-        print(f"Loading pre-split datasets from {train_csv} and {val_csv} (test set skipped)...")
+        print(
+            f"Loading pre-split datasets from {train_csv} and {val_csv} (test set skipped)..."
+        )
 
     # Load separate train, validation, and test files
     train_dataset = load_dataset(
@@ -282,18 +256,6 @@ def setup_model_and_tokenizer(
     id2label: Dict[int, str],
     cache_dir: str | None,
 ):
-    """
-    Setup tokenizer and model.
-
-    Args:
-        model_name: Name of the model to load
-        label2id: Label to ID mapping
-        id2label: ID to label mapping
-        cache_dir: Cache directory for model files
-
-    Returns:
-        tokenizer, base_model
-    """
     print(f"Loading tokenizer and model from {model_name}...")
     tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
 
@@ -326,9 +288,6 @@ def setup_model_and_tokenizer(
 
 
 def setup_training_args(cfg, output_dir: str):
-    """Setup training arguments."""
-    # IT IS EVAL_STRATEGY, NOT EVALUATION_STRATEGY
-
     # Check if eval_steps is configured for step-based evaluation
     eval_steps = getattr(cfg.training, "eval_steps", None)
     if eval_steps is not None:
@@ -352,12 +311,14 @@ def setup_training_args(cfg, output_dir: str):
         "logging_strategy": "steps",
         "load_best_model_at_end": True,
         "metric_for_best_model": "eval_loss",
-        "greater_is_better": False,  # Loss is lower is better
+        "greater_is_better": False,
         "report_to": "mlflow",
         "seed": int(getattr(cfg.project, "seed", 42)),
         "bf16": True,
         "save_total_limit": 2,  # Keep best checkpoint and latest checkpoint
-        "gradient_accumulation_steps": int(getattr(cfg.training, "gradient_accumulation_steps", 1)),
+        "gradient_accumulation_steps": int(
+            getattr(cfg.training, "gradient_accumulation_steps", 1)
+        ),
     }
 
     # Add eval_steps if using step-based evaluation

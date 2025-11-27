@@ -74,15 +74,12 @@ df_graded = df_graded[df_graded["student"].apply(should_keep_student)].reset_ind
 print(f"After filtering: {len(df_graded)} participants")
 
 # %%
-# HTML cleaning functions (from logic_new.py)
 
 
 def remove_background_colors(text):
-    """Remove all background color spans from HTML text"""
     if pd.isna(text):
         return text
     text = str(text)
-    # Remove all <span style="background-color:rgb(...); ..."> tags (catch any style after or not)
     text = re.sub(
         r'<span style="[^"]*background-color:rgb\(\d{1,3},\d{1,3},\d{1,3}\);?[^"]*">',
         "",
@@ -127,25 +124,9 @@ df_graded["validity_and_soundness"] = df_graded["validity_and_soundness"].apply(
 )
 
 # %%
-# Improved extraction function
 
 
 def extract_subtask(text, letter, task_type="sentences"):
-    """
-    Extract content for a specific subtask letter from text.
-
-    Only stops at the NEXT letter in sequence (e.g., when extracting "a.",
-    only stops at "b.", not at "a." within the text).
-    Avoids false matches on "e.g." by checking that it's not followed by "g."
-
-    Args:
-        text: HTML text containing subtasks
-        letter: Letter to extract (a-h)
-        task_type: "sentences" (a-f) or "validity_and_soundness" (a-h)
-
-    Returns:
-        Extracted content for the subtask
-    """
     if pd.isna(text) or text == "":
         return ""
 

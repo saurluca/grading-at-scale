@@ -7,7 +7,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def process_grading_results(json_path):
-    """Process JSON grading results and add to CSV"""
     csv_path = PROJECT_ROOT / "data" / "logic" / "quiz_1_subtasks.csv"
 
     if not csv_path.exists():

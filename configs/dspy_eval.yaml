@@ -1,7 +1,3 @@
-# Configuration for DSPy-based API model evaluation
-# Used by: src/evaluation/evaluate.py
-# Note: This config is merged with base.yaml in the Python code
-
 model:
   # Single model to evaluate
   model: gpt-4o
@@ -13,20 +9,16 @@ model:
   with_prompt: false
   pass_reference_answer: true
 
-
 dataset:
-  # test_csv: data/gras/test.csv  # Always use test.csv
+  # test_csv: data/gras/test.csv
   test_csv: data/SciEntsBank_3way/test_ud.csv
 
-
 evaluation:
-  num_threads: 16  # For DSPy batched processing
-  num_runs: 1  # Number of times to run the evaluation (useful for stochastic models)
-
+  num_threads: 16 # For DSPy batched processing
+  num_runs: 1 # Number of times to run the evaluation (useful for stochastic models)
 
 mlflow:
-  experiment_name: lora_training_comparison_results_final_1  # MLflow experiment name
-
+  experiment_name: lora_training_comparison_results_final_1 # MLflow experiment name
 
 output:
   dir: ${paths.output_dir}/dspy_eval

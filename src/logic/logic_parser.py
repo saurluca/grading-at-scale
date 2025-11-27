@@ -24,16 +24,6 @@ df_remarks = pd.read_csv(
 def merge_raw_points_remarks(df_raw, df_points, df_remarks):
     # goal is to merge all df into one dataframe, but first correct tasks and columns need to be selected
 
-    # Columns of df_raw: Index(['Teilnehmer', '1. Sentences', '2. Validity and Soundness (I)',
-    #        '3. Validity and Soundness (II)', '4. Arguments'],
-    #       dtype='object')
-    # Columns of df_points: Index(['Teilnehmer', '1. Sentences', '2. Validity and Soundness (I)',
-    #        '3. Validity and Soundness (II)', '4. Arguments', 'Summe'],
-    #       dtype='object')
-    # Columns of df_remarks: Index(['task_id', 'username', 'remark_html'], dtype='object')
-    # Columns of df_tasks: Index(['question', 'answer', 'task'], dtype='object')
-
-    # First rename in df_points, "1. Sentences" to "sentences_points", and "3. Validity and Soundness (II)" to "validity_and_soundness_points"
     df_points = df_points.rename(
         columns={
             "1. Sentences": "sentences_points",
@@ -49,25 +39,20 @@ def merge_raw_points_remarks(df_raw, df_points, df_remarks):
         }
     )
 
-    # drop columns "2. Validity and Soundness (I)" and "4. Arguments" from df_raw and df_points
     df_raw = df_raw.drop(columns=["2. Validity and Soundness (I)", "4. Arguments"])
     df_points = df_points.drop(
         columns=["2. Validity and Soundness (I)", "4. Arguments", "Summe", "Teilnehmer"]
     )
 
-    # first we concat df_raw and df_points along the Teilnehmer column
     df_concat = pd.concat([df_raw, df_points], axis=1, join="inner")
 
     # assert length of both orgnal dfs and of df_concat same
     assert len(df_raw) == len(df_points) == len(df_concat)
 
-    # df_remarks has columns ['task_id', 'username', 'remark_html'], change task_id 0 to sentences and 2 to validity_and_soundness
     df_remarks["task_id"] = df_remarks["task_id"].replace(
         {0: "sentences", 2: "validity_and_soundness"}
     )
 
-    # merge df_concat and df_remarks, make two columsn from remarks. sentences_remarks and validity_and_soundness_remarks
-    # pivot df_remarks so that task_id values become column names
     df_remarks_pivot = df_remarks.pivot(
         index="username", columns="task_id", values="remark_html"
     ).reset_index()
@@ -119,24 +104,19 @@ df["validity_and_soundness_points"] = (
 df.dtypes
 
 # %%
-# next goal is to clean up the html of sentences and validity_and_soundness tasks
 
-
-# remove all background color spans (even if they only have background-color style) for all colors with regex
+# remove all background color spans
 def remove_background_colors(text):
-    # Remove all <span style="background-color:rgb(...); ..."> tags (catch any style after or not)
     text = re.sub(
         r'<span style="[^"]*background-color:rgb\(\d{1,3},\d{1,3},\d{1,3}\);?[^"]*">',
         "",
         text,
     )
-    # Also remove <span style="background-color:transparent;color:#000000;">
     text = re.sub(
         r'<span style="?background-color:transparent;color:#000000;"?>',
         "",
         text,
     )
-    # Also remove <span style="color:rgb(0,0,0);">
     text = re.sub(
         r'<span style="?color:rgb\(0,0,0\);"?>',
         "",
@@ -150,20 +130,17 @@ df["validity_and_soundness"] = df["validity_and_soundness"].apply(
     remove_background_colors
 )
 
-# remove <!--HTML-->
 df["sentences"] = df["sentences"].str.replace("<!--HTML-->", "")
 df["validity_and_soundness"] = df["validity_and_soundness"].str.replace(
     "<!--HTML-->", ""
 )
 
 
-# replace </p><p> with <br /> for uniform parsing
 df["sentences"] = df["sentences"].str.replace("</p><p>", "<br />")
 df["validity_and_soundness"] = df["validity_and_soundness"].str.replace(
     "</p><p>", "<br />"
 )
 
-# replace <br /><br /> with just <br />
 df["sentences"] = df["sentences"].str.replace("<br /><br />", "<br />")
 df["validity_and_soundness"] = df["validity_and_soundness"].str.replace(
     "<br /><br />", "<br />"
@@ -173,21 +150,12 @@ df.head()
 
 # %%
 
-# next up, clean up html of sentences_remarks and validity_and_soundness_remarks
-
-
-# Function to decode HTML entities, handling multiple levels of encoding
 def decode_html_entities(text):
-    """
-    Decode HTML entities, handling nested encodings like &amp;lt; -> &lt; -> <
-    """
     if pd.isna(text):
         return text
 
-    # Convert to string if not already
     text = str(text)
 
-    # Keep decoding until no more changes occur (handles nested encodings)
     previous_text = ""
     while text != previous_text:
         previous_text = text
@@ -215,10 +183,6 @@ df.to_csv(PROJECT_ROOT / "data" / "logic" / "quiz_1_cleaned.csv", index=False, s
 df.head()
 
 # %%
-
-# next up, split sentences and validity_and_soundness into subtasks, as extra columns.
-# for sentences, there are 6 subtasks, for validity_and_soundness, there are 8 subtasks, indicated by a., b., c., d., e., f., g., h.
-
 
 def extract_subtask(text, letter):
     """
@@ -267,4 +231,3 @@ df.head()
 # save df to csv
 df.to_csv(PROJECT_ROOT / "data" / "logic" / "quiz_1_subtasks.csv", index=False, sep=";")
 
-# %%

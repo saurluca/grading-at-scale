@@ -1,16 +1,3 @@
-#!/usr/bin/env python3
-"""
-Analyze the distribution of questions, answers, and labels per topic and data split.
-
-This script reads train.csv, val.csv, and test.csv from the data/gras directory
-and prints statistics about:
-- Questions (unique task_ids)
-- Answers (total rows)
-- Correct answers (label == 2)
-- Partially correct answers (label == 1)
-- Incorrect answers (label == 0)
-"""
-
 import pandas as pd
 from pathlib import Path
 from collections import defaultdict
@@ -20,7 +7,6 @@ DATA_DIR = PROJECT_ROOT / "data" / "gras"
 
 
 def analyze_split(df: pd.DataFrame, split_name: str) -> dict:
-    """Analyze a single data split and return statistics per topic."""
     stats = defaultdict(
         lambda: {
             "questions": set(),

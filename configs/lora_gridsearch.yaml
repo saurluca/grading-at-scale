@@ -1,10 +1,8 @@
-# Dispatcher controls (for multiple runs with different seeds)
 dispatcher:
   num_runs: 1 # Number of grid search runs to perform
   # seeds: [42, 43, 44]  # optional list; if not provided, random seeds will be used
   # If seeds is not specified, random seeds will be generated based on num_runs
 
-# Model selection (single model only for grid search)
 model:
   # base: Qwen/Qwen3-0.6B
   # base: meta-llama/Llama-3.2-1B-Instruct

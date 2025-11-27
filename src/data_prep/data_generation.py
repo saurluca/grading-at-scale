@@ -53,10 +53,7 @@ tasks_file_path = os.path.join(output_dir, cfg.input.tasks_filename)
 tasks = pd.read_csv(tasks_file_path, sep=";")
 
 
-# ------------------------------
 # Helpers to build kwargs/rows
-# ------------------------------
-
 DEFAULT_PASS_REFERENCE_ANSWER = {
     "correct": True,
     "partial": True,

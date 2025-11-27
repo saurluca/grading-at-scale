@@ -1,10 +1,3 @@
-"""
-MLflow configuration utility module.
-
-This module provides centralized MLflow setup functionality that reads
-the tracking URI from the configuration and initializes MLflow accordingly.
-"""
-
 import os
 from pathlib import Path
 from typing import Optional
@@ -14,17 +7,6 @@ from omegaconf import DictConfig
 
 
 def setup_mlflow(cfg: DictConfig, project_root: Optional[Path] = None) -> None:
-    """
-    Setup MLflow tracking URI from configuration.
-
-    This function reads the MLflow tracking URI from the config and sets it
-    before any MLflow operations. If tracking_uri is not set in config,
-    it defaults to SQLite backend.
-
-    Args:
-        cfg: OmegaConf configuration object (should contain mlflow.tracking_uri)
-        project_root: Optional project root path (defaults to detecting from file location)
-    """
     if project_root is None:
         # Default to parent of src directory
         project_root = Path(__file__).resolve().parent.parent
@@ -60,16 +42,6 @@ def setup_mlflow(cfg: DictConfig, project_root: Optional[Path] = None) -> None:
 
 
 def get_tracking_uri(cfg: DictConfig, project_root: Optional[Path] = None) -> str:
-    """
-    Get the MLflow tracking URI from configuration.
-
-    Args:
-        cfg: OmegaConf configuration object
-        project_root: Optional project root path
-
-    Returns:
-        The tracking URI string
-    """
     if project_root is None:
         project_root = Path(__file__).resolve().parent.parent
 
