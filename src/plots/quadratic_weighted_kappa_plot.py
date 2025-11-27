@@ -1,9 +1,3 @@
-"""
-Script to create a bar chart of quadratic weighted kappa scores from evaluation results.
-Orders models with GPT-4o at the top, then best to worst.
-Includes error bars based on aggregated model performance.
-"""
-
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -32,6 +26,15 @@ MODEL_NAME_MAPPING = {
     "qwen/qwen3-0.6b": "Qwen3 0.6B",
     "openai-community/gpt2-large": "GPT-2 Large",
     "google/flan-t5-large": "Flan-T5 Large",
+}
+
+# Mmodel order
+MODEL_ORDER = {
+    "openai/chatgpt-4o": 1,
+    "meta-llama/llama-3.2-1b-instruct": 2,
+    "google/flan-t5-large": 3,
+    "openai-community/gpt2-large": 4,
+    "qwen/qwen3-0.6b": 5,
 }
 
 
@@ -74,18 +77,14 @@ def main():
     # Format model names for display
     stats["model_display"] = stats["model_group"].apply(format_model_name)
 
-    # Separate GPT-4o from others
-    gpt4o_row = stats[stats["model_group"] == "openai/chatgpt-4o"].copy()
-    other_rows = stats[stats["model_group"] != "openai/chatgpt-4o"].copy()
-
-    # Sort others by kappa score (best to worst)
-    other_rows = other_rows.sort_values("mean_kappa", ascending=False)
-
-    # Combine: GPT-4o first, then others sorted best to worst
-    df_sorted = pd.concat([gpt4o_row, other_rows], ignore_index=True)
+    # Add order column and sort by custom order
+    stats["order"] = stats["model_group"].map(MODEL_ORDER)
+    # Fill NaN with a high number for models not in the order list
+    stats["order"] = stats["order"].fillna(999)
+    df_sorted = stats.sort_values("order").reset_index(drop=True)
 
     # Create the plot
-    fig, ax = plt.subplots(figsize=(12, 3 ))
+    fig, ax = plt.subplots(figsize=(12, 3))
 
     # Create color palette - highlight GPT-4o
     colors = [
