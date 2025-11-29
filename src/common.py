@@ -4,6 +4,7 @@ import os
 
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
 
+import torch
 from datasets import load_dataset, ClassLabel, DatasetDict, Value
 from sklearn.metrics import (
     accuracy_score,
@@ -298,6 +299,12 @@ def setup_training_args(cfg, output_dir: str):
         eval_strategy = str(getattr(cfg.training, "eval_strategy", "epoch"))
         save_strategy = str(getattr(cfg.output, "save_strategy", "epoch"))
 
+    # Check CUDA availability and force bf16 to False if CUDA is not available
+    use_bf16 = bool(getattr(cfg.training, "use_bf16", False))
+    if use_bf16 and not torch.cuda.is_available():
+        print("Warning: CUDA is not available, forcing use_bf16 to False")
+        use_bf16 = False
+
     training_args_dict = {
         "output_dir": output_dir,
         "num_train_epochs": float(cfg.training.num_epochs),
@@ -314,7 +321,7 @@ def setup_training_args(cfg, output_dir: str):
         "greater_is_better": False,
         "report_to": "mlflow",
         "seed": int(getattr(cfg.project, "seed", 42)),
-        "bf16": bool(getattr(cfg.training, "use_bf16", False)),
+        "bf16": use_bf16,
         "save_total_limit": 2,  # Keep best checkpoint and latest checkpoint
         "gradient_accumulation_steps": int(
             getattr(cfg.training, "gradient_accumulation_steps", 1)
