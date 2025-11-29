@@ -582,7 +582,7 @@ for run_idx in range(num_runs):
 
         traceback.print_exc()
         if num_runs > 1:
-            print(f"Continuing to next run...")
+            print("Continuing to next run...")
             continue
         else:
             raise

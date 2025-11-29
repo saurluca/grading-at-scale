@@ -82,12 +82,6 @@ def run_single_training(
 
     trainer.train()
 
-    # Get best validation metrics (from training history)
-    # The trainer stores the best metrics
-    best_metrics = (
-        trainer.state.best_metric if hasattr(trainer.state, "best_metric") else None
-    )
-
     # Evaluate on validation set to get final metrics
     final_eval_metrics = trainer.evaluate()
 
@@ -97,7 +91,7 @@ def run_single_training(
         raise ValueError(
             "Validation set is required for grid search but was not found in tokenized_data"
         )
-    print(f"\nPerforming detailed evaluation on validation dataset...")
+    print("\nPerforming detailed evaluation on validation dataset...")
     detailed_metrics = detailed_evaluation(trainer, tokenized_data["val"], label_order)
 
     return {
@@ -386,7 +380,7 @@ def main() -> None:
         seeds = [random.randint(0, 2**31 - 1) for _ in range(num_runs)]
 
     print(f"\n{'=' * 60}")
-    print(f"MULTI-RUN GRID SEARCH")
+    print("MULTI-RUN GRID SEARCH")
     print(f"{'=' * 60}")
     print(f"Number of runs: {num_runs}")
     print(f"Seeds: {seeds}")

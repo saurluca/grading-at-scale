@@ -9,11 +9,11 @@ from typing import Dict, List, Optional
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from omegaconf import OmegaConf
-import matplotlib.pyplot as plt
-import numpy as np
-import seaborn as sns
-from sklearn.metrics import confusion_matrix
+from omegaconf import OmegaConf  # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+import seaborn as sns  # noqa: E402
+from sklearn.metrics import confusion_matrix  # noqa: E402
 
 # Check if CPU enforcement is needed (must be before torch imports)
 base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
@@ -26,11 +26,11 @@ enforce_cpu = bool(getattr(cfg.classifier_eval, "enforce_cpu", False))
 if enforce_cpu:
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-from datasets import DatasetDict, load_dataset
-from peft import PeftModel
-import torch
-import mlflow
-from transformers import (
+from datasets import DatasetDict, load_dataset  # noqa: E402
+from peft import PeftModel  # noqa: E402
+import torch  # noqa: E402
+import mlflow  # noqa: E402
+from transformers import (  # noqa: E402
     DataCollatorWithPadding,
     Trainer,
     TrainingArguments,

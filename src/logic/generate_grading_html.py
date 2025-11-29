@@ -86,10 +86,6 @@ def create_group_html(group_row):
         """
         validity_subtasks_html.append(subtask_html)
 
-    # Calculate expected totals
-    sentences_total = sum([1.0] * 6)  # Default all to 1
-    validity_total = sum([1.0] * 8)  # Default all to 1
-
     group_html = f"""
     <details class="group-container" data-group-id="{group_id}" data-teilnehmer="{teilnehmer}" open>
         <summary>

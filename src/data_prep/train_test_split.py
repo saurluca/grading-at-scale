@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "src"))
 
 # TODO can we isolate train_test_split to not rely on common.py?
-from common import load_and_preprocess_data
+from common import load_and_preprocess_data  # noqa: E402
 
 # Load configuration
 config_path = PROJECT_ROOT / "configs" / "data_generation.yaml"
