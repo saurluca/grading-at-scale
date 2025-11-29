@@ -70,7 +70,9 @@ def main():
     df = pd.read_csv(CSV_PATH)
 
     # Clean quadratic_weighted_kappa column
-    df["quadratic_weighted_kappa"] = df["quadratic_weighted_kappa"].apply(clean_kappa_value)
+    df["quadratic_weighted_kappa"] = df["quadratic_weighted_kappa"].apply(
+        clean_kappa_value
+    )
 
     # Filter out rows with missing/invalid kappa values
     df = df.dropna(subset=["quadratic_weighted_kappa"])
@@ -93,7 +95,7 @@ def main():
             "min": df[col].min(),
             "max": df[col].max(),
         }
-    
+
     # Store metric range for axis labels
     param_ranges[METRIC_COLUMN] = {
         "min": df[METRIC_COLUMN].min(),
@@ -104,19 +106,21 @@ def main():
     df_normalized = df.copy()
     for col in PARAM_COLUMNS:
         df_normalized[f"{col}_norm"] = normalize_column(df[col])
-    
+
     # Normalize metric for visualization
     df_normalized[f"{METRIC_COLUMN}_norm"] = normalize_column(df[METRIC_COLUMN])
 
     # Sort by kappa for better visualization (best on top)
-    df_normalized = df_normalized.sort_values("quadratic_weighted_kappa", ascending=False)
+    df_normalized = df_normalized.sort_values(
+        "quadratic_weighted_kappa", ascending=False
+    )
 
     # Create figure and axis
     fig, ax = plt.subplots(figsize=(14, 6))
 
     # All columns including metric
     ALL_COLUMNS = PARAM_COLUMNS + [METRIC_COLUMN]
-    
+
     # Number of axes (parameters + metric)
     n_axes = len(ALL_COLUMNS)
     x_positions = np.linspace(0, 1, n_axes)
@@ -219,7 +223,13 @@ def main():
     sm = ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
     cbar = plt.colorbar(sm, ax=ax, pad=0.02, aspect=30)
-    cbar.set_label("Quadratic Weighted Kappa", fontsize=11, fontweight="bold", rotation=270, labelpad=20)
+    cbar.set_label(
+        "Quadratic Weighted Kappa",
+        fontsize=11,
+        fontweight="bold",
+        rotation=270,
+        labelpad=20,
+    )
 
     # Tight layout
     plt.tight_layout()
@@ -234,4 +244,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

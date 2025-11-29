@@ -478,7 +478,9 @@ print(f"Test set size: {len(test_df)}")
 pass_reference_answer = getattr(cfg.model, "pass_reference_answer", True)
 
 # Configure MLflow experiment
-experiment_name = OmegaConf.select(cfg, "mlflow.experiment_name", default="DSPy-Evaluation")
+experiment_name = OmegaConf.select(
+    cfg, "mlflow.experiment_name", default="DSPy-Evaluation"
+)
 mlflow.set_experiment(experiment_name)
 
 # Get number of runs from config
@@ -557,7 +559,8 @@ for run_idx in range(num_runs):
             mode_suffix = {"single": "single", "per_question": "perq"}.get(mode, mode)
             run_suffix = f"_run{run_idx + 1}" if num_runs > 1 else ""
             confusion_matrix_path = os.path.join(
-                output_dir, f"confusion_matrix_{model_short_safe}_{mode_suffix}{run_suffix}.png"
+                output_dir,
+                f"confusion_matrix_{model_short_safe}_{mode_suffix}{run_suffix}.png",
             )
             plot_confusion_matrix(
                 evaluation_metrics["y_true"],
@@ -569,7 +572,9 @@ for run_idx in range(num_runs):
             if os.path.exists(confusion_matrix_path):
                 mlflow.log_artifact(confusion_matrix_path, "confusion_matrices")
 
-            print(f"\nRun {run_idx + 1}/{num_runs} complete. MLflow run ID: {run.info.run_id}")
+            print(
+                f"\nRun {run_idx + 1}/{num_runs} complete. MLflow run ID: {run.info.run_id}"
+            )
 
     except Exception as e:
         print(f"Error during run {run_idx + 1}/{num_runs}: {e}")

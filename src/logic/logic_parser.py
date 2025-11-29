@@ -105,6 +105,7 @@ df.dtypes
 
 # %%
 
+
 # remove all background color spans
 def remove_background_colors(text):
     text = re.sub(
@@ -150,6 +151,7 @@ df.head()
 
 # %%
 
+
 def decode_html_entities(text):
     if pd.isna(text):
         return text
@@ -183,6 +185,7 @@ df.to_csv(PROJECT_ROOT / "data" / "logic" / "quiz_1_cleaned.csv", index=False, s
 df.head()
 
 # %%
+
 
 def extract_subtask(text, letter):
     """
@@ -230,4 +233,3 @@ df.head()
 
 # save df to csv
 df.to_csv(PROJECT_ROOT / "data" / "logic" / "quiz_1_subtasks.csv", index=False, sep=";")
-
