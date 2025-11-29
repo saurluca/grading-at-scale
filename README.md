@@ -63,7 +63,9 @@ uv run src/data_prep/prepare_scientsbank.py
 
 ### Custom Data Setup
 
-Note: for a simple test of the pipeline, just use the SciEntsBank dataset, for its simple setup.
+Note: for a simple test of the pipeline, use the SciEntsBank dataset due to its simple setup.
+
+The original GRAS dataset can be found at <https://huggingface.co/datasets/saurluca/GRAS>
 
 Expected CSV format (semicolon-separated):
 
@@ -166,7 +168,7 @@ Evaluate a model from an API (currently supports Azure, Ollama and VLLM) without
 uv run src/evaluation/dspy_eval.py
 ```
 
-Uses configuration from `configs/dspy_eval.yaml`. Supports single question or batch evaluation modes.
+Uses configuration from `configs/dspy_eval.yaml`. Supports single-question or batch evaluation modes.
 
 If you want to add other models, do so in `src/model_builder.py`
 
@@ -240,7 +242,7 @@ grading-at-scale/
 
 - **`json_tasks_to_csv.py`**: Converts JSON task files to CSV format. Processes all JSON files in the raw tasks directory and creates a unified CSV with columns: `question`, `answer`, `topic`.
 
-- **`answer_generation.py`**: Generates synthetic student answers using DSPy and LLMs. Supports three generation modes:
+- **`answer_generation.py`**: Generates synthetic student answers using DSPy and LLMs. Supports three-generation modes:
   - `single`: Generate one answer at a time
   - `per_question`: Generate multiple answers per question
   - `all`: Generate answers for all questions at once
