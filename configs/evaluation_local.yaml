@@ -19,8 +19,7 @@ classifier_eval:
     # For 'none': no adapter will be loaded, base model will be used directly
 
   dataset:
-    csv_path: data/gras/test.csv
-    # csv_path: data/gras/test.csv
+    csv_path: data/SciEntsBank_3way/test_ud.csv
 
     # Data sampling for evaluation
     sample_fraction: 1.0 # Use 100% of data by default (0.0-1.0), useful for quick testing
