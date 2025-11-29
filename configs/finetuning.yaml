@@ -70,7 +70,7 @@ training:
   eval_steps: 100 # Evaluation frequency in steps (only used when eval_strategy is overridden to steps)
   early_stopping_patience: 3 # Number of evaluations to wait before early stopping
   logging_steps: 20 # 20
-  use_bf16: true
+  use_bf16: true # when running on CPU set to false
 
 # Tokenization settings
 tokenization:
