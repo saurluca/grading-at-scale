@@ -5,8 +5,6 @@ model:
   mode: single
   cache: false
   max_tokens: 4096
-
-  with_prompt: false
   pass_reference_answer: true
 
 dataset:
@@ -14,7 +12,6 @@ dataset:
   test_csv: data/SciEntsBank_3way/test_ud.csv
 
 evaluation:
-  num_threads: 16 # For DSPy batched processing
   num_runs: 1 # Number of times to run the evaluation (useful for stochastic models)
 
 mlflow:

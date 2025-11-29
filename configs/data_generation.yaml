@@ -1,6 +1,5 @@
-# Model selection for generation and evaluation
+# Model selection for generation
 generation_model: gpt-4o
-teacher_model: gpt-4o
 
 # Input/Output paths
 input:
@@ -10,7 +9,6 @@ input:
 
 output:
   dir: ${paths.results_dir}
-  infer_filename: true # Auto-generate filename from params
 
 # Generation parameters
 generation:
@@ -27,15 +25,7 @@ generation:
     partial: true
     incorrect: false
 
-# Evaluation parameters (for grading generated answers)
-evaluation:
-  mode: per_question # single | per_question | all
-  chain_of_thought: false
-  pass_reference_answer: true
-
 # LM settings
 lm:
   temp_generation: 1.0
-  temp_evaluation: 0.6
   cache: true
-  max_tokens: 512 # Overridden based on mode

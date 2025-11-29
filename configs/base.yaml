@@ -1,6 +1,5 @@
 # Base configuration shared across all pipeline modules
 project:
-  name: grading-at-scale
   seed: 42
 
 paths:
@@ -10,18 +9,6 @@ paths:
   output_dir: results/
   results_dir: results/
   hf_cache_dir: .hf_cache
-
-labels:
-  order: [incorrect, partial, correct]
-  num_classes: 3
-  label2id:
-    incorrect: 0
-    partial: 1
-    correct: 2
-  id2label:
-    0: incorrect
-    1: partial
-    2: correct
 
 mlflow:
   tracking_uri: sqlite:///mlflow.db
