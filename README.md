@@ -197,7 +197,7 @@ grading-at-scale/
 │   │   ├── answer_generation.py
 │   │   ├── json_tasks_to_csv.py
 │   │   ├── prepare_scientsbank.py
-│   │   ├── train_test_split.py
+│   │   ├── split_data.py
 │   │   └── signatures.py
 │   ├── finetuning/       # LoRA fine-tuning scripts
 │   │   ├── lora.py
@@ -248,7 +248,7 @@ grading-at-scale/
   - `all`: Generate answers for all questions at once
   - Generates correct, partial, and incorrect answers based on configuration
 
-- **`train_test_split.py`**: Splits datasets into train/val/test sets by `task_id` to ensure no data leakage. Supports stratified splitting by topic.
+- **`split_data.py`**: Splits datasets into train/val/test sets by `task_id` to ensure no data leakage. Supports stratified splitting by topic.
 
 - **`prepare_scientsbank.py`**: Prepares SciEntsBank dataset from HuggingFace. Converts 5-way classification labels to 3-way (incorrect, partial, correct).
 
