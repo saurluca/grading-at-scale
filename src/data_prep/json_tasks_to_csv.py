@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Load configuration
 base_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
-data_gen_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "data_generation.yaml")
+data_gen_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "answer_generation.yaml")
 cfg = OmegaConf.merge(base_cfg, data_gen_cfg)
 
 # Resolve directories relative to project root

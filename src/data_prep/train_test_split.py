@@ -14,7 +14,7 @@ sys.path.append(str(PROJECT_ROOT / "src"))
 from common import load_and_preprocess_data  # noqa: E402
 
 # Load configuration
-config_path = PROJECT_ROOT / "configs" / "data_generation.yaml"
+config_path = PROJECT_ROOT / "configs" / "answer_generation.yaml"
 base_config_path = PROJECT_ROOT / "configs" / "base.yaml"
 
 with open(base_config_path, "r") as f:
