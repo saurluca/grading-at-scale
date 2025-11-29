@@ -1,10 +1,10 @@
 # %%
 from pathlib import Path
 import pandas as pd
-import yaml
 import sys
 import numpy as np
 from datasets import DatasetDict, Dataset
+from omegaconf import OmegaConf
 
 # Add src to path to import common module
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -13,24 +13,13 @@ sys.path.append(str(PROJECT_ROOT / "src"))
 # TODO can we isolate train_test_split to not rely on common.py?
 from common import load_and_preprocess_data  # noqa: E402
 
-# Load configuration
-config_path = PROJECT_ROOT / "configs" / "answer_generation.yaml"
-base_config_path = PROJECT_ROOT / "configs" / "base.yaml"
-
-with open(base_config_path, "r") as f:
-    base_config = yaml.safe_load(f)
-
-with open(config_path, "r") as f:
-    data_config = yaml.safe_load(f)
-
-# Merge configurations (data_config takes precedence)
-config = {**base_config, **data_config}
+# Load configuration (only base.yaml for seed)
+cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
 
 # Set up paths
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-data_dir = PROJECT_ROOT / config["paths"]["data_dir"]
+data_dir = PROJECT_ROOT / cfg.paths.data_dir
 synth_dir = PROJECT_ROOT / "data" / "gras"
-seed = config["project"]["seed"]
+seed = cfg.project.seed
 
 # Load the full dataset
 print("Loading full dataset...")
