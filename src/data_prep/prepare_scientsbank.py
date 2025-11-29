@@ -49,7 +49,7 @@ for split_name in dataset.keys():
     ]
 
     # Save to CSV with semicolon separator
-    output_path = output_dir / f"{split_name}_FAKE.csv"
+    output_path = output_dir / f"{split_name}.csv"
     df.to_csv(output_path, index=False, sep=";")
     print(f"Saved {split_name} split ({len(df)} samples) to {output_path}")
 
