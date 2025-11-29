@@ -16,6 +16,208 @@ This project is designed to:
 - Evaluate models with comprehensive metrics including accuracy, F1 scores, and quadratic weighted kappa
 - Track experiments using MLflow for reproducibility
 
+## Setup Instructions
+
+### Prerequisites
+
+- Python 3.12+
+- CUDA-capable GPU (for fine-tuning) or CPU-only mode available
+- `uv` package manager ([installation guide](https://github.com/astral-sh/uv))
+
+### Installation
+
+```bash
+# Install dependencies using uv
+uv sync
+
+# Install development dependencies (for linting, etc.)
+uv sync --group dev
+```
+
+### Environment Variables
+
+If you want to generate synthetic data, test proprietary models like GPT-4o, or use models through VLLM or OLLAMA for generation and evalution please create the `.env`. This is not needed for fine-tuning and evaluting models from Hugging Face.
+
+Create a `.env` file in the project root with the following variables:
+
+
+```bash
+# Azure OpenAI (for GPT-4o, GPT-4o-mini)
+AZURE_API_KEY=your_azure_api_key
+AZURE_API_BASE=https://your-resource.openai.azure.com/
+
+# Ollama (optional, for local models)
+OLLAMA_API_BASE=http://localhost:11434
+
+# vLLM (optional, for hosted vLLM models)
+VLLM_API_BASE=http://localhost:8000
+```
+
+### SciEntsBank Data Setup
+
+Simply run the following, and you are ready to go:
+
+```bash
+uv run src/data_prep/prepare_scientsbank.py
+```
+
+### Custom Data Setup
+
+Note: for a simple test of the pipeline, just use the SciEntsBank dataset, for its simple setup.
+
+Expected CSV format (semicolon-separated):
+
+- Columns: `task_id`, `question`, `reference_answer`, `topic`, `student_answer`, `labels`
+- Labels: `"incorrect"` (0), `"partial"` (1), `"correct"` (2)
+
+Steps
+
+1. Place dataset in the `data/` directory
+2. (Optional, if not done already) Split data into train, val, test-set by running
+
+```bash
+uv run src/data_prep/test_train_split.py
+```
+
+3. Example structure:
+
+```bash
+data/
+├── gras/
+│   ├── train.csv
+│   ├── val.csv
+│   └── test.csv
+└── SciEntsBank_3way/
+    ├── train.csv
+    └── ...
+```
+
+
+### MLflow Setup
+
+MLflow tracking is configured automatically using SQLite (`mlflow.db` in the project root). To view results:
+
+```bash
+# Start MLflow UI
+uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
+```
+
+Then open `http://localhost:5000` in your browser.
+
+## Usage Examples
+
+### Data Generation
+
+Generate synthetic student answers from reference questions:
+
+```bash
+uv run src/data_prep/answer_generation.py
+```
+
+This reads configuration from `configs/answer_generation.yaml` and generates synthetic answers based on the specified parameters. Requires prepared questions and reference answers, which can be served in json and converted to csv with `json_tasks_to.py`
+
+### Fine-tuning
+
+#### Single Model Training
+
+```bash
+uv run src/finetuning/dispatch.py
+```
+
+Uses configuration from `configs/finetuning.yaml`. Set `TRAINING_CONFIG_PATH` environment variable to use a different config:
+
+```bash
+TRAINING_CONFIG_PATH=configs/custom_training.yaml uv run src/finetuning/dispatch.py
+```
+
+We currently do not support multiple GPUs, so please use the environment flag `CUDA_VISIBLE_DEVICES=0` if you have multiple ones running, to only use one. 
+
+It is possible to queue multiple runs with different models and seeds in `configs/finetuning.yaml` under the `dispatcher` section.
+
+#### Grid Search
+
+Perform hyperparameter grid search:
+
+```bash
+uv run src/finetuning/lora_gridsearch.py
+```
+
+Configure the search space in `configs/lora_gridsearch.yaml`.
+
+### Evaluation
+
+#### Evaluate Fine-tuned Model
+
+Evaluate a fine-tuned model on a test set:
+
+```bash
+uv run src/evaluation/local.py
+```
+
+Configuration is read from `configs/evaluation_local.yaml`. Supports:
+- Loading adapters from HuggingFace Hub or local files
+- CPU-only evaluation mode (`enforce_cpu: true`), which was used for Experiment III
+
+#### Zero-shot Evaluation with DSPy
+
+Evaluate a model from an API (currently supports Azure, Ollama and VLLM) without fine-tuning using DSPy:
+
+```bash
+uv run src/evaluation/dspy_eval.py
+```
+
+Uses configuration from `configs/dspy_eval.yaml`. Supports single question or batch evaluation modes.
+
+If you want to add other models, do so in `src/model_builder.py`
+
+
+
+## Project Structure
+
+```
+grading-at-scale/
+├── configs/              # YAML configuration files
+│   ├── base.yaml
+│   ├── answer_generation.yaml
+│   ├── finetuning.yaml
+│   ├── evaluation_local.yaml
+│   ├── dspy_eval.yaml
+│   └── lora_gridsearch.yaml
+├── data/                 # Datasets (CSV files)
+│   ├── gras/
+│   ├── SciEntsBank_3way/
+│   └── raw/              # Raw data files
+├── results/              # Training outputs and results
+│   ├── peft_output/      # LoRA adapter outputs
+│   └── ...
+├── src/
+│   ├── data_prep/        # Data preparation scripts
+│   │   ├── answer_generation.py
+│   │   ├── json_tasks_to_csv.py
+│   │   ├── prepare_scientsbank.py
+│   │   ├── train_test_split.py
+│   │   └── signatures.py
+│   ├── finetuning/       # LoRA fine-tuning scripts
+│   │   ├── lora.py
+│   │   ├── lora_gridsearch.py
+│   │   └── dispatch.py
+│   ├── evaluation/       # Evaluation scripts
+│   │   ├── local.py
+│   │   ├── dspy_eval.py
+│   │   └── signatures.py
+│   ├── logic/            # Logic-related utilities
+│   ├── plots/            # Plotting utilities
+│   ├── scripts/          # Utility scripts
+│   ├── common.py         # Shared utilities
+│   ├── model_builder.py  # DSPy model builder
+│   └── mlflow_config.py  # MLflow configuration
+├── pyproject.toml        # Project dependencies and metadata
+├── uv.lock               # Locked dependency versions
+├── mlflow.db             # MLflow SQLite database
+└── README.md             # This file
+```
+
+
 ## Code Overview and Structure
 
 ### Core Modules (`src/`)
@@ -135,141 +337,6 @@ All configurations use OmegaConf YAML files with hierarchical merging:
   - Optimization metric selection
   - Dispatcher configuration
 
-## Setup Instructions
-
-### Prerequisites
-
-- Python 3.12+
-- CUDA-capable GPU (for fine-tuning) or CPU-only mode available
-- `uv` package manager ([installation guide](https://github.com/astral-sh/uv))
-
-### Installation
-
-```bash
-# Install dependencies using uv
-uv sync
-
-# Install development dependencies (for linting, etc.)
-uv sync --group dev
-```
-
-### Environment Variables
-
-Create a `.env` file in the project root with the following variables:
-
-```bash
-# Azure OpenAI (for GPT-4o, GPT-4o-mini)
-AZURE_API_KEY=your_azure_api_key
-AZURE_API_BASE=https://your-resource.openai.azure.com/
-
-# Ollama (optional, for local models)
-OLLAMA_API_BASE=http://localhost:11434
-
-# vLLM (optional, for hosted vLLM models)
-VLLM_API_BASE=http://localhost:8000
-```
-
-### Data Setup
-
-1. Place your datasets in the `data/` directory
-2. Expected CSV format (semicolon-separated):
-   - Columns: `task_id`, `question`, `reference_answer`, `topic`, `student_answer`, `labels`
-   - Labels: `"incorrect"` (0), `"partial"` (1), `"correct"` (2)
-3. Example structure:
-   ```
-   data/
-   ├── gras/
-   │   ├── train.csv
-   │   ├── val.csv
-   │   └── test.csv
-   └── SciEntsBank_3way/
-       ├── train.csv
-       └── ...
-   ```
-
-### MLflow Setup
-
-MLflow tracking is configured automatically using SQLite (`mlflow.db` in the project root). To view results:
-
-```bash
-# Start MLflow UI
-mlflow ui --backend-store-uri sqlite:///mlflow.db
-```
-
-Then open `http://localhost:5000` in your browser.
-
-## Usage Examples
-
-### Data Generation
-
-Generate synthetic student answers from reference questions:
-
-```bash
-uv run src/data_prep/answer_generation.py
-```
-
-This reads configuration from `configs/answer_generation.yaml` and generates synthetic answers based on the specified parameters.
-
-### Fine-tuning
-
-#### Single Model Training
-
-```bash
-CUDA_VISIBLE_DEVICES=0 uv run src/finetuning/lora.py
-```
-
-Uses configuration from `configs/finetuning.yaml`. Set `TRAINING_CONFIG_PATH` environment variable to use a different config:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 TRAINING_CONFIG_PATH=configs/custom_training.yaml uv run src/finetuning/lora.py
-```
-
-#### Multiple Models/Seeds
-
-Run multiple training runs with different models and seeds:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 uv run src/finetuning/dispatch.py
-```
-
-Configure models and seeds in `configs/finetuning.yaml` under the `dispatcher` section.
-
-#### Grid Search
-
-Perform hyperparameter grid search:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 uv run src/finetuning/lora_gridsearch.py
-```
-
-Configure the search space in `configs/lora_gridsearch.yaml`.
-
-### Evaluation
-
-#### Evaluate Fine-tuned Model
-
-Evaluate a fine-tuned model on a test set:
-
-```bash
-uv run src/evaluation/local.py
-```
-
-Configuration is read from `configs/evaluation_local.yaml`. Supports:
-- Loading adapters from HuggingFace Hub or local files
-- CPU-only evaluation mode (`enforce_cpu: true`)
-- Data sampling for faster evaluation
-- Comprehensive metrics and visualizations
-
-#### Zero-shot Evaluation with DSPy
-
-Evaluate a model without fine-tuning using DSPy:
-
-```bash
-uv run src/evaluation/dspy_eval.py
-```
-
-Uses configuration from `configs/dspy_eval.yaml`. Supports single question or batch evaluation modes.
-
 ## Configuration Guide
 
 ### Configuration System
@@ -315,55 +382,10 @@ dataset:
   sample_seed: 42
 ```
 
-## Project Structure
-
-```
-grading-at-scale/
-├── configs/              # YAML configuration files
-│   ├── base.yaml
-│   ├── answer_generation.yaml
-│   ├── finetuning.yaml
-│   ├── evaluation_local.yaml
-│   ├── dspy_eval.yaml
-│   └── lora_gridsearch.yaml
-├── data/                 # Datasets (CSV files)
-│   ├── gras/
-│   ├── SciEntsBank_3way/
-│   └── raw/              # Raw data files
-├── results/              # Training outputs and results
-│   ├── peft_output/      # LoRA adapter outputs
-│   └── ...
-├── src/
-│   ├── data_prep/        # Data preparation scripts
-│   │   ├── answer_generation.py
-│   │   ├── json_tasks_to_csv.py
-│   │   ├── prepare_scientsbank.py
-│   │   ├── train_test_split.py
-│   │   └── signatures.py
-│   ├── finetuning/       # LoRA fine-tuning scripts
-│   │   ├── lora.py
-│   │   ├── lora_gridsearch.py
-│   │   └── dispatch.py
-│   ├── evaluation/       # Evaluation scripts
-│   │   ├── local.py
-│   │   ├── dspy_eval.py
-│   │   └── signatures.py
-│   ├── logic/            # Logic-related utilities
-│   ├── plots/            # Plotting utilities
-│   ├── scripts/          # Utility scripts
-│   ├── common.py         # Shared utilities
-│   ├── model_builder.py  # DSPy model builder
-│   └── mlflow_config.py  # MLflow configuration
-├── pyproject.toml        # Project dependencies and metadata
-├── uv.lock               # Locked dependency versions
-├── mlflow.db             # MLflow SQLite database
-└── README.md             # This file
-```
-
 ## Key Features
 
-- **Parameter-Efficient Fine-tuning**: Uses LoRA (Low-Rank Adaptation) for efficient model fine-tuning with minimal parameter overhead
-- **Synthetic Data Generation**: Generates training data using LLMs with configurable quality levels (correct/partial/incorrect)
+- **Parameter-Efficient Fine-tuning**: Uses LoRA for efficient model fine-tuning
+- **Synthetic Data Generation**: Generates training data using LLMs 
 - **Comprehensive Evaluation Metrics**:
   - Overall: accuracy, macro F1, weighted F1, quadratic weighted kappa
   - Per-class: precision, recall, F1 for each label
@@ -373,22 +395,6 @@ grading-at-scale/
 - **Multiple Model Backends**: Supports Azure OpenAI, Ollama, and vLLM backends
 - **Flexible Configuration**: Hierarchical YAML configuration with model-specific overrides
 - **Reproducibility**: Seed control and deterministic data splitting by task_id
-
-## Datasets
-
-### GRAS
-
-Custom dataset located in `data/gras/`. Contains:
-- `full.csv`: Complete dataset
-- `train.csv`, `val.csv`, `test.csv`: Pre-split datasets
-- Format: `task_id`, `question`, `reference_answer`, `topic`, `student_answer`, `labels`
-
-### SciEntsBank
-
-Converted from HuggingFace dataset (`nkazi/SciEntsBank`). The original 5-way classification is converted to 3-way:
-- **Original labels**: correct, partially_correct_incomplete, contradictory, irrelevant, non_domain
-- **Converted labels**: correct (2), partial (1), incorrect (0)
-- Located in `data/SciEntsBank_3way/`
 
 ## Dependencies
 
@@ -428,15 +434,10 @@ Key dependencies (see `pyproject.toml` for complete list):
 - Labels must be: `"incorrect"`, `"partial"`, `"correct"` (case-insensitive)
 - `task_id` is used to prevent data leakage between splits
 
-### Evaluation Modes
+## AI Usage Disclosure
 
-- **Local evaluation** (`local.py`): For fine-tuned models, supports CPU-only mode
-- **DSPy evaluation** (`dspy_eval.py`): For zero-shot evaluation, requires API access
+A substantial part of this codebase has been created with the help of generative AI tools (Claude Sonnet 4, Composer 1). Usage includes but is not limited to: refactoring, boilerplate generation, writing of commit messages, translating comments to code. All code has been manually reviewedm, verified and tested by the author, to ensure correctness.
 
 ## Contributing
 
-This is a thesis project. For questions or issues, please contact the project maintainer.
-
-## License
-
-[Add license information if applicable]
+This is a thesis project. For questions or issues, please contact the project maintainer at <mail@lucasaur.com>.
