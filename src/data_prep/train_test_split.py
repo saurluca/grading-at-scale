@@ -1,54 +1,61 @@
 # %%
 from pathlib import Path
 import pandas as pd
-import sys
 import numpy as np
-from datasets import DatasetDict, Dataset
 from omegaconf import OmegaConf
 
-# Add src to path to import common module
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.append(str(PROJECT_ROOT / "src"))
-
-# TODO can we isolate train_test_split to not rely on common.py?
-from common import load_and_preprocess_data  # noqa: E402
-
 # Load configuration (only base.yaml for seed)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 cfg = OmegaConf.load(PROJECT_ROOT / "configs" / "base.yaml")
 
 # Set up paths
 data_dir = PROJECT_ROOT / cfg.paths.data_dir
 synth_dir = PROJECT_ROOT / "data" / "gras"
+synth_dir.mkdir(parents=True, exist_ok=True)
 seed = cfg.project.seed
+
+label_order = ["incorrect", "partial", "correct"]
+label2id = {name: i for i, name in enumerate(label_order)}
+
+
+def map_label(label_raw):
+    """Map string labels to integer IDs."""
+    if label_raw is None:
+        raise ValueError("No label found.")
+
+    # Try to interpret as a number
+    try:
+        label_num = float(label_raw)
+        if label_num.is_integer():
+            return int(label_num)
+        else:
+            raise ValueError(
+                f"Label value '{label_raw}' is not an integer class index."
+            )
+    except (ValueError, TypeError):
+        # Not a number, treat as string label
+        label_val = str(label_raw).strip().lower()
+        if label_val in label2id:
+            return label2id[label_val]
+        else:
+            raise ValueError(
+                f"Label '{label_raw}' not found in label2id mapping: {label2id}"
+            )
+
 
 # Load the full dataset
 print("Loading full dataset...")
 df_full = pd.read_csv(data_dir / "gras" / "full.csv", sep=";")
 
-# Save to temporary file for load_and_preprocess_data function
-temp_csv_path = synth_dir / "temp_full.csv"
-df_full.to_csv(temp_csv_path, index=False, sep=";")
+# Map labels to integers
+print("Mapping labels...")
+df_full["labels"] = df_full["labels"].apply(map_label)
 
-# %%
 # Split dataset by task_id (questions) to ensure no overlap between splits
-print("Splitting dataset into train/val/test (6/2/2) by task_id...")
-
-# Load and preprocess data (for label mapping, etc.)
-# Note: load_and_preprocess_data always splits by questions (task_id) now
-raw_data, label_order, label2id, id2label = load_and_preprocess_data(
-    dataset_csv=str(temp_csv_path),
-    cache_dir=None,
-    seed=seed,
-    test_size=0.2,  # 20% for test
-)
-
-# Get unique task_ids from the full dataset
-df_full_with_labels = raw_data["train"].to_pandas()
-df_test_with_labels = raw_data["test"].to_pandas()
-df_combined = pd.concat([df_full_with_labels, df_test_with_labels], ignore_index=True)
+print("Splitting dataset into train/val/test (60/20/20) by task_id...")
 
 # Group task_ids by topic for stratified splitting
-task_id_to_topic = df_combined.groupby("task_id")["topic"].first().to_dict()
+task_id_to_topic = df_full.groupby("task_id")["topic"].first().to_dict()
 topics_to_task_ids = {}
 for task_id, topic in task_id_to_topic.items():
     if topic not in topics_to_task_ids:
@@ -56,10 +63,9 @@ for task_id, topic in task_id_to_topic.items():
     topics_to_task_ids[topic].append(task_id)
 
 # Calculate label distribution per task_id
-# This will help us stratify by labels while splitting by task_id
 task_id_label_counts = {}
-for task_id in df_combined["task_id"].unique():
-    task_rows = df_combined[df_combined["task_id"] == task_id]
+for task_id in df_full["task_id"].unique():
+    task_rows = df_full[df_full["task_id"] == task_id]
     label_counts = task_rows["labels"].value_counts().to_dict()
     # Ensure all labels are present (0=incorrect, 1=partial, 2=correct)
     task_id_label_counts[task_id] = {
@@ -201,12 +207,11 @@ for split_name, task_ids in [
         )
 
 # Print label distribution
-label_names = ["incorrect", "partial", "correct"]
 for split_name in ["train", "val", "test"]:
     counts = split_label_counts[split_name]
     total = counts.sum()
     print(f"\n{split_name.upper()}:")
-    for label_id, label_name in enumerate(label_names):
+    for label_id, label_name in enumerate(label_order):
         count = counts[label_id]
         percentage = (count / total * 100) if total > 0 else 0
         print(f"  {label_name:12}: {count:6} ({percentage:5.1f}%)")
@@ -238,57 +243,21 @@ for topic in sorted(topics_to_task_ids.keys()):
 print("=" * 80 + "\n")
 
 # Filter datasets based on task_id assignment
-train_indices = [
-    i for i, task_id in enumerate(df_combined["task_id"]) if task_id in train_task_ids
-]
-val_indices = [
-    i for i, task_id in enumerate(df_combined["task_id"]) if task_id in val_task_ids
-]
-test_indices = [
-    i for i, task_id in enumerate(df_combined["task_id"]) if task_id in test_task_ids
-]
-
-# Convert back to datasets
-train_dataset = Dataset.from_pandas(
-    df_combined.iloc[train_indices].reset_index(drop=True)
-)
-val_dataset = Dataset.from_pandas(df_combined.iloc[val_indices].reset_index(drop=True))
-test_dataset = Dataset.from_pandas(
-    df_combined.iloc[test_indices].reset_index(drop=True)
-)
-
-# Create final dataset with 6/2/2 split (60% train, 20% val, 20% test)
-final_dataset = DatasetDict(
-    {
-        "train": train_dataset,
-        "val": val_dataset,
-        "test": test_dataset,
-    }
-)
+df_train = df_full[df_full["task_id"].isin(train_task_ids)].copy()
+df_val = df_full[df_full["task_id"].isin(val_task_ids)].copy()
+df_test = df_full[df_full["task_id"].isin(test_task_ids)].copy()
 
 print("Final split sizes:")
-print(f"Train: {len(final_dataset['train'])} samples")
-print(f"Validation: {len(final_dataset['val'])} samples")
-print(f"Test: {len(final_dataset['test'])} samples")
-print(
-    f"Total: {len(final_dataset['train']) + len(final_dataset['val']) + len(final_dataset['test'])} samples"
-)
+print(f"Train: {len(df_train)} samples")
+print(f"Validation: {len(df_val)} samples")
+print(f"Test: {len(df_test)} samples")
+print(f"Total: {len(df_train) + len(df_val) + len(df_test)} samples")
 
-# %%
 # Save the split datasets
-print("Saving split datasets...")
-
-# Convert back to pandas DataFrames and save
-for split_name, dataset in final_dataset.items():
-    # Convert to pandas DataFrame
-    df_split = dataset.to_pandas()
-
-    # Save to CSV
-    output_path = synth_dir / f"{split_name}.csv"
+print("\nSaving split datasets...")
+for split_name, df_split in [("train", df_train), ("val", df_val), ("test", df_test)]:
+    output_path = synth_dir / f"{split_name}_FAKE.csv"
     df_split.to_csv(output_path, index=False, sep=";")
-    print(f"Saved {split_name} split to {output_path}")
+    print(f"Saved {split_name} split ({len(df_split)} samples) to {output_path}")
 
-# Clean up temporary file
-temp_csv_path.unlink()
-
-print("Dataset splitting completed!")
+print("\nDataset splitting completed!")
