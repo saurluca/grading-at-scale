@@ -256,7 +256,7 @@ print(f"Total: {len(df_train) + len(df_val) + len(df_test)} samples")
 # Save the split datasets
 print("\nSaving split datasets...")
 for split_name, df_split in [("train", df_train), ("val", df_val), ("test", df_test)]:
-    output_path = synth_dir / f"{split_name}_FAKE.csv"
+    output_path = synth_dir / f"{split_name}.csv"
     df_split.to_csv(output_path, index=False, sep=";")
     print(f"Saved {split_name} split ({len(df_split)} samples) to {output_path}")
 
