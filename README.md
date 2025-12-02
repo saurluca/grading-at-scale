@@ -424,7 +424,7 @@ Key dependencies (see `pyproject.toml` for complete list):
 
 ## AI Usage Disclosure
 
-A substantial part of this codebase has been created with the help of generative AI tools (Claude Sonnet 4, Composer 1). Usage includes but is not limited to: refactoring, boilerplate generation, writing of commit messages, translating comments to code. All code has been manually reviewedm, verified and tested by the author, to ensure correctness.
+A substantial portion of this codebase was created using generative AI tools (Claude Sonnet 4, Composer 1). Usage includes but is not limited to: refactoring, boilerplate generation, writing of commit messages, and translating comments to code. All code has been manually reviewed, verified and tested by the author to ensure correctness.
 
 ## Contributing
 
