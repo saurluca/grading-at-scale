@@ -384,20 +384,6 @@ dataset:
   sample_seed: 42
 ```
 
-## Key Features
-
-- **Parameter-Efficient Fine-tuning**: Uses LoRA for efficient model fine-tuning
-- **Synthetic Data Generation**: Generates training data using LLMs 
-- **Comprehensive Evaluation Metrics**:
-  - Overall: accuracy, macro F1, weighted F1, quadratic weighted kappa
-  - Per-class: precision, recall, F1 for each label
-  - Per-topic: topic-specific performance evaluation
-- **MLflow Experiment Tracking**: All experiments are tracked with parameters, metrics, and artifacts
-- **CPU-Only Evaluation Mode**: Supports evaluation on CPU-only environments
-- **Multiple Model Backends**: Supports Azure OpenAI, Ollama, and vLLM backends
-- **Flexible Configuration**: Hierarchical YAML configuration with model-specific overrides
-- **Reproducibility**: Seed control and deterministic data splitting by task_id
-
 ## Dependencies
 
 Key dependencies (see `pyproject.toml` for complete list):
