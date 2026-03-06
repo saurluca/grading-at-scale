@@ -207,7 +207,6 @@ grading-at-scale/
 │   │   ├── local.py
 │   │   ├── dspy_eval.py
 │   │   └── signatures.py
-│   ├── logic/            # Logic-related utilities
 │   ├── plots/            # Plotting utilities
 │   ├── scripts/          # Utility scripts
 │   ├── common.py         # Shared utilities
