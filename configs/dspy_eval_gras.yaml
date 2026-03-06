@@ -1,0 +1,20 @@
+# GPT-4o evaluation on GRAS test set (no logic)
+# Used for: Experiment 1 (GRAS results) and Table 3 D2->D1 column
+model:
+  model: gpt-4o
+  mode: single
+  cache: false
+  max_tokens: 4096
+  pass_reference_answer: true
+
+dataset:
+  test_csv: data/gras_no_logic/test.csv
+
+evaluation:
+  num_runs: 3
+
+mlflow:
+  experiment_name: paper_experiments_no_logic
+
+output:
+  dir: ${paths.output_dir}/dspy_eval

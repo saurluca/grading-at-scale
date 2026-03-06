@@ -1,0 +1,20 @@
+# GPT-4o evaluation on SciEntsBank test set (test_ud)
+# Used for: Table 3 D1->D2 column
+model:
+  model: gpt-4o
+  mode: single
+  cache: false
+  max_tokens: 4096
+  pass_reference_answer: true
+
+dataset:
+  test_csv: data/SciEntsBank_3way/test_ud.csv
+
+evaluation:
+  num_runs: 3
+
+mlflow:
+  experiment_name: paper_experiments_no_logic
+
+output:
+  dir: ${paths.output_dir}/dspy_eval

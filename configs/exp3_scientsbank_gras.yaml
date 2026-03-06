@@ -1,0 +1,65 @@
+# Experiment 3: Train on SciEntsBank, Test on GRAS (no logic)
+dispatcher:
+  num_runs: 5
+  models:
+    - meta-llama/Llama-3.2-1B-Instruct
+    - google/flan-t5-large
+    - openai-community/gpt2-large
+    - Qwen/Qwen3-0.6B
+
+dataset:
+  dataset_name: SciEntsBank_3way
+  test_set_name: gras_no_logic
+  train_file: train.csv
+  val_file: test_uq.csv
+  test_file: ../gras_no_logic/test.csv
+
+output:
+  dir: ${paths.output_dir}/peft_output
+  save_model_locally: false
+  push_to_hub: false
+  save_strategy: steps
+
+lora:
+  r: 8
+  alpha: 16
+  dropout: 0.2
+  target_modules: "all-linear"
+
+model_specific_params:
+  meta-llama/Llama-3.2-1B-Instruct:
+    batch_size:
+      train: 16
+    learning_rate: 0.0002
+  Qwen/Qwen3-0.6B:
+    batch_size:
+      train: 16
+    learning_rate: 0.0005
+  openai-community/gpt2-large:
+    batch_size:
+      train: 8
+    learning_rate: 0.0005
+  google/flan-t5-large:
+    batch_size:
+      train: 8
+    learning_rate: 0.0005
+
+training:
+  num_epochs: 4
+  batch_size:
+    train: 16
+    eval: 128
+  gradient_accumulation_steps: 1
+  learning_rate: 0.0005
+  weight_decay: 0.01
+  eval_strategy: steps
+  eval_steps: 100
+  early_stopping_patience: 3
+  logging_steps: 20
+  use_bf16: true
+
+tokenization:
+  include_reference_answer: true
+
+mlflow:
+  experiment_name: paper_experiments_no_logic
