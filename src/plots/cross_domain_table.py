@@ -27,7 +27,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.mlflow_config import setup_mlflow  # noqa: E402
 
-EXPERIMENT_NAME = "paper_experiments_no_logic"
+EXPERIMENT_NAME = "paper_experiments"
 OUTPUT_PATH = PROJECT_ROOT / "results" / "cross_domain_transfer.csv"
 
 MODEL_ORDER = [
@@ -43,7 +43,9 @@ def fmt(mean: float, std: float) -> str:
     return f"{mean:.2f} +/- {std:.2f}"
 
 
-def get_runs_for_direction(all_runs: pd.DataFrame, model_id: str, direction: str) -> pd.DataFrame:
+def get_runs_for_direction(
+    all_runs: pd.DataFrame, model_id: str, direction: str
+) -> pd.DataFrame:
     """
     Filter runs for a model and transfer direction.
     direction: "d1_to_d2" = train GRAS test SciEntsBank (exp 2)
@@ -53,25 +55,29 @@ def get_runs_for_direction(all_runs: pd.DataFrame, model_id: str, direction: str
         if direction == "d1_to_d2":
             return all_runs[
                 (all_runs["params.model"] == "gpt-4o")
-                & (all_runs["params.test_csv"].str.contains("SciEntsBank_3way", na=False))
+                & (
+                    all_runs["params.test_csv"].str.contains(
+                        "SciEntsBank_3way", na=False
+                    )
+                )
             ]
         else:
             return all_runs[
                 (all_runs["params.model"] == "gpt-4o")
-                & (all_runs["params.test_csv"].str.contains("gras_no_logic", na=False))
+                & (all_runs["params.test_csv"].str.contains("gras", na=False))
             ]
     else:
         if direction == "d1_to_d2":
             return all_runs[
                 (all_runs["params.model_name"] == model_id)
-                & (all_runs["params.dataset_name"] == "gras_no_logic")
+                & (all_runs["params.dataset_name"] == "gras")
                 & (all_runs["params.test_set_name"] == "SciEntsBank_3way")
             ]
         else:
             return all_runs[
                 (all_runs["params.model_name"] == model_id)
                 & (all_runs["params.dataset_name"] == "SciEntsBank_3way")
-                & (all_runs["params.test_set_name"] == "gras_no_logic")
+                & (all_runs["params.test_set_name"] == "gras")
             ]
 
 
@@ -104,7 +110,9 @@ def main():
             if runs.empty:
                 print(f"WARNING: No {label} runs for {display_name}")
 
-            row[f"QWK {label}"] = extract_metric(runs, "metrics.quadratic_weighted_kappa")
+            row[f"QWK {label}"] = extract_metric(
+                runs, "metrics.quadratic_weighted_kappa"
+            )
             row[f"Macro-F1 {label}"] = extract_metric(runs, "metrics.macro_f1")
 
         rows.append(row)

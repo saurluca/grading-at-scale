@@ -12,7 +12,7 @@ model:
 # Grid search parameters
 grid_search:
   # Optimization metric to use for selecting best combination
-  optimization_metric: macro_f1 # weighted_f1 | macro_f1 | accuracy | eval_loss
+  optimization_metric: macro_f1 # macro_f1 | accuracy | eval_loss
 
   # Learning rate values to explore
   learning_rate: [0.0001, 0.0002, 0.0005, 0.001]

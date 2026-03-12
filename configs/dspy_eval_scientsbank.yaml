@@ -14,7 +14,7 @@ evaluation:
   num_runs: 3
 
 mlflow:
-  experiment_name: paper_experiments_no_logic
+  experiment_name: paper_experiments
 
 output:
   dir: ${paths.output_dir}/dspy_eval

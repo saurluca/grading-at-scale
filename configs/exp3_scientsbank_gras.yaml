@@ -9,10 +9,10 @@ dispatcher:
 
 dataset:
   dataset_name: SciEntsBank_3way
-  test_set_name: gras_no_logic
+  test_set_name: gras
   train_file: train.csv
   val_file: test_uq.csv
-  test_file: ../gras_no_logic/test.csv
+  test_file: ../gras/test.csv
 
 output:
   dir: ${paths.output_dir}/peft_output
@@ -62,4 +62,4 @@ tokenization:
   include_reference_answer: true
 
 mlflow:
-  experiment_name: paper_experiments_no_logic
+  experiment_name: paper_experiments

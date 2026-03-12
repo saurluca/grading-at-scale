@@ -23,7 +23,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.mlflow_config import setup_mlflow  # noqa: E402
 
-EXPERIMENT_NAME = "paper_experiments_no_logic"
+EXPERIMENT_NAME = "paper_experiments"
 OUTPUT_PATH = PROJECT_ROOT / "results" / "macro_f1_per_domain.csv"
 
 MODEL_ORDER = [
@@ -64,15 +64,14 @@ def main():
 
     for model_id, display_name in MODEL_ORDER:
         if model_id == "gpt-4o":
-            mask = (
-                (all_runs["params.model"] == "gpt-4o")
-                & (all_runs["params.test_csv"].str.contains("gras_no_logic", na=False))
+            mask = (all_runs["params.model"] == "gpt-4o") & (
+                all_runs["params.test_csv"].str.contains("gras", na=False)
             )
         else:
             mask = (
                 (all_runs["params.model_name"] == model_id)
-                & (all_runs["params.dataset_name"] == "gras_no_logic")
-                & (all_runs["params.test_set_name"] == "gras_no_logic")
+                & (all_runs["params.dataset_name"] == "gras")
+                & (all_runs["params.test_set_name"] == "gras")
             )
         model_runs[model_id] = all_runs[mask]
 
@@ -81,7 +80,9 @@ def main():
         runs = model_runs[model_id]
         if runs.empty:
             print(f"WARNING: No runs found for {display_name}")
-            rows.append({"Model": display_name, **{col: "N/A" for col in METRIC_COLUMNS}})
+            rows.append(
+                {"Model": display_name, **{col: "N/A" for col in METRIC_COLUMNS}}
+            )
             continue
 
         row = {"Model": display_name}
@@ -90,7 +91,9 @@ def main():
             if values.empty:
                 row[col_name] = "N/A"
             else:
-                row[col_name] = fmt(values.mean(), values.std(ddof=1) if len(values) > 1 else 0.0)
+                row[col_name] = fmt(
+                    values.mean(), values.std(ddof=1) if len(values) > 1 else 0.0
+                )
         rows.append(row)
 
     result = pd.DataFrame(rows)

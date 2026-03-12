@@ -2,7 +2,7 @@
 Bar chart of Quadratic Weighted Kappa on the GRAS dataset (Experiment 1).
 
 Queries MLflow for all runs in the experiment where both train and test
-are on gras_no_logic, then plots mean +/- std per model.
+are on gras, then plots mean +/- std per model.
 
 Usage:
     uv run src/plots/quadratic_weighted_kappa_plot.py
@@ -21,7 +21,7 @@ sys.path.append(str(PROJECT_ROOT))
 from src.mlflow_config import setup_mlflow  # noqa: E402
 from omegaconf import OmegaConf  # noqa: E402
 
-EXPERIMENT_NAME = "paper_experiments_no_logic"
+EXPERIMENT_NAME = "paper_experiments"
 OUTPUT_PATH = PROJECT_ROOT / "results" / "quadratic_weighted_kappa_chart.png"
 
 MODEL_NAME_MAPPING = {
@@ -57,27 +57,29 @@ def query_exp1_runs() -> pd.DataFrame:
 
     rows = []
 
-    # Fine-tuned models: dataset_name=gras_no_logic, test on gras_no_logic test.csv
-    ft_mask = (
-        (all_runs["params.dataset_name"] == "gras_no_logic")
-        & (all_runs["params.test_set_name"] == "gras_no_logic")
+    # Fine-tuned models: dataset_name=gras, test on gras test.csv
+    ft_mask = (all_runs["params.dataset_name"] == "gras") & (
+        all_runs["params.test_set_name"] == "gras"
     )
     for _, run in all_runs[ft_mask].iterrows():
-        rows.append({
-            "model": run["params.model_name"],
-            "quadratic_weighted_kappa": run["metrics.quadratic_weighted_kappa"],
-        })
+        rows.append(
+            {
+                "model": run["params.model_name"],
+                "quadratic_weighted_kappa": run["metrics.quadratic_weighted_kappa"],
+            }
+        )
 
     # GPT-4o runs (dspy_eval)
-    gpt_mask = (
-        (all_runs["params.model"] == "gpt-4o")
-        & (all_runs["params.test_csv"].str.contains("gras_no_logic", na=False))
+    gpt_mask = (all_runs["params.model"] == "gpt-4o") & (
+        all_runs["params.test_csv"].str.contains("gras", na=False)
     )
     for _, run in all_runs[gpt_mask].iterrows():
-        rows.append({
-            "model": "gpt-4o",
-            "quadratic_weighted_kappa": run["metrics.quadratic_weighted_kappa"],
-        })
+        rows.append(
+            {
+                "model": "gpt-4o",
+                "quadratic_weighted_kappa": run["metrics.quadratic_weighted_kappa"],
+            }
+        )
 
     return pd.DataFrame(rows)
 
@@ -96,7 +98,9 @@ def main():
     stats.columns = ["model", "mean_kappa", "std_kappa"]
     stats["std_kappa"] = stats["std_kappa"].fillna(0)
 
-    stats["model_display"] = stats["model"].map(MODEL_NAME_MAPPING).fillna(stats["model"])
+    stats["model_display"] = (
+        stats["model"].map(MODEL_NAME_MAPPING).fillna(stats["model"])
+    )
     order_map = {m: i for i, m in enumerate(MODEL_ORDER)}
     stats["order"] = stats["model"].map(order_map).fillna(999)
     df_sorted = stats.sort_values("order").reset_index(drop=True)
@@ -106,8 +110,7 @@ def main():
     fig, ax = plt.subplots(figsize=(12, 3))
 
     colors = [
-        "#2E86AB" if m == "GPT-4o" else "#A23B72"
-        for m in df_sorted["model_display"]
+        "#2E86AB" if m == "GPT-4o" else "#A23B72" for m in df_sorted["model_display"]
     ]
 
     bars = ax.barh(
@@ -122,7 +125,9 @@ def main():
     )
 
     for i, (bar, value) in enumerate(zip(bars, df_sorted["mean_kappa"])):
-        error_offset = df_sorted.iloc[i]["std_kappa"] if df_sorted.iloc[i]["std_kappa"] > 0 else 0
+        error_offset = (
+            df_sorted.iloc[i]["std_kappa"] if df_sorted.iloc[i]["std_kappa"] > 0 else 0
+        )
         ax.text(
             bar.get_width() + error_offset + 0.005,
             bar.get_y() + bar.get_height() / 2,

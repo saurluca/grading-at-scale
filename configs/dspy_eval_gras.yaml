@@ -8,13 +8,13 @@ model:
   pass_reference_answer: true
 
 dataset:
-  test_csv: data/gras_no_logic/test.csv
+  test_csv: data/gras/test.csv
 
 evaluation:
   num_runs: 3
 
 mlflow:
-  experiment_name: paper_experiments_no_logic
+  experiment_name: paper_experiments
 
 output:
   dir: ${paths.output_dir}/dspy_eval

@@ -8,8 +8,8 @@ dispatcher:
     - Qwen/Qwen3-0.6B
 
 dataset:
-  dataset_name: gras_no_logic
-  test_set_name: gras_no_logic
+  dataset_name: gras
+  test_set_name: gras
   train_file: train.csv
   val_file: val.csv
   test_file: test.csv
@@ -62,4 +62,4 @@ tokenization:
   include_reference_answer: true
 
 mlflow:
-  experiment_name: paper_experiments_no_logic
+  experiment_name: paper_experiments

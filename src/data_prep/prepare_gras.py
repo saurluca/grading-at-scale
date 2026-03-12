@@ -2,7 +2,7 @@
 Filter the 'logic' topic from the GRAS dataset and re-split into train/val/test.
 
 Reads data/gras/full.csv, removes all rows with topic=='logic',
-saves filtered full.csv to data/gras_no_logic/, then performs a
+saves filtered full.csv to data/gras/, then performs a
 stratified 60/20/20 split by task_id (identical logic to split_data.py).
 
 Usage:
@@ -21,7 +21,7 @@ seed = cfg.project.seed
 
 EXCLUDE_TOPIC = "logic"
 INPUT_PATH = PROJECT_ROOT / "data" / "gras" / "full.csv"
-OUTPUT_DIR = PROJECT_ROOT / "data" / "gras_no_logic"
+OUTPUT_DIR = PROJECT_ROOT / "data" / "gras"
 
 label_order = ["incorrect", "partial", "correct"]
 label2id = {name: i for i, name in enumerate(label_order)}
@@ -62,7 +62,9 @@ def stratified_split(df, seed):
 
         topic_label_counts = np.array([0, 0, 0])
         for tid in shuffled:
-            topic_label_counts += np.array([task_id_label_counts[tid][i] for i in range(3)])
+            topic_label_counts += np.array(
+                [task_id_label_counts[tid][i] for i in range(3)]
+            )
 
         target_counts = {
             "train": np.round(topic_label_counts * 0.6).astype(int),
@@ -70,7 +72,9 @@ def stratified_split(df, seed):
             "test": np.round(topic_label_counts * 0.2).astype(int),
         }
         for i in range(3):
-            diff = topic_label_counts[i] - sum(target_counts[s][i] for s in target_counts)
+            diff = topic_label_counts[i] - sum(
+                target_counts[s][i] for s in target_counts
+            )
             target_counts["train"][i] += diff
 
         if n_total <= 2:
@@ -106,7 +110,11 @@ def stratified_split(df, seed):
 
             task_list, label_counts, _ = splits[best_split]
             task_list.append(tid)
-            splits[best_split] = (task_list, label_counts + task_labels, splits[best_split][2])
+            splits[best_split] = (
+                task_list,
+                label_counts + task_labels,
+                splits[best_split][2],
+            )
 
         train_ids.extend(splits["train"][0])
         val_ids.extend(splits["val"][0])
@@ -144,7 +152,9 @@ def main():
     df_val = df[df["task_id"].isin(val_ids)]
     df_test = df[df["task_id"].isin(test_ids)]
 
-    print(f"\nFinal sizes: train={len(df_train)}, val={len(df_val)}, test={len(df_test)}")
+    print(
+        f"\nFinal sizes: train={len(df_train)}, val={len(df_val)}, test={len(df_test)}"
+    )
 
     for name, split_df in [("train", df_train), ("val", df_val), ("test", df_test)]:
         out = OUTPUT_DIR / f"{name}.csv"
