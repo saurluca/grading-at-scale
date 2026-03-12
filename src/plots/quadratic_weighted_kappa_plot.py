@@ -105,9 +105,14 @@ def main():
     stats["order"] = stats["model"].map(order_map).fillna(999)
     df_sorted = stats.sort_values("order").reset_index(drop=True)
 
-    plt.rcParams["figure.figsize"] = (12, 3)
+    # Journal: max width 20 cm, 300 DPI (saved below)
+    MAX_WIDTH_CM = 20
+    INCH_PER_CM = 2.54
+    width_in = MAX_WIDTH_CM / INCH_PER_CM
+    height_in = width_in * (3 / 12)  # preserve 12:3 aspect ratio
+    plt.rcParams["figure.figsize"] = (width_in, height_in)
     plt.rcParams["font.size"] = 11
-    fig, ax = plt.subplots(figsize=(12, 3))
+    fig, ax = plt.subplots(figsize=(width_in, height_in))
 
     colors = [
         "#2E86AB" if m == "GPT-4o" else "#A23B72" for m in df_sorted["model_display"]
